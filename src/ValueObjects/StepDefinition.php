@@ -19,6 +19,7 @@ final readonly class StepDefinition
         public bool $retriable = false,
         public array $dependsOn = [],
         public array $metadata = [],
+        public ?FlowRetryPolicy $retryPolicy = null,
     ) {
         if ($this->id === '') {
             throw new InvalidArgumentException('A flow step must have an id.');
@@ -37,6 +38,14 @@ final readonly class StepDefinition
                 ? array_values(array_filter($data['depends_on'], 'is_string'))
                 : [],
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            retryPolicy: is_array($data['retry_policy'] ?? null)
+                ? new FlowRetryPolicy(
+                    enabled: (bool) ($data['retry_policy']['enabled'] ?? true),
+                    maxAttempts: (int) ($data['retry_policy']['max_attempts'] ?? 3),
+                    backoffSeconds: (int) ($data['retry_policy']['backoff_seconds'] ?? 0),
+                    idempotent: (bool) ($data['retry_policy']['idempotent'] ?? true),
+                )
+                : null,
         );
     }
 
@@ -50,6 +59,7 @@ final readonly class StepDefinition
             'retriable' => $this->retriable,
             'depends_on' => $this->dependsOn,
             'metadata' => $this->metadata,
+            'retry_policy' => $this->retryPolicy?->toArray(),
         ];
     }
 }

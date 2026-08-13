@@ -18,6 +18,9 @@ use Zorvia\WebFlow\Services\FlowPresentationFactory;
 use Zorvia\WebFlow\Services\FlowRunner;
 use Zorvia\WebFlow\Services\FlowStateTransition;
 use Zorvia\WebFlow\Services\FlowStateMigrationRunner;
+use Zorvia\WebFlow\Services\InMemoryFlowStateStore;
+use Zorvia\WebFlow\Services\DefaultFlowStateSerializer;
+use Zorvia\WebFlow\Services\CollectingFlowEventSink;
 use Zorvia\WebFlow\Contracts\FlowStateMigrator;
 use Zorvia\WebFlow\ValueObjects\FlowAction;
 use Zorvia\WebFlow\ValueObjects\ArrayFlowContext;
@@ -26,6 +29,8 @@ use Zorvia\WebFlow\ValueObjects\FlowState;
 use Zorvia\WebFlow\ValueObjects\StepDefinition;
 use Zorvia\WebFlow\ValueObjects\StepResult;
 use Zorvia\WebFlow\ValueObjects\StepState;
+use Zorvia\WebFlow\ValueObjects\FlowActionContext;
+use Zorvia\WebFlow\Enums\PresentationKind;
 
 final class FlowEvaluatorTest extends TestCase
 {
@@ -191,5 +196,62 @@ final class FlowEvaluatorTest extends TestCase
         );
 
         self::assertSame(2, $state->version);
+    }
+
+    public function test_state_store_and_serializer_round_trip_state(): void
+    {
+        $state = new FlowState(
+            FlowStatus::ATTENTION,
+            ['verify' => new StepState(StepStatus::FAILED, error: 'Expired', attempts: 2, nextRetryAt: 123)],
+            canRetryStep: 'verify',
+            version: 1,
+        );
+        $serializer = new DefaultFlowStateSerializer();
+        $store = new InMemoryFlowStateStore();
+
+        $store->put('setup', $serializer->deserialize($serializer->serialize($state)));
+
+        self::assertSame(FlowStatus::ATTENTION, $store->get('setup')?->status);
+        self::assertSame(2, $store->get('setup')?->steps['verify']->attempts);
+    }
+
+    public function test_runner_emits_lifecycle_events_and_supports_deferred_steps(): void
+    {
+        $events = new CollectingFlowEventSink();
+        $executor = new class implements FlowStepExecutor {
+            public function supports(StepDefinition $step): bool { return true; }
+
+            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            {
+                return StepResult::deferred('Waiting for provider callback.');
+            }
+        };
+
+        $state = (new FlowRunner(events: $events))->run(
+            new FlowDefinition('async_setup', [new StepDefinition('authorize', 'Authorize')]),
+            new FlowState(FlowStatus::PENDING),
+            new ArrayFlowContext(),
+            [$executor],
+        );
+
+        self::assertSame(StepStatus::PENDING, $state->steps['authorize']->status);
+        self::assertSame('step_started', $events->events()[1]->type->value);
+        self::assertSame('step_started', $events->events()[2]->type->value);
+    }
+
+    public function test_presentation_covers_progress_and_completed_states(): void
+    {
+        $factory = new FlowPresentationFactory();
+
+        self::assertSame(PresentationKind::INLINE, $factory->fromState(new FlowState(FlowStatus::RUNNING))?->kind);
+        self::assertSame('success', $factory->fromState(new FlowState(FlowStatus::COMPLETED))?->severity);
+    }
+
+    public function test_action_context_preserves_actor_and_resource_scope(): void
+    {
+        $context = new FlowActionContext(actor: 'operator-1', resource: 'channel-1', attributes: ['tenant' => 'tenant-1']);
+
+        self::assertSame('operator-1', $context->toArray()['actor']);
+        self::assertSame('tenant-1', $context->toArray()['attributes']['tenant']);
     }
 }

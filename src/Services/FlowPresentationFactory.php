@@ -18,18 +18,24 @@ final class FlowPresentationFactory
         ?string $message = null,
         ?FlowAction $action = null,
     ): ?FlowPresentation {
-        if (! in_array($state->status, [FlowStatus::ATTENTION, FlowStatus::BLOCKED], true)) {
-            return null;
-        }
-
         $actions = $action instanceof FlowAction ? [$action] : [];
+        $defaults = match ($state->status) {
+            FlowStatus::PENDING => ['info', 'Flow is ready to begin.'],
+            FlowStatus::RUNNING => ['info', 'Flow is in progress.'],
+            FlowStatus::ATTENTION => ['warning', 'Review this flow and take the required action.'],
+            FlowStatus::BLOCKED => ['error', 'This flow is blocked until the issue is resolved.'],
+            FlowStatus::COMPLETED => ['success', 'Flow completed successfully.'],
+        };
 
         return new FlowPresentation(
-            kind: PresentationKind::BANNER,
-            severity: $state->status === FlowStatus::BLOCKED ? 'error' : 'warning',
+            kind: in_array($state->status, [FlowStatus::ATTENTION, FlowStatus::BLOCKED], true)
+                ? PresentationKind::BANNER
+                : PresentationKind::INLINE,
+            severity: $defaults[0],
             title: $title,
-            message: $message ?? $state->message ?? 'Review this flow and take the required action.',
+            message: $message ?? $state->message ?? $defaults[1],
             actions: $actions,
+            dismissible: $state->status === FlowStatus::COMPLETED,
         );
     }
 }

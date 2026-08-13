@@ -19,6 +19,7 @@ final readonly class StepResult
         public int $attempts = 0,
         public ?int $nextRetryAt = null,
         public array $metadata = [],
+        public bool $deferred = false,
     ) {
     }
 
@@ -27,9 +28,9 @@ final readonly class StepResult
         return new self(StepStatus::COMPLETED, $message, metadata: $metadata);
     }
 
-    public static function failed(string $error, bool $retriable = false, array $metadata = []): self
+    public static function failed(string $error, bool $retriable = false, array $metadata = [], ?int $nextRetryAt = null): self
     {
-        return new self(StepStatus::FAILED, error: $error, retriable: $retriable, metadata: $metadata);
+        return new self(StepStatus::FAILED, error: $error, retriable: $retriable, nextRetryAt: $nextRetryAt, metadata: $metadata);
     }
 
     public static function skipped(?string $message = null, array $metadata = []): self
@@ -40,6 +41,11 @@ final readonly class StepResult
     public static function pending(?string $message = null, array $metadata = []): self
     {
         return new self(StepStatus::PENDING, $message, metadata: $metadata);
+    }
+
+    public static function deferred(?string $message = null, ?int $nextRetryAt = null, array $metadata = []): self
+    {
+        return new self(StepStatus::PENDING, message: $message, nextRetryAt: $nextRetryAt, metadata: [...$metadata, 'deferred' => true], deferred: true);
     }
 
     public function toState(): StepState

@@ -8,6 +8,7 @@ use Zorvia\WebFlow\Enums\FlowStatus;
 
 final readonly class FlowState
 {
+    public const int SCHEMA_VERSION = 1;
     /**
      * @param array<string, StepState> $steps
      * @param list<string> $failedSteps

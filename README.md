@@ -32,6 +32,12 @@ its domain requires.
 - `FlowStateMigrationRunner`: upgrades persisted state between schema versions.
 - `FlowActionAuthorizer`: lets the host enforce domain permissions before an
   action is dispatched.
+- `FlowEventSink`: receives lifecycle events without coupling the package to an
+  event bus; the host can persist or publish them.
+- `FlowStateSerializer`: defines the durable array representation used by
+  stores, while the package leaves database and cache persistence to the host.
+- `FlowActionContext`: carries actor, resource, and host-owned authorization
+  attributes into action handlers.
 
 The same vocabulary can represent a failed webhook setup step or a
 conversation banner that asks an operator to use a template. Domain code owns
@@ -45,9 +51,12 @@ domain step. `FlowRunner` returns a new evaluated state; the host persists it
 and may dispatch each executor through its own queue system.
 
 Definitions are versioned and validate duplicate ids, unknown dependencies, and
-dependency cycles at construction time. Executor exceptions are converted into
-failed step states using the step's retriable policy; the host can persist the
-returned state and retry it later.
+dependency cycles at construction time. Step state includes attempts and the
+next retry timestamp, and a step can return a deferred result when completion
+will arrive asynchronously. Executor exceptions are converted into failed step
+states using the step's retry policy; the host can persist the returned state
+and retry it later. `CollectingFlowEventSink` is available for tests, while
+production applications provide their own event sink.
 
 ## TypeScript contracts
 

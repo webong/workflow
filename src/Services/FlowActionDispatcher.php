@@ -9,6 +9,7 @@ use Zorvia\WebFlow\Contracts\FlowActionAuthorizer;
 use Zorvia\WebFlow\Contracts\FlowActionHandler;
 use Zorvia\WebFlow\Contracts\FlowActionRegistry;
 use Zorvia\WebFlow\ValueObjects\FlowAction;
+use Zorvia\WebFlow\ValueObjects\FlowActionContext;
 
 final class FlowActionDispatcher
 {
@@ -37,5 +38,10 @@ final class FlowActionDispatcher
         }
 
         return $handler->handle($action, $context);
+    }
+
+    public function dispatchWithContext(FlowAction $action, FlowActionContext $context): mixed
+    {
+        return $this->dispatch($action, $context->toArray());
     }
 }
