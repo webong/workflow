@@ -1,0 +1,32 @@
+{
+    "name": "zorvia/web-flow",
+    "description": "Framework-agnostic flow definitions, state evaluation, presentations, and actions.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5"
+    },
+    "require-dev": {
+        "paneon/php-to-typescript": "^2.3",
+        "phpstan/phpstan": "^2.0",
+        "phpunit/phpunit": "^12.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Zorvia\\WebFlow\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Zorvia\\WebFlow\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit --testdox",
+        "types": "php tools/generate-types.php",
+        "analyse": "vendor/bin/phpstan analyse --no-progress"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

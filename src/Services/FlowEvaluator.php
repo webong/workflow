@@ -1,0 +1,85 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Zorvia\WebFlow\Services;
+
+use Zorvia\WebFlow\Enums\FlowStatus;
+use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\ValueObjects\FlowDefinition;
+use Zorvia\WebFlow\ValueObjects\FlowState;
+use Zorvia\WebFlow\ValueObjects\StepState;
+
+final class FlowEvaluator
+{
+    public function evaluate(FlowDefinition $definition, ?FlowState $stored = null): FlowState
+    {
+        $storedSteps = $stored?->steps ?? [];
+        $steps = [];
+        $failedSteps = [];
+        $criticalFailed = [];
+        $criticalPending = [];
+        $canRetryStep = null;
+
+        foreach ($definition->steps as $definitionStep) {
+            $step = $storedSteps[$definitionStep->id] ?? new StepState();
+            $steps[$definitionStep->id] = $step;
+
+            $dependencyPending = array_filter(
+                $definitionStep->dependsOn,
+                static fn (string $dependency): bool => ! isset($steps[$dependency])
+                    || ! in_array($steps[$dependency]->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true),
+            );
+
+            if ($dependencyPending !== [] && $step->status === StepStatus::PENDING) {
+                $criticalPending[] = $definitionStep->id;
+                continue;
+            }
+
+            if ($step->status === StepStatus::FAILED) {
+                $failedSteps[] = $definitionStep->id;
+
+                if ($definitionStep->critical) {
+                    $criticalFailed[] = $definitionStep->id;
+                }
+
+                if ($canRetryStep === null && ($step->retriable ?? $definitionStep->retriable)) {
+                    $canRetryStep = $definitionStep->id;
+                }
+
+                continue;
+            }
+
+            if ($definitionStep->critical && ! in_array($step->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true)) {
+                $criticalPending[] = $definitionStep->id;
+            }
+        }
+
+        if ($criticalFailed !== []) {
+            $status = $canRetryStep !== null ? FlowStatus::ATTENTION : FlowStatus::BLOCKED;
+            $message = $steps[$canRetryStep ?? $criticalFailed[0]]->error ?? 'A required flow step failed.';
+        } elseif ($criticalPending !== []) {
+            $status = FlowStatus::RUNNING;
+            $message = 'Flow is waiting for: '.implode(', ', $criticalPending);
+        } elseif ($failedSteps !== []) {
+            $status = FlowStatus::COMPLETED;
+            $message = 'Flow completed with non-critical step failures.';
+        } elseif ($definition->steps === []) {
+            $status = FlowStatus::COMPLETED;
+            $message = null;
+        } else {
+            $status = FlowStatus::COMPLETED;
+            $message = null;
+        }
+
+        return new FlowState(
+            status: $status,
+            steps: $steps,
+            currentStep: $stored?->currentStep,
+            failedSteps: $failedSteps,
+            canRetryStep: $canRetryStep,
+            message: $message,
+            metadata: $stored?->metadata ?? [],
+        );
+    }
+}

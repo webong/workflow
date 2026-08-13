@@ -1,0 +1,28 @@
+name: WebFlow CI
+
+on:
+  push:
+    paths:
+      - 'ext/web-flow/**'
+  pull_request:
+    paths:
+      - 'ext/web-flow/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ext/web-flow
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer analyse
+      - run: composer test
+      - run: composer types
+      - run: git diff --exit-code -- types/web-flow.generated.ts
