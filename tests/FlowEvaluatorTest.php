@@ -236,7 +236,7 @@ final class FlowEvaluatorTest extends TestCase
 
         self::assertSame(StepStatus::PENDING, $state->steps['authorize']->status);
         self::assertSame('step_started', $events->events()[1]->type->value);
-        self::assertSame('step_started', $events->events()[2]->type->value);
+        self::assertSame('step_deferred', $events->events()[2]->type->value);
     }
 
     public function test_presentation_covers_progress_and_completed_states(): void

@@ -19,7 +19,12 @@ final class FlowPresentationFactory
         ?FlowAction $action = null,
     ): ?FlowPresentation {
         $actions = $action instanceof FlowAction ? [$action] : [];
-        $defaults = match ($state->status) {
+        $hasFailedStep = $state->failedSteps !== [] || array_filter(
+            $state->steps,
+            static fn (\Zorvia\WebFlow\ValueObjects\StepState $step): bool => $step->status === \Zorvia\WebFlow\Enums\StepStatus::FAILED,
+        ) !== [];
+        $status = $hasFailedStep && $state->status === FlowStatus::RUNNING ? FlowStatus::ATTENTION : $state->status;
+        $defaults = match ($status) {
             FlowStatus::PENDING => ['info', 'Flow is ready to begin.'],
             FlowStatus::RUNNING => ['info', 'Flow is in progress.'],
             FlowStatus::ATTENTION => ['warning', 'Review this flow and take the required action.'],
@@ -28,14 +33,14 @@ final class FlowPresentationFactory
         };
 
         return new FlowPresentation(
-            kind: in_array($state->status, [FlowStatus::ATTENTION, FlowStatus::BLOCKED], true)
+            kind: in_array($status, [FlowStatus::ATTENTION, FlowStatus::BLOCKED], true)
                 ? PresentationKind::BANNER
                 : PresentationKind::INLINE,
             severity: $defaults[0],
             title: $title,
             message: $message ?? $state->message ?? $defaults[1],
             actions: $actions,
-            dismissible: $state->status === FlowStatus::COMPLETED,
+            dismissible: $status === FlowStatus::COMPLETED,
         );
     }
 }
