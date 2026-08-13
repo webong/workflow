@@ -1,5 +1,5 @@
 {
-    "name": "zorvia/web-flow",
+    "name": "webong/web-flow",
     "description": "Framework-agnostic flow definitions, state evaluation, presentations, and actions.",
     "type": "library",
     "license": "MIT",
