@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\ValueObjects;
+namespace Webong\WebFlow\ValueObjects;
 
-use Zorvia\WebFlow\Enums\FlowEventType;
+use Webong\WebFlow\Enums\FlowEventType;
 
 final readonly class FlowEvent
 {

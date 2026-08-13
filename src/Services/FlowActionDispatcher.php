@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Services;
+namespace Webong\WebFlow\Services;
 
 use RuntimeException;
-use Zorvia\WebFlow\Contracts\FlowActionAuthorizer;
-use Zorvia\WebFlow\Contracts\FlowActionHandler;
-use Zorvia\WebFlow\Contracts\FlowActionRegistry;
-use Zorvia\WebFlow\ValueObjects\FlowAction;
-use Zorvia\WebFlow\ValueObjects\FlowActionContext;
+use Webong\WebFlow\Contracts\FlowActionAuthorizer;
+use Webong\WebFlow\Contracts\FlowActionHandler;
+use Webong\WebFlow\Contracts\FlowActionRegistry;
+use Webong\WebFlow\ValueObjects\FlowAction;
+use Webong\WebFlow\ValueObjects\FlowActionContext;
 
 final class FlowActionDispatcher
 {

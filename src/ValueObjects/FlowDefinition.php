@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\ValueObjects;
+namespace Webong\WebFlow\ValueObjects;
 
 use InvalidArgumentException;
 

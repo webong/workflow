@@ -13,12 +13,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Zorvia\\WebFlow\\": "src/"
+            "Webong\\WebFlow\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Zorvia\\WebFlow\\Tests\\": "tests/"
+            "Webong\\WebFlow\\Tests\\": "tests/"
         }
     },
     "scripts": {

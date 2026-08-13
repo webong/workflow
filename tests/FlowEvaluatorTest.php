@@ -2,36 +2,36 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Tests;
+namespace Webong\WebFlow\Tests;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Zorvia\WebFlow\Contracts\FlowActionHandler;
-use Zorvia\WebFlow\Contracts\FlowActionRegistry;
-use Zorvia\WebFlow\Contracts\FlowContext;
-use Zorvia\WebFlow\Contracts\FlowStepExecutor;
-use Zorvia\WebFlow\Enums\FlowStatus;
-use Zorvia\WebFlow\Enums\FlowStepStatus;
-use Zorvia\WebFlow\Services\FlowEvaluator;
-use Zorvia\WebFlow\Services\FlowActionDispatcher;
-use Zorvia\WebFlow\Services\FlowPresentationFactory;
-use Zorvia\WebFlow\Services\FlowRunner;
-use Zorvia\WebFlow\Services\FlowStateTransition;
-use Zorvia\WebFlow\Services\FlowStateMigrationRunner;
-use Zorvia\WebFlow\Services\InMemoryFlowStateStore;
-use Zorvia\WebFlow\Services\DefaultFlowStateSerializer;
-use Zorvia\WebFlow\Services\CollectingFlowEventSink;
-use Zorvia\WebFlow\Contracts\FlowStateMigrator;
-use Zorvia\WebFlow\ValueObjects\FlowAction;
-use Zorvia\WebFlow\ValueObjects\ArrayFlowContext;
-use Zorvia\WebFlow\ValueObjects\FlowDefinition;
-use Zorvia\WebFlow\ValueObjects\FlowState;
-use Zorvia\WebFlow\ValueObjects\StepDefinition;
-use Zorvia\WebFlow\ValueObjects\StepResult;
-use Zorvia\WebFlow\ValueObjects\StepState;
-use Zorvia\WebFlow\ValueObjects\FlowActionContext;
-use Zorvia\WebFlow\ValueObjects\FlowDeferredCompletion;
-use Zorvia\WebFlow\ValueObjects\FlowRetryPolicy;
+use Webong\WebFlow\Contracts\FlowActionHandler;
+use Webong\WebFlow\Contracts\FlowActionRegistry;
+use Webong\WebFlow\Contracts\FlowContext;
+use Webong\WebFlow\Contracts\FlowStepExecutor;
+use Webong\WebFlow\Enums\FlowStatus;
+use Webong\WebFlow\Enums\FlowStepStatus;
+use Webong\WebFlow\Services\FlowEvaluator;
+use Webong\WebFlow\Services\FlowActionDispatcher;
+use Webong\WebFlow\Services\FlowPresentationFactory;
+use Webong\WebFlow\Services\FlowRunner;
+use Webong\WebFlow\Services\FlowStateTransition;
+use Webong\WebFlow\Services\FlowStateMigrationRunner;
+use Webong\WebFlow\Services\InMemoryFlowStateStore;
+use Webong\WebFlow\Services\DefaultFlowStateSerializer;
+use Webong\WebFlow\Services\CollectingFlowEventSink;
+use Webong\WebFlow\Contracts\FlowStateMigrator;
+use Webong\WebFlow\ValueObjects\FlowAction;
+use Webong\WebFlow\ValueObjects\ArrayFlowContext;
+use Webong\WebFlow\ValueObjects\FlowDefinition;
+use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WebFlow\ValueObjects\StepDefinition;
+use Webong\WebFlow\ValueObjects\StepResult;
+use Webong\WebFlow\ValueObjects\StepState;
+use Webong\WebFlow\ValueObjects\FlowActionContext;
+use Webong\WebFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WebFlow\ValueObjects\FlowRetryPolicy;
 
 final class FlowEvaluatorTest extends TestCase
 {
@@ -166,7 +166,7 @@ final class FlowEvaluatorTest extends TestCase
 
     public function test_action_dispatcher_rejects_unauthorized_actions(): void
     {
-        $authorizer = new class implements \Zorvia\WebFlow\Contracts\FlowActionAuthorizer {
+        $authorizer = new class implements \Webong\WebFlow\Contracts\FlowActionAuthorizer {
             public function allows(FlowAction $action, array $context = []): bool
             {
                 return ($context['actor'] ?? null) === 'allowed';
@@ -348,7 +348,7 @@ final class FlowEvaluatorTest extends TestCase
 
         self::assertSame(
             ['started', 'step_started', 'step_deferred', 'started'],
-            array_map(static fn (\Zorvia\WebFlow\ValueObjects\FlowEvent $event): string => $event->type->value, $events->events()),
+            array_map(static fn (\Webong\WebFlow\ValueObjects\FlowEvent $event): string => $event->type->value, $events->events()),
         );
     }
 }

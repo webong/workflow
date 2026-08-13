@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Contracts;
+namespace Webong\WebFlow\Contracts;
 
 interface FlowContext
 {

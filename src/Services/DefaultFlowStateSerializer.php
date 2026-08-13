@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Services;
+namespace Webong\WebFlow\Services;
 
-use Zorvia\WebFlow\Contracts\FlowStateSerializer;
-use Zorvia\WebFlow\ValueObjects\FlowState;
+use Webong\WebFlow\Contracts\FlowStateSerializer;
+use Webong\WebFlow\ValueObjects\FlowState;
 
 final class DefaultFlowStateSerializer implements FlowStateSerializer
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\ValueObjects;
+namespace Webong\WebFlow\ValueObjects;
 
-use Zorvia\WebFlow\Contracts\FlowContext;
+use Webong\WebFlow\Contracts\FlowContext;
 
 final readonly class ArrayFlowContext implements FlowContext
 {

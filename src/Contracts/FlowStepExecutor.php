@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Contracts;
+namespace Webong\WebFlow\Contracts;
 
-use Zorvia\WebFlow\ValueObjects\StepDefinition;
-use Zorvia\WebFlow\ValueObjects\StepResult;
-use Zorvia\WebFlow\ValueObjects\StepState;
+use Webong\WebFlow\ValueObjects\StepDefinition;
+use Webong\WebFlow\ValueObjects\StepResult;
+use Webong\WebFlow\ValueObjects\StepState;
 
 interface FlowStepExecutor
 {

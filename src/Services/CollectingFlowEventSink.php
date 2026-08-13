@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Services;
+namespace Webong\WebFlow\Services;
 
-use Zorvia\WebFlow\Contracts\FlowEventSink;
-use Zorvia\WebFlow\ValueObjects\FlowEvent;
+use Webong\WebFlow\Contracts\FlowEventSink;
+use Webong\WebFlow\ValueObjects\FlowEvent;
 
 final class CollectingFlowEventSink implements FlowEventSink
 {

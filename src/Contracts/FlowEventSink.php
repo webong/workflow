@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Contracts;
+namespace Webong\WebFlow\Contracts;
 
-use Zorvia\WebFlow\ValueObjects\FlowEvent;
+use Webong\WebFlow\ValueObjects\FlowEvent;
 
 interface FlowEventSink
 {

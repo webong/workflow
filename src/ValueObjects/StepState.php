@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\ValueObjects;
+namespace Webong\WebFlow\ValueObjects;
 
-use Zorvia\WebFlow\Enums\FlowStepStatus;
+use Webong\WebFlow\Enums\FlowStepStatus;
 
 final readonly class StepState
 {

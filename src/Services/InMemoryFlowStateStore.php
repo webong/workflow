@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Services;
+namespace Webong\WebFlow\Services;
 
-use Zorvia\WebFlow\Contracts\FlowStateStore;
-use Zorvia\WebFlow\ValueObjects\FlowState;
+use Webong\WebFlow\Contracts\FlowStateStore;
+use Webong\WebFlow\ValueObjects\FlowState;
 
 /** Reference implementation for package consumers and conformance tests. */
 final class InMemoryFlowStateStore implements FlowStateStore

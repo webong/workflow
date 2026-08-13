@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Enums;
+namespace Webong\WebFlow\Enums;
 
 enum FlowStatus: string
 {

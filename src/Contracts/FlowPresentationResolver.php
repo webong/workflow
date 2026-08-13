@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Zorvia\WebFlow\Contracts;
+namespace Webong\WebFlow\Contracts;
 
-use Zorvia\WebFlow\ValueObjects\FlowPresentation;
-use Zorvia\WebFlow\ValueObjects\FlowState;
+use Webong\WebFlow\ValueObjects\FlowPresentation;
+use Webong\WebFlow\ValueObjects\FlowState;
 
 interface FlowPresentationResolver
 {
