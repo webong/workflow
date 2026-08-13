@@ -8,6 +8,7 @@ final readonly class FlowAction
 {
     /**
      * @param array<string, mixed> $payload
+     * @param array<string, mixed> $metadata
      */
     public function __construct(
         public string $key,

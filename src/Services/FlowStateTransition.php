@@ -18,6 +18,7 @@ final class FlowStateTransition
         ));
     }
 
+    /** @param array<string, mixed> $metadata */
     public function completed(FlowState $state, string $stepId, ?string $message = null, array $metadata = []): FlowState
     {
         return $state->withStep($stepId, new StepState(
@@ -28,6 +29,7 @@ final class FlowStateTransition
         ));
     }
 
+    /** @param array<string, mixed> $metadata */
     public function failed(FlowState $state, string $stepId, string $error, bool $retriable = false, array $metadata = []): FlowState
     {
         return $state->withStep($stepId, new StepState(

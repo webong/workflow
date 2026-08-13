@@ -14,7 +14,7 @@ final class FlowEvaluator
 {
     public function evaluate(FlowDefinition $definition, ?FlowState $stored = null): FlowState
     {
-        $storedSteps = $stored?->steps ?? [];
+        $storedSteps = $stored instanceof FlowState ? $stored->steps : [];
         $steps = [];
         $failedSteps = [];
         $criticalFailed = [];
@@ -79,7 +79,7 @@ final class FlowEvaluator
             failedSteps: $failedSteps,
             canRetryStep: $canRetryStep,
             message: $message,
-            metadata: $stored?->metadata ?? [],
+            metadata: $stored instanceof FlowState ? $stored->metadata : [],
         );
     }
 }

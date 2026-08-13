@@ -17,7 +17,7 @@ final class FlowPresentationFactory
         string $title = 'Flow needs attention',
         ?string $message = null,
         ?FlowAction $action = null,
-    ): ?FlowPresentation {
+    ): FlowPresentation {
         $actions = $action instanceof FlowAction ? [$action] : [];
         $hasFailedStep = $state->failedSteps !== [] || array_filter(
             $state->steps,

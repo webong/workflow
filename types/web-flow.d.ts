@@ -7,6 +7,7 @@ export type FlowEventType =
     | 'step_completed'
     | 'step_failed'
     | 'step_skipped'
+    | 'step_deferred'
     | 'completed'
     | 'attention_required'
     | 'blocked'
@@ -19,6 +20,7 @@ export interface StepDefinition {
     retriable: boolean;
     depends_on: string[];
     metadata: Record<string, unknown>;
+    retry_policy: FlowRetryPolicy | null;
 }
 
 export interface FlowDefinition {
@@ -66,6 +68,12 @@ export interface FlowPresentation {
     actions: FlowAction[];
     dismissible: boolean;
     metadata: Record<string, unknown>;
+}
+
+export interface FlowActionContext {
+    actor: unknown;
+    resource: unknown;
+    attributes: Record<string, unknown>;
 }
 
 export interface FlowRetryPolicy {

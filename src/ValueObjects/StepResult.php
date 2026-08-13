@@ -23,26 +23,31 @@ final readonly class StepResult
     ) {
     }
 
+    /** @param array<string, mixed> $metadata */
     public static function completed(?string $message = null, array $metadata = []): self
     {
         return new self(StepStatus::COMPLETED, $message, metadata: $metadata);
     }
 
+    /** @param array<string, mixed> $metadata */
     public static function failed(string $error, bool $retriable = false, array $metadata = [], ?int $nextRetryAt = null): self
     {
         return new self(StepStatus::FAILED, error: $error, retriable: $retriable, nextRetryAt: $nextRetryAt, metadata: $metadata);
     }
 
+    /** @param array<string, mixed> $metadata */
     public static function skipped(?string $message = null, array $metadata = []): self
     {
         return new self(StepStatus::SKIPPED, $message, metadata: $metadata);
     }
 
+    /** @param array<string, mixed> $metadata */
     public static function pending(?string $message = null, array $metadata = []): self
     {
         return new self(StepStatus::PENDING, $message, metadata: $metadata);
     }
 
+    /** @param array<string, mixed> $metadata */
     public static function deferred(?string $message = null, ?int $nextRetryAt = null, array $metadata = []): self
     {
         return new self(StepStatus::PENDING, message: $message, nextRetryAt: $nextRetryAt, metadata: [...$metadata, 'deferred' => true], deferred: true);
