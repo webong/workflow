@@ -30,6 +30,8 @@ use Zorvia\WebFlow\ValueObjects\StepDefinition;
 use Zorvia\WebFlow\ValueObjects\StepResult;
 use Zorvia\WebFlow\ValueObjects\StepState;
 use Zorvia\WebFlow\ValueObjects\FlowActionContext;
+use Zorvia\WebFlow\ValueObjects\FlowDeferredCompletion;
+use Zorvia\WebFlow\ValueObjects\FlowRetryPolicy;
 
 final class FlowEvaluatorTest extends TestCase
 {
@@ -162,6 +164,22 @@ final class FlowEvaluatorTest extends TestCase
         );
     }
 
+    public function test_action_dispatcher_rejects_unauthorized_actions(): void
+    {
+        $authorizer = new class implements \Zorvia\WebFlow\Contracts\FlowActionAuthorizer {
+            public function allows(FlowAction $action, array $context = []): bool
+            {
+                return ($context['actor'] ?? null) === 'allowed';
+            }
+        };
+        $registry = new class implements FlowActionRegistry {
+            public function handlerFor(FlowAction $action): ?FlowActionHandler { return null; }
+        };
+
+        $this->expectException(RuntimeException::class);
+        (new FlowActionDispatcher($registry, $authorizer))->dispatch(new FlowAction('retry', 'Retry'), ['actor' => 'denied']);
+    }
+
     public function test_state_transition_and_presentation_are_framework_neutral(): void
     {
         $state = (new FlowStateTransition())->failed(new FlowState(FlowStatus::RUNNING), 'verify', 'Expired', true);
@@ -214,6 +232,20 @@ final class FlowEvaluatorTest extends TestCase
         self::assertSame(2, $store->get('setup')?->steps['verify']->attempts);
     }
 
+    public function test_legacy_state_payload_remains_readable(): void
+    {
+        $state = (new DefaultFlowStateSerializer())->deserialize([
+            'status' => 'running',
+            'steps' => ['verify' => ['status' => 'completed']],
+            'message' => 'Legacy state',
+        ]);
+
+        self::assertSame(FlowStatus::RUNNING, $state->status);
+        self::assertSame(FlowStepStatus::COMPLETED, $state->steps['verify']->status);
+        self::assertSame('Legacy state', $state->message);
+        self::assertSame(1, $state->version);
+    }
+
     public function test_runner_emits_lifecycle_events_and_supports_deferred_steps(): void
     {
         $events = new CollectingFlowEventSink();
@@ -252,5 +284,71 @@ final class FlowEvaluatorTest extends TestCase
 
         self::assertSame('operator-1', $context->toArray()['actor']);
         self::assertSame('tenant-1', $context->toArray()['attributes']['tenant']);
+    }
+
+    public function test_retry_policy_exhaustion_blocks_retry_and_respects_backoff(): void
+    {
+        $definition = new FlowDefinition('retrying', [
+            new StepDefinition('verify', 'Verify', retryPolicy: new FlowRetryPolicy(maxAttempts: 2, backoffSeconds: 60)),
+        ]);
+        $state = new FlowState(FlowStatus::RUNNING, [
+            'verify' => new StepState(FlowStepStatus::FAILED, error: 'Failed', retriable: true, attempts: 2, nextRetryAt: time() - 1),
+        ]);
+
+        $result = (new FlowEvaluator())->evaluate($definition, $state);
+
+        self::assertSame(FlowStatus::BLOCKED, $result->status);
+        self::assertNull($result->canRetryStep);
+    }
+
+    public function test_deferred_completion_is_correlated_and_idempotent(): void
+    {
+        $initial = new FlowState(FlowStatus::RUNNING, [
+            'subscribe' => new StepState(FlowStepStatus::PENDING, metadata: ['deferred' => true]),
+        ]);
+        $completion = new FlowDeferredCompletion('setup', 'subscribe', 'callback-1', StepResult::completed('Subscribed'));
+        $transition = new FlowStateTransition();
+
+        $completed = $transition->completeDeferred($initial, $completion);
+        $replayed = $transition->completeDeferred($completed, $completion);
+
+        self::assertSame(FlowStepStatus::COMPLETED, $completed->steps['subscribe']->status);
+        self::assertSame($completed->toArray(), $replayed->toArray());
+    }
+
+    public function test_reset_clears_a_step_for_replay_without_mutating_the_original(): void
+    {
+        $state = new FlowState(FlowStatus::ATTENTION, [
+            'verify' => new StepState(FlowStepStatus::FAILED, error: 'Expired', attempts: 1),
+        ]);
+
+        $reset = (new FlowStateTransition())->reset($state, 'verify');
+
+        self::assertSame(FlowStepStatus::PENDING, $reset->steps['verify']->status);
+        self::assertSame(FlowStepStatus::FAILED, $state->steps['verify']->status);
+    }
+
+    public function test_event_order_is_stable_for_deferred_execution(): void
+    {
+        $events = new CollectingFlowEventSink();
+        $executor = new class implements FlowStepExecutor {
+            public function supports(StepDefinition $step): bool { return true; }
+            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            {
+                return StepResult::deferred();
+            }
+        };
+
+        (new FlowRunner(events: $events))->run(
+            new FlowDefinition('ordered', [new StepDefinition('one', 'One')]),
+            new FlowState(FlowStatus::PENDING),
+            new ArrayFlowContext(),
+            [$executor],
+        );
+
+        self::assertSame(
+            ['started', 'step_started', 'step_deferred', 'started'],
+            array_map(static fn (\Zorvia\WebFlow\ValueObjects\FlowEvent $event): string => $event->type->value, $events->events()),
+        );
     }
 }

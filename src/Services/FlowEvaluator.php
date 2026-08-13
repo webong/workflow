@@ -43,7 +43,10 @@ final class FlowEvaluator
                     $criticalFailed[] = $definitionStep->id;
                 }
 
-                if ($canRetryStep === null && ($step->retriable ?? $definitionStep->retriable)) {
+                $canRetry = $definitionStep->retryPolicy?->canRetry($step->attempts)
+                    ?? ($step->retriable ?? $definitionStep->retriable);
+
+                if ($canRetryStep === null && $canRetry) {
                     $canRetryStep = $definitionStep->id;
                 }
 

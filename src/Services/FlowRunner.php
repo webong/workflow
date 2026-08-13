@@ -53,6 +53,10 @@ final class FlowRunner
                 continue;
             }
 
+            if ($previous->nextRetryAt !== null && $previous->nextRetryAt > time()) {
+                continue;
+            }
+
             if ($step->dependsOn !== [] && ! $this->dependenciesCompleted($step->dependsOn, $state)) {
                 continue;
             }
