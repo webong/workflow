@@ -30,7 +30,6 @@ use Zorvia\WebFlow\ValueObjects\StepDefinition;
 use Zorvia\WebFlow\ValueObjects\StepResult;
 use Zorvia\WebFlow\ValueObjects\StepState;
 use Zorvia\WebFlow\ValueObjects\FlowActionContext;
-use Zorvia\WebFlow\Enums\PresentationKind;
 
 final class FlowEvaluatorTest extends TestCase
 {
@@ -172,7 +171,7 @@ final class FlowEvaluatorTest extends TestCase
         );
 
         self::assertNotNull($presentation);
-        self::assertSame('banner', $presentation->toArray()['kind']);
+        self::assertSame('warning', $presentation->toArray()['severity']);
         self::assertSame('retry', $presentation->actions[0]->key);
     }
 
@@ -243,7 +242,7 @@ final class FlowEvaluatorTest extends TestCase
     {
         $factory = new FlowPresentationFactory();
 
-        self::assertSame(PresentationKind::INLINE, $factory->fromState(new FlowState(FlowStatus::RUNNING))?->kind);
+        self::assertSame('info', $factory->fromState(new FlowState(FlowStatus::RUNNING))->severity);
         self::assertSame('success', $factory->fromState(new FlowState(FlowStatus::COMPLETED))?->severity);
     }
 

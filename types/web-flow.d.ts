@@ -1,6 +1,5 @@
 export type FlowStatus = 'pending' | 'running' | 'attention' | 'completed' | 'blocked';
 export type FlowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
-export type PresentationKind = 'banner' | 'card' | 'inline' | 'toast';
 export type FlowEventType =
     | 'started'
     | 'step_started'
@@ -61,12 +60,9 @@ export interface FlowAction {
 }
 
 export interface FlowPresentation {
-    kind: PresentationKind;
     severity: string;
-    title: string;
     message: string;
     actions: FlowAction[];
-    dismissible: boolean;
     metadata: Record<string, unknown>;
 }
 

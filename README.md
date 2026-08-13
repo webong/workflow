@@ -15,7 +15,7 @@ its domain requires.
 - `StepDefinition`: a step's stable identity, label, dependencies, and policy.
 - `FlowState`: the evaluated state of a flow and its step states.
 - `FlowEvaluator`: derives a flow state from a definition and stored data.
-- `FlowPresentation`: a UI-neutral banner/card/inline presentation.
+- `FlowPresentation`: a UI-neutral semantic message with severity, actions, and metadata.
 - `FlowAction`: a UI-neutral action descriptor.
 - `FlowDefinitionProvider`: resolves definitions supplied by the host domain.
 - `FlowPresentationResolver`: turns state into a presentation for a surface.
@@ -26,7 +26,7 @@ its domain requires.
 - `FlowRunner`: executes supported steps in order and respects dependencies.
 - `FlowStateTransition`: produces immutable running/completed/failed/reset states.
 - `FlowActionDispatcher`: delegates host-owned actions through a registry.
-- `FlowPresentationFactory`: provides a neutral default attention presentation.
+- `FlowPresentationFactory`: provides neutral semantic presentations for flow states.
 - `FlowRetryPolicy`: describes attempts, backoff, and idempotency.
 - `FlowEvent`: serializable lifecycle event descriptor for host event buses.
 - `FlowStateMigrationRunner`: upgrades persisted state between schema versions.

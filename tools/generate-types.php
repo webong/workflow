@@ -14,7 +14,6 @@ $parser->setExport(true)->setUseType(true)->setSingleFileMode(true);
 $files = [
     'src/Enums/FlowStatus.php',
     'src/Enums/FlowStepStatus.php',
-    'src/Enums/PresentationKind.php',
     'src/Enums/FlowEventType.php',
     'src/ValueObjects/StepDefinition.php',
     'src/ValueObjects/FlowDefinition.php',
