@@ -10,7 +10,7 @@ use Zorvia\WebFlow\Contracts\FlowContext;
 use Zorvia\WebFlow\Contracts\FlowEventSink;
 use Zorvia\WebFlow\Contracts\FlowStepExecutor;
 use Zorvia\WebFlow\Enums\FlowEventType;
-use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\Enums\FlowStepStatus;
 use Zorvia\WebFlow\ValueObjects\FlowDefinition;
 use Zorvia\WebFlow\ValueObjects\FlowState;
 use Zorvia\WebFlow\ValueObjects\StepState;
@@ -43,13 +43,13 @@ final class FlowRunner
         foreach ($definition->steps as $step) {
             $previous = $state->steps[$step->id] ?? new StepState();
 
-            if (in_array($previous->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true)) {
+            if (in_array($previous->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
                 continue;
             }
 
             if ($step->retryPolicy instanceof \Zorvia\WebFlow\ValueObjects\FlowRetryPolicy
                 && ! $step->retryPolicy->canRetry($previous->attempts)
-                && $previous->status === StepStatus::FAILED) {
+                && $previous->status === FlowStepStatus::FAILED) {
                 continue;
             }
 
@@ -83,10 +83,10 @@ final class FlowRunner
             ));
             $this->events->record(new \Zorvia\WebFlow\ValueObjects\FlowEvent(
                 match ($stepState->status) {
-                    StepStatus::COMPLETED => FlowEventType::STEP_COMPLETED,
-                    StepStatus::FAILED => FlowEventType::STEP_FAILED,
-                    StepStatus::SKIPPED => FlowEventType::STEP_SKIPPED,
-                    StepStatus::PENDING => $stepState->metadata['deferred'] ?? false
+                    FlowStepStatus::COMPLETED => FlowEventType::STEP_COMPLETED,
+                    FlowStepStatus::FAILED => FlowEventType::STEP_FAILED,
+                    FlowStepStatus::SKIPPED => FlowEventType::STEP_SKIPPED,
+                    FlowStepStatus::PENDING => $stepState->metadata['deferred'] ?? false
                         ? FlowEventType::STEP_DEFERRED
                         : FlowEventType::STEP_STARTED,
                     default => FlowEventType::STEP_STARTED,
@@ -117,7 +117,7 @@ final class FlowRunner
         foreach ($dependencies as $dependency) {
             $step = $state->steps[$dependency] ?? null;
 
-            if ($step === null || ! in_array($step->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true)) {
+            if ($step === null || ! in_array($step->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
                 return false;
             }
         }
@@ -136,7 +136,7 @@ final class FlowRunner
             $attempts = $previous->attempts + 1;
             $policy = $step->retryPolicy;
 
-            if ($result->status === StepStatus::FAILED && $policy instanceof \Zorvia\WebFlow\ValueObjects\FlowRetryPolicy) {
+            if ($result->status === FlowStepStatus::FAILED && $policy instanceof \Zorvia\WebFlow\ValueObjects\FlowRetryPolicy) {
                 $result = new \Zorvia\WebFlow\ValueObjects\StepResult(
                     status: $result->status,
                     message: $result->message,
@@ -152,7 +152,7 @@ final class FlowRunner
             return $result->toState();
         } catch (Throwable $exception) {
             return (new \Zorvia\WebFlow\ValueObjects\StepResult(
-                status: StepStatus::FAILED,
+                status: FlowStepStatus::FAILED,
                 error: $exception->getMessage() !== '' ? $exception->getMessage() : 'Flow step failed.',
                 retriable: $step->retriable,
             ))->toState();

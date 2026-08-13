@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Zorvia\WebFlow\Enums;
 
-enum StepStatus: string
+enum FlowStepStatus: string
 {
     case PENDING = 'pending';
     case RUNNING = 'running';

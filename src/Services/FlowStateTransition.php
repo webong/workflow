@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Zorvia\WebFlow\Services;
 
-use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\Enums\FlowStepStatus;
 use Zorvia\WebFlow\ValueObjects\FlowState;
 use Zorvia\WebFlow\ValueObjects\StepState;
 
@@ -13,7 +13,7 @@ final class FlowStateTransition
     public function running(FlowState $state, string $stepId): FlowState
     {
         return $state->withStep($stepId, new StepState(
-            status: StepStatus::RUNNING,
+            status: FlowStepStatus::RUNNING,
             updatedAt: date(DATE_ATOM),
         ));
     }
@@ -22,7 +22,7 @@ final class FlowStateTransition
     public function completed(FlowState $state, string $stepId, ?string $message = null, array $metadata = []): FlowState
     {
         return $state->withStep($stepId, new StepState(
-            status: StepStatus::COMPLETED,
+            status: FlowStepStatus::COMPLETED,
             message: $message,
             updatedAt: date(DATE_ATOM),
             metadata: $metadata,
@@ -33,7 +33,7 @@ final class FlowStateTransition
     public function failed(FlowState $state, string $stepId, string $error, bool $retriable = false, array $metadata = []): FlowState
     {
         return $state->withStep($stepId, new StepState(
-            status: StepStatus::FAILED,
+            status: FlowStepStatus::FAILED,
             error: $error,
             updatedAt: date(DATE_ATOM),
             retriable: $retriable,

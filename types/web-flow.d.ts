@@ -1,5 +1,5 @@
 export type FlowStatus = 'pending' | 'running' | 'attention' | 'completed' | 'blocked';
-export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
+export type FlowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export type PresentationKind = 'banner' | 'card' | 'inline' | 'toast';
 export type FlowEventType =
     | 'started'
@@ -31,7 +31,7 @@ export interface FlowDefinition {
 }
 
 export interface StepState {
-    status: StepStatus;
+    status: FlowStepStatus;
     message: string | null;
     error: string | null;
     updated_at: string | null;

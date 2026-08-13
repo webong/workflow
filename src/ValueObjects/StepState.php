@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Zorvia\WebFlow\ValueObjects;
 
-use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\Enums\FlowStepStatus;
 
 final readonly class StepState
 {
@@ -12,7 +12,7 @@ final readonly class StepState
      * @param array<string, mixed> $metadata
      */
     public function __construct(
-        public StepStatus $status = StepStatus::PENDING,
+        public FlowStepStatus $status = FlowStepStatus::PENDING,
         public ?string $message = null,
         public ?string $error = null,
         public ?string $updatedAt = null,
@@ -27,7 +27,7 @@ final readonly class StepState
     public static function fromArray(array $data): self
     {
         return new self(
-            status: StepStatus::tryFrom((string) ($data['status'] ?? StepStatus::PENDING->value)) ?? StepStatus::PENDING,
+            status: FlowStepStatus::tryFrom((string) ($data['status'] ?? FlowStepStatus::PENDING->value)) ?? FlowStepStatus::PENDING,
             message: is_string($data['message'] ?? null) ? $data['message'] : null,
             error: is_string($data['error'] ?? null) ? $data['error'] : null,
             updatedAt: is_string($data['updated_at'] ?? null) ? $data['updated_at'] : null,

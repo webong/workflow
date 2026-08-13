@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Zorvia\WebFlow\Services;
 
 use Zorvia\WebFlow\Enums\FlowStatus;
-use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\Enums\FlowStepStatus;
 use Zorvia\WebFlow\ValueObjects\FlowDefinition;
 use Zorvia\WebFlow\ValueObjects\FlowState;
 use Zorvia\WebFlow\ValueObjects\StepState;
@@ -28,15 +28,15 @@ final class FlowEvaluator
             $dependencyPending = array_filter(
                 $definitionStep->dependsOn,
                 static fn (string $dependency): bool => ! isset($steps[$dependency])
-                    || ! in_array($steps[$dependency]->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true),
+                    || ! in_array($steps[$dependency]->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true),
             );
 
-            if ($dependencyPending !== [] && $step->status === StepStatus::PENDING) {
+            if ($dependencyPending !== [] && $step->status === FlowStepStatus::PENDING) {
                 $criticalPending[] = $definitionStep->id;
                 continue;
             }
 
-            if ($step->status === StepStatus::FAILED) {
+            if ($step->status === FlowStepStatus::FAILED) {
                 $failedSteps[] = $definitionStep->id;
 
                 if ($definitionStep->critical) {
@@ -50,7 +50,7 @@ final class FlowEvaluator
                 continue;
             }
 
-            if ($definitionStep->critical && ! in_array($step->status, [StepStatus::COMPLETED, StepStatus::SKIPPED], true)) {
+            if ($definitionStep->critical && ! in_array($step->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
                 $criticalPending[] = $definitionStep->id;
             }
         }

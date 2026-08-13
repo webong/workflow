@@ -21,7 +21,7 @@ final class FlowPresentationFactory
         $actions = $action instanceof FlowAction ? [$action] : [];
         $hasFailedStep = $state->failedSteps !== [] || array_filter(
             $state->steps,
-            static fn (\Zorvia\WebFlow\ValueObjects\StepState $step): bool => $step->status === \Zorvia\WebFlow\Enums\StepStatus::FAILED,
+            static fn (\Zorvia\WebFlow\ValueObjects\StepState $step): bool => $step->status === \Zorvia\WebFlow\Enums\FlowStepStatus::FAILED,
         ) !== [];
         $status = $hasFailedStep && $state->status === FlowStatus::RUNNING ? FlowStatus::ATTENTION : $state->status;
         $defaults = match ($status) {

@@ -11,7 +11,7 @@ use Zorvia\WebFlow\Contracts\FlowActionRegistry;
 use Zorvia\WebFlow\Contracts\FlowContext;
 use Zorvia\WebFlow\Contracts\FlowStepExecutor;
 use Zorvia\WebFlow\Enums\FlowStatus;
-use Zorvia\WebFlow\Enums\StepStatus;
+use Zorvia\WebFlow\Enums\FlowStepStatus;
 use Zorvia\WebFlow\Services\FlowEvaluator;
 use Zorvia\WebFlow\Services\FlowActionDispatcher;
 use Zorvia\WebFlow\Services\FlowPresentationFactory;
@@ -42,7 +42,7 @@ final class FlowEvaluatorTest extends TestCase
         ]);
         $state = new FlowState(
             FlowStatus::RUNNING,
-            ['verify' => new StepState(StepStatus::FAILED, error: 'Token expired', retriable: true)],
+            ['verify' => new StepState(FlowStepStatus::FAILED, error: 'Token expired', retriable: true)],
         );
 
         $result = (new FlowEvaluator())->evaluate($definition, $state);
@@ -62,8 +62,8 @@ final class FlowEvaluatorTest extends TestCase
         $state = new FlowState(
             FlowStatus::RUNNING,
             [
-                'connection' => new StepState(StepStatus::COMPLETED),
-                'analytics' => new StepState(StepStatus::FAILED, error: 'Unavailable'),
+                'connection' => new StepState(FlowStepStatus::COMPLETED),
+                'analytics' => new StepState(FlowStepStatus::FAILED, error: 'Unavailable'),
             ],
         );
 
@@ -202,7 +202,7 @@ final class FlowEvaluatorTest extends TestCase
     {
         $state = new FlowState(
             FlowStatus::ATTENTION,
-            ['verify' => new StepState(StepStatus::FAILED, error: 'Expired', attempts: 2, nextRetryAt: 123)],
+            ['verify' => new StepState(FlowStepStatus::FAILED, error: 'Expired', attempts: 2, nextRetryAt: 123)],
             canRetryStep: 'verify',
             version: 1,
         );
@@ -234,7 +234,7 @@ final class FlowEvaluatorTest extends TestCase
             [$executor],
         );
 
-        self::assertSame(StepStatus::PENDING, $state->steps['authorize']->status);
+        self::assertSame(FlowStepStatus::PENDING, $state->steps['authorize']->status);
         self::assertSame('step_started', $events->events()[1]->type->value);
         self::assertSame('step_deferred', $events->events()[2]->type->value);
     }
