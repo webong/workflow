@@ -26,24 +26,30 @@ final readonly class StepDefinition
         }
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     public static function fromArray(array $data): self
     {
+        $id = $data['id'] ?? null;
+        $label = $data['label'] ?? $id;
+        $retryPolicy = $data['retry_policy'] ?? null;
+        $maxAttempts = is_array($retryPolicy) ? ($retryPolicy['max_attempts'] ?? null) : null;
+        $backoffSeconds = is_array($retryPolicy) ? ($retryPolicy['backoff_seconds'] ?? null) : null;
+
         return new self(
-            id: (string) ($data['id'] ?? ''),
-            label: (string) ($data['label'] ?? $data['id'] ?? ''),
+            id: is_string($id) ? $id : '',
+            label: is_string($label) ? $label : '',
             critical: (bool) ($data['critical'] ?? true),
             retriable: (bool) ($data['retriable'] ?? false),
             dependsOn: is_array($data['depends_on'] ?? null)
                 ? array_values(array_filter($data['depends_on'], 'is_string'))
                 : [],
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
-            retryPolicy: is_array($data['retry_policy'] ?? null)
+            retryPolicy: is_array($retryPolicy)
                 ? new FlowRetryPolicy(
-                    enabled: (bool) ($data['retry_policy']['enabled'] ?? true),
-                    maxAttempts: (int) ($data['retry_policy']['max_attempts'] ?? 3),
-                    backoffSeconds: (int) ($data['retry_policy']['backoff_seconds'] ?? 0),
-                    idempotent: (bool) ($data['retry_policy']['idempotent'] ?? true),
+                    enabled: is_bool($retryPolicy['enabled'] ?? null) ? $retryPolicy['enabled'] : true,
+                    maxAttempts: is_int($maxAttempts) ? $maxAttempts : 3,
+                    backoffSeconds: is_int($backoffSeconds) ? $backoffSeconds : 0,
+                    idempotent: is_bool($retryPolicy['idempotent'] ?? null) ? $retryPolicy['idempotent'] : true,
                 )
                 : null,
         );

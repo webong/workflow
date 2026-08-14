@@ -6,12 +6,14 @@ namespace Webong\WebFlow\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use Webong\WebFlow\Contracts\FlowStateMigrator;
 use Webong\WebFlow\Enums\FlowStatus;
 use Webong\WebFlow\Enums\FlowStepStatus;
 use Webong\WebFlow\Services\DefaultFlowStateSerializer;
+use Webong\WebFlow\Services\FlowEvaluator;
 use Webong\WebFlow\Services\FlowStateMigrationRunner;
 use Webong\WebFlow\Services\InMemoryFlowStateStore;
-use Webong\WebFlow\Contracts\FlowStateMigrator;
+use Webong\WebFlow\ValueObjects\FlowDefinition;
 use Webong\WebFlow\ValueObjects\FlowState;
 use Webong\WebFlow\ValueObjects\StepState;
 
@@ -52,6 +54,29 @@ final class FlowStatePersistenceTest extends TestCase
         self::assertSame($state->toArray(), $roundTrip->toArray());
     }
 
+    public function test_deserializer_uses_safe_defaults_for_malformed_scalar_fields(): void
+    {
+        $state = (new DefaultFlowStateSerializer())->deserialize([
+            'status' => ['invalid'],
+            'steps' => [
+                'verify' => [
+                    'status' => ['invalid'],
+                    'attempts' => 'many',
+                ],
+            ],
+            'failed_steps' => 'verify',
+            'status_message' => ['invalid'],
+            'version' => '3',
+        ]);
+
+        self::assertSame(FlowStatus::PENDING, $state->status);
+        self::assertSame(FlowStepStatus::PENDING, $state->steps['verify']->status);
+        self::assertSame(0, $state->steps['verify']->attempts);
+        self::assertSame([], $state->failedSteps);
+        self::assertNull($state->message);
+        self::assertSame(1, $state->version);
+    }
+
     public function test_migration_runner_applies_a_chain_of_versioned_migrators(): void
     {
         $state = (new FlowStateMigrationRunner())->migrate(
@@ -67,12 +92,23 @@ final class FlowStatePersistenceTest extends TestCase
         self::assertSame(['migrated_1_2' => true, 'migrated_2_3' => true], $state->metadata);
     }
 
-    public function test_migration_runner_rejects_missing_steps_and_downgrades(): void
+    public function test_migration_runner_rejects_downgrades(): void
     {
         $runner = new FlowStateMigrationRunner();
 
         $this->expectException(InvalidArgumentException::class);
         $runner->migrate(new FlowState(FlowStatus::PENDING, version: 2), 1, []);
+    }
+
+    public function test_migration_runner_rejects_a_missing_migrator(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new FlowStateMigrationRunner())->migrate(
+            new FlowState(FlowStatus::PENDING, version: 1),
+            2,
+            [],
+        );
     }
 
     public function test_migration_runner_rejects_a_gap_in_the_migration_chain(): void
@@ -86,11 +122,49 @@ final class FlowStatePersistenceTest extends TestCase
         );
     }
 
-    private function migrator(int $from, int $to): FlowStateMigrator
+    public function test_evaluation_preserves_a_migrated_state_version(): void
     {
-        return new class($from, $to) implements FlowStateMigrator {
-            public function __construct(private readonly int $from, private readonly int $to)
-            {
+        $state = (new FlowEvaluator())->evaluate(
+            new FlowDefinition('setup'),
+            new FlowState(FlowStatus::PENDING, version: 3),
+        );
+
+        self::assertSame(3, $state->version);
+    }
+
+    public function test_migration_runner_rejects_duplicate_source_versions(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new FlowStateMigrationRunner())->migrate(
+            new FlowState(FlowStatus::PENDING, version: 1),
+            2,
+            [
+                $this->migrator(1, 2),
+                $this->migrator(1, 2),
+            ],
+        );
+    }
+
+    public function test_migration_runner_rejects_an_incorrect_returned_version(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        (new FlowStateMigrationRunner())->migrate(
+            new FlowState(FlowStatus::PENDING, version: 1),
+            2,
+            [$this->migrator(1, 2, returnedVersion: 3)],
+        );
+    }
+
+    private function migrator(int $from, int $to, ?int $returnedVersion = null): FlowStateMigrator
+    {
+        return new class($from, $to, $returnedVersion) implements FlowStateMigrator {
+            public function __construct(
+                private readonly int $from,
+                private readonly int $to,
+                private readonly ?int $returnedVersion,
+            ) {
             }
 
             public function fromVersion(): int
@@ -113,7 +187,7 @@ final class FlowStatePersistenceTest extends TestCase
                     $state->canRetryStep,
                     $state->message,
                     [...$state->metadata, "migrated_{$this->from}_{$this->to}" => true],
-                    $this->to,
+                    $this->returnedVersion ?? $this->to,
                 );
             }
         };

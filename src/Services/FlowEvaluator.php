@@ -83,6 +83,7 @@ final class FlowEvaluator
             canRetryStep: $canRetryStep,
             message: $message,
             metadata: $stored instanceof FlowState ? $stored->metadata : [],
+            version: $stored instanceof FlowState ? $stored->version : FlowState::SCHEMA_VERSION,
         );
     }
 }

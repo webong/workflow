@@ -64,7 +64,8 @@ When an external callback completes a deferred step, the host passes a
 `FlowDefinition`, the stored `FlowState`, and a `FlowDeferredCompletion` to a
 `FlowDeferredCompletionHandler`. The handler rejects mismatched flows, unknown
 or non-deferred steps, applies the callback's completed/failed/pending result,
-and ignores duplicate idempotency keys.
+re-evaluates the flow, and ignores duplicate idempotency keys. Pending callback
+results remain deferred so a later callback can complete the same step.
 
 ## TypeScript contracts
 

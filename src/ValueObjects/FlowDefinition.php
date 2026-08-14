@@ -43,20 +43,22 @@ final readonly class FlowDefinition
         $this->assertAcyclic($this->steps);
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     public static function fromArray(array $data): self
     {
         $steps = is_array($data['steps'] ?? null) ? $data['steps'] : [];
+        $key = $data['key'] ?? null;
+        $version = $data['version'] ?? null;
 
         return new self(
-            key: (string) ($data['key'] ?? ''),
+            key: is_string($key) ? $key : '',
             steps: array_map(
                 static fn (array|StepDefinition $step): StepDefinition => $step instanceof StepDefinition
                     ? $step
                     : StepDefinition::fromArray($step),
                 array_values(array_filter($steps, static fn (mixed $step): bool => is_array($step) || $step instanceof StepDefinition)),
             ),
-            version: (int) ($data['version'] ?? 1),
+            version: is_int($version) ? $version : 1,
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
         );
     }

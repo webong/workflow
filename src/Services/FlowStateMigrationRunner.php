@@ -17,9 +17,24 @@ final class FlowStateMigrationRunner
             throw new InvalidArgumentException('Flow state downgrades are not supported.');
         }
 
+        if ($targetVersion === $state->version) {
+            return $state;
+        }
+
         $available = [];
         foreach ($migrators as $migrator) {
-            $available[$migrator->fromVersion()] = $migrator;
+            $fromVersion = $migrator->fromVersion();
+            $toVersion = $migrator->toVersion();
+
+            if ($fromVersion < 1 || $toVersion !== $fromVersion + 1) {
+                throw new InvalidArgumentException('Flow state migrators must advance one valid version at a time.');
+            }
+
+            if (isset($available[$fromVersion])) {
+                throw new InvalidArgumentException("Multiple flow state migrators exist for version {$fromVersion}.");
+            }
+
+            $available[$fromVersion] = $migrator;
         }
 
         while ($state->version < $targetVersion) {
@@ -27,10 +42,6 @@ final class FlowStateMigrationRunner
 
             if (! $migrator instanceof FlowStateMigrator) {
                 throw new InvalidArgumentException("No flow state migrator exists for version {$state->version}.");
-            }
-
-            if ($migrator->toVersion() !== $state->version + 1 || $migrator->toVersion() > $targetVersion) {
-                throw new InvalidArgumentException('Flow state migrators must advance one valid version at a time.');
             }
 
             $migrated = $migrator->migrate($state);

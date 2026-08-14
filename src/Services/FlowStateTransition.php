@@ -15,6 +15,11 @@ use Webong\WebFlow\ValueObjects\StepState;
 
 final class FlowStateTransition implements FlowDeferredCompletionHandler
 {
+    public function __construct(
+        private readonly FlowEvaluator $evaluator = new FlowEvaluator(),
+    ) {
+    }
+
     public function running(FlowState $state, string $stepId): FlowState
     {
         return $state->withStep($stepId, new StepState(
@@ -65,6 +70,23 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             throw new InvalidArgumentException("Deferred completion belongs to flow '{$completion->flowKey}', not '{$definition->key}'.");
         }
 
+        if ($definition->step($completion->stepId) === null) {
+            throw new InvalidArgumentException("Unknown flow definition step '{$completion->stepId}'.");
+        }
+
+        return $this->applyDeferredCompletion($definition, $state, $completion);
+    }
+
+    public function completeDeferred(FlowState $state, FlowDeferredCompletion $completion): FlowState
+    {
+        return $this->applyDeferredCompletion(null, $state, $completion);
+    }
+
+    private function applyDeferredCompletion(
+        ?FlowDefinition $definition,
+        FlowState $state,
+        FlowDeferredCompletion $completion,
+    ): FlowState {
         $processedKeys = $state->metadata['deferred_idempotency_keys']
             ?? $state->metadata['completed_idempotency_keys']
             ?? [];
@@ -86,18 +108,13 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         $processedKeys = is_array($processedKeys) ? array_values(array_filter($processedKeys, 'is_string')) : [];
         $next = $this->withStepResult($state, $completion->stepId, $completion->result);
 
-        return $this->withMetadata($next, [
+        $next = $this->withMetadata($next, [
             'deferred_idempotency_keys' => [...$processedKeys, $completion->idempotencyKey],
         ]);
-    }
 
-    public function completeDeferred(FlowState $state, FlowDeferredCompletion $completion): FlowState
-    {
-        return $this->complete(
-            new \Webong\WebFlow\ValueObjects\FlowDefinition($completion->flowKey),
-            $state,
-            $completion,
-        );
+        return $definition instanceof FlowDefinition
+            ? $this->evaluator->evaluate($definition, $next)
+            : $next;
     }
 
     private function withStepResult(FlowState $state, string $stepId, StepResult $result): FlowState
@@ -106,6 +123,12 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         $previous = $state->steps[$stepId] ?? null;
 
         if ($previous instanceof StepState && $step->attempts === 0) {
+            $metadata = $step->metadata;
+
+            if ($step->status === FlowStepStatus::PENDING && ($previous->metadata['deferred'] ?? false) === true) {
+                $metadata = [...$previous->metadata, ...$metadata, 'deferred' => true];
+            }
+
             $step = new StepState(
                 status: $step->status,
                 message: $step->message,
@@ -114,7 +137,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
                 retriable: $step->retriable,
                 attempts: $previous->attempts,
                 nextRetryAt: $step->nextRetryAt,
-                metadata: $step->metadata,
+                metadata: $metadata,
             );
         }
 

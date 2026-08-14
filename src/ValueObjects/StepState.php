@@ -23,16 +23,19 @@ final readonly class StepState
     ) {
     }
 
-    /** @param array<string, mixed> $data */
+    /** @param array<array-key, mixed> $data */
     public static function fromArray(array $data): self
     {
+        $status = $data['status'] ?? null;
+        $attempts = $data['attempts'] ?? null;
+
         return new self(
-            status: FlowStepStatus::tryFrom((string) ($data['status'] ?? FlowStepStatus::PENDING->value)) ?? FlowStepStatus::PENDING,
+            status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,
             message: is_string($data['message'] ?? null) ? $data['message'] : null,
             error: is_string($data['error'] ?? null) ? $data['error'] : null,
             updatedAt: is_string($data['updated_at'] ?? null) ? $data['updated_at'] : null,
             retriable: is_bool($data['retriable'] ?? null) ? $data['retriable'] : null,
-            attempts: max(0, (int) ($data['attempts'] ?? 0)),
+            attempts: is_int($attempts) ? max(0, $attempts) : 0,
             nextRetryAt: is_int($data['next_retry_at'] ?? null) ? $data['next_retry_at'] : null,
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
         );
