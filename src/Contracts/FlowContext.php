@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Contracts;
+namespace Webong\WorkFlow\Contracts;
 
 interface FlowContext
 {

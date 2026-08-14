@@ -1,6 +1,6 @@
 {
-    "name": "webong/web-flow",
-    "description": "Framework-agnostic flow definitions, state evaluation, presentations, and actions.",
+    "name": "webong/work-flow",
+    "description": "Framework-agnostic workflow definitions, state evaluation, presentations, and actions.",
     "type": "library",
     "license": "MIT",
     "require": {
@@ -13,12 +13,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Webong\\WebFlow\\": "src/"
+            "Webong\\WorkFlow\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Webong\\WebFlow\\Tests\\": "tests/"
+            "Webong\\WorkFlow\\Tests\\": "tests/"
         }
     },
     "scripts": {

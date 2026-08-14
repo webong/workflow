@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
-use Webong\WebFlow\Enums\FlowStatus;
-use Webong\WebFlow\ValueObjects\FlowAction;
-use Webong\WebFlow\ValueObjects\FlowPresentation;
-use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\Enums\FlowStatus;
+use Webong\WorkFlow\ValueObjects\FlowAction;
+use Webong\WorkFlow\ValueObjects\FlowPresentation;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 final class FlowPresentationFactory
 {
@@ -19,7 +19,7 @@ final class FlowPresentationFactory
         $actions = $action instanceof FlowAction ? [$action] : [];
         $hasFailedStep = $state->failedSteps !== [] || array_filter(
             $state->steps,
-            static fn (\Webong\WebFlow\ValueObjects\StepState $step): bool => $step->status === \Webong\WebFlow\Enums\FlowStepStatus::FAILED,
+            static fn (\Webong\WorkFlow\ValueObjects\StepState $step): bool => $step->status === \Webong\WorkFlow\Enums\FlowStepStatus::FAILED,
         ) !== [];
         $status = $hasFailedStep && $state->status === FlowStatus::RUNNING ? FlowStatus::ATTENTION : $state->status;
         $defaults = match ($status) {

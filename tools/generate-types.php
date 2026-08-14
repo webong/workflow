@@ -15,7 +15,7 @@ $files = [
     'src/Enums/FlowStatus.php',
     'src/Enums/FlowStepStatus.php',
     'src/Enums/FlowEventType.php',
-    'src/ValueObjects/StepDefinition.php',
+    'src/ValueObjects/FlowStepDefinition.php',
     'src/ValueObjects/FlowDefinition.php',
     'src/ValueObjects/StepState.php',
     'src/ValueObjects/FlowState.php',
@@ -33,4 +33,4 @@ foreach ($files as $file) {
     $output .= ($parser->getContent(__DIR__.'/../'.$file, requireAttribute: false) ?? '')."\n\n";
 }
 
-file_put_contents(__DIR__.'/../types/web-flow.generated.ts', $output);
+file_put_contents(__DIR__.'/../types/work-flow.generated.ts', $output);

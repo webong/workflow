@@ -2,16 +2,16 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
 use InvalidArgumentException;
-use Webong\WebFlow\Contracts\FlowDeferredCompletionHandler;
-use Webong\WebFlow\Enums\FlowStepStatus;
-use Webong\WebFlow\ValueObjects\FlowDefinition;
-use Webong\WebFlow\ValueObjects\FlowState;
-use Webong\WebFlow\ValueObjects\FlowDeferredCompletion;
-use Webong\WebFlow\ValueObjects\StepResult;
-use Webong\WebFlow\ValueObjects\StepState;
+use Webong\WorkFlow\Contracts\FlowDeferredCompletionHandler;
+use Webong\WorkFlow\Enums\FlowStepStatus;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WorkFlow\ValueObjects\StepResult;
+use Webong\WorkFlow\ValueObjects\StepState;
 
 final class FlowStateTransition implements FlowDeferredCompletionHandler
 {
@@ -55,7 +55,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
     public function reset(FlowState $state, ?string $stepId = null): FlowState
     {
         if ($stepId === null) {
-            return new FlowState(\Webong\WebFlow\Enums\FlowStatus::PENDING, version: $state->version, metadata: $state->metadata);
+            return new FlowState(\Webong\WorkFlow\Enums\FlowStatus::PENDING, version: $state->version, metadata: $state->metadata);
         }
 
         return $state->withStep($stepId, new StepState(updatedAt: date(DATE_ATOM)));

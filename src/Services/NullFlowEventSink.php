@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
-use Webong\WebFlow\Contracts\FlowEventSink;
-use Webong\WebFlow\ValueObjects\FlowEvent;
+use Webong\WorkFlow\Contracts\FlowEventSink;
+use Webong\WorkFlow\ValueObjects\FlowEvent;
 
 final class NullFlowEventSink implements FlowEventSink
 {

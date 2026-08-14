@@ -1,4 +1,4 @@
-name: WebFlow CI
+name: WorkFlow CI
 
 on:
   push:
@@ -22,4 +22,4 @@ jobs:
       - run: composer analyse
       - run: composer test
       - run: composer types
-      - run: git diff --exit-code -- types/web-flow.generated.ts
+      - run: git diff --exit-code -- types/work-flow.generated.ts

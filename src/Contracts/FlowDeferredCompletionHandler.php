@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Contracts;
+namespace Webong\WorkFlow\Contracts;
 
-use Webong\WebFlow\ValueObjects\FlowDeferredCompletion;
-use Webong\WebFlow\ValueObjects\FlowDefinition;
-use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 interface FlowDeferredCompletionHandler
 {

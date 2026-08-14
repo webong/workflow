@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
-use Webong\WebFlow\Contracts\FlowStateSerializer;
-use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\Contracts\FlowStateSerializer;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 final class DefaultFlowStateSerializer implements FlowStateSerializer
 {

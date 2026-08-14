@@ -2,18 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Contracts;
+namespace Webong\WorkFlow\Contracts;
 
-use Webong\WebFlow\ValueObjects\StepDefinition;
-use Webong\WebFlow\ValueObjects\StepResult;
-use Webong\WebFlow\ValueObjects\StepState;
+use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\StepResult;
+use Webong\WorkFlow\ValueObjects\StepState;
 
 interface FlowStepExecutor
 {
-    public function supports(StepDefinition $step): bool;
+    public function supports(FlowStepDefinition $step): bool;
 
     public function execute(
-        StepDefinition $step,
+        FlowStepDefinition $step,
         FlowContext $context,
         StepState $previous,
     ): StepResult;

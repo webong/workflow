@@ -2,44 +2,44 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Tests;
+namespace Webong\WorkFlow\Tests;
 
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Webong\WebFlow\Contracts\FlowActionHandler;
-use Webong\WebFlow\Contracts\FlowActionRegistry;
-use Webong\WebFlow\Contracts\FlowContext;
-use Webong\WebFlow\Contracts\FlowStepExecutor;
-use Webong\WebFlow\Enums\FlowStatus;
-use Webong\WebFlow\Enums\FlowStepStatus;
-use Webong\WebFlow\Services\FlowEvaluator;
-use Webong\WebFlow\Services\FlowActionDispatcher;
-use Webong\WebFlow\Services\FlowPresentationFactory;
-use Webong\WebFlow\Services\FlowRunner;
-use Webong\WebFlow\Services\FlowStateTransition;
-use Webong\WebFlow\Services\FlowStateMigrationRunner;
-use Webong\WebFlow\Services\InMemoryFlowStateStore;
-use Webong\WebFlow\Services\DefaultFlowStateSerializer;
-use Webong\WebFlow\Services\CollectingFlowEventSink;
-use Webong\WebFlow\Contracts\FlowStateMigrator;
-use Webong\WebFlow\ValueObjects\FlowAction;
-use Webong\WebFlow\ValueObjects\ArrayFlowContext;
-use Webong\WebFlow\ValueObjects\FlowDefinition;
-use Webong\WebFlow\ValueObjects\FlowState;
-use Webong\WebFlow\ValueObjects\StepDefinition;
-use Webong\WebFlow\ValueObjects\StepResult;
-use Webong\WebFlow\ValueObjects\StepState;
-use Webong\WebFlow\ValueObjects\FlowActionContext;
-use Webong\WebFlow\ValueObjects\FlowDeferredCompletion;
-use Webong\WebFlow\ValueObjects\FlowRetryPolicy;
+use Webong\WorkFlow\Contracts\FlowActionHandler;
+use Webong\WorkFlow\Contracts\FlowActionRegistry;
+use Webong\WorkFlow\Contracts\FlowContext;
+use Webong\WorkFlow\Contracts\FlowStepExecutor;
+use Webong\WorkFlow\Enums\FlowStatus;
+use Webong\WorkFlow\Enums\FlowStepStatus;
+use Webong\WorkFlow\Services\FlowEvaluator;
+use Webong\WorkFlow\Services\FlowActionDispatcher;
+use Webong\WorkFlow\Services\FlowPresentationFactory;
+use Webong\WorkFlow\Services\FlowRunner;
+use Webong\WorkFlow\Services\FlowStateTransition;
+use Webong\WorkFlow\Services\FlowStateMigrationRunner;
+use Webong\WorkFlow\Services\InMemoryFlowStateStore;
+use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
+use Webong\WorkFlow\Services\CollectingFlowEventSink;
+use Webong\WorkFlow\Contracts\FlowStateMigrator;
+use Webong\WorkFlow\ValueObjects\FlowAction;
+use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\StepResult;
+use Webong\WorkFlow\ValueObjects\StepState;
+use Webong\WorkFlow\ValueObjects\FlowActionContext;
+use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WorkFlow\ValueObjects\FlowRetryPolicy;
 
 final class FlowEvaluatorTest extends TestCase
 {
     public function test_a_retriable_critical_failure_needs_attention(): void
     {
         $definition = new FlowDefinition('channel_setup', [
-            new StepDefinition('verify', 'Verify access', retriable: true),
-            new StepDefinition('webhook', 'Configure webhook'),
+            new FlowStepDefinition('verify', 'Verify access', retriable: true),
+            new FlowStepDefinition('webhook', 'Configure webhook'),
         ]);
         $state = new FlowState(
             FlowStatus::RUNNING,
@@ -57,8 +57,8 @@ final class FlowEvaluatorTest extends TestCase
     public function test_non_critical_failure_does_not_block_completion(): void
     {
         $definition = new FlowDefinition('conversation_policy', [
-            new StepDefinition('connection', 'Connection', critical: true),
-            new StepDefinition('analytics', 'Analytics', critical: false),
+            new FlowStepDefinition('connection', 'Connection', critical: true),
+            new FlowStepDefinition('analytics', 'Analytics', critical: false),
         ]);
         $state = new FlowState(
             FlowStatus::RUNNING,
@@ -77,20 +77,20 @@ final class FlowEvaluatorTest extends TestCase
     public function test_runner_executes_steps_and_respects_dependencies(): void
     {
         $definition = new FlowDefinition('setup', [
-            new StepDefinition('authorize', 'Authorize', retriable: true),
-            new StepDefinition('subscribe', 'Subscribe', dependsOn: ['authorize']),
+            new FlowStepDefinition('authorize', 'Authorize', retriable: true),
+            new FlowStepDefinition('subscribe', 'Subscribe', dependsOn: ['authorize']),
         ]);
 
         $executor = new class implements FlowStepExecutor {
             /** @var list<string> */
             public array $executed = [];
 
-            public function supports(StepDefinition $step): bool
+            public function supports(FlowStepDefinition $step): bool
             {
                 return in_array($step->id, ['authorize', 'subscribe'], true);
             }
 
-            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
             {
                 $this->executed[] = $step->id;
 
@@ -113,15 +113,15 @@ final class FlowEvaluatorTest extends TestCase
     public function test_runner_converts_executor_exceptions_to_retriable_failures(): void
     {
         $definition = new FlowDefinition('setup', [
-            new StepDefinition('authorize', 'Authorize', retriable: true),
+            new FlowStepDefinition('authorize', 'Authorize', retriable: true),
         ]);
         $executor = new class implements FlowStepExecutor {
-            public function supports(StepDefinition $step): bool
+            public function supports(FlowStepDefinition $step): bool
             {
                 return $step->id === 'authorize';
             }
 
-            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
             {
                 throw new RuntimeException('provider unavailable');
             }
@@ -166,7 +166,7 @@ final class FlowEvaluatorTest extends TestCase
 
     public function test_action_dispatcher_rejects_unauthorized_actions(): void
     {
-        $authorizer = new class implements \Webong\WebFlow\Contracts\FlowActionAuthorizer {
+        $authorizer = new class implements \Webong\WorkFlow\Contracts\FlowActionAuthorizer {
             public function allows(FlowAction $action, array $context = []): bool
             {
                 return ($context['actor'] ?? null) === 'allowed';
@@ -250,16 +250,16 @@ final class FlowEvaluatorTest extends TestCase
     {
         $events = new CollectingFlowEventSink();
         $executor = new class implements FlowStepExecutor {
-            public function supports(StepDefinition $step): bool { return true; }
+            public function supports(FlowStepDefinition $step): bool { return true; }
 
-            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
             {
                 return StepResult::deferred('Waiting for provider callback.');
             }
         };
 
         $state = (new FlowRunner(events: $events))->run(
-            new FlowDefinition('async_setup', [new StepDefinition('authorize', 'Authorize')]),
+            new FlowDefinition('async_setup', [new FlowStepDefinition('authorize', 'Authorize')]),
             new FlowState(FlowStatus::PENDING),
             new ArrayFlowContext(),
             [$executor],
@@ -289,7 +289,7 @@ final class FlowEvaluatorTest extends TestCase
     public function test_retry_policy_exhaustion_blocks_retry_and_respects_backoff(): void
     {
         $definition = new FlowDefinition('retrying', [
-            new StepDefinition('verify', 'Verify', retryPolicy: new FlowRetryPolicy(maxAttempts: 2, backoffSeconds: 60)),
+            new FlowStepDefinition('verify', 'Verify', retryPolicy: new FlowRetryPolicy(maxAttempts: 2, backoffSeconds: 60)),
         ]);
         $state = new FlowState(FlowStatus::RUNNING, [
             'verify' => new StepState(FlowStepStatus::FAILED, error: 'Failed', retriable: true, attempts: 2, nextRetryAt: time() - 1),
@@ -309,7 +309,7 @@ final class FlowEvaluatorTest extends TestCase
         $completion = new FlowDeferredCompletion('setup', 'subscribe', 'callback-1', StepResult::completed('Subscribed'));
         $transition = new FlowStateTransition();
 
-        $definition = new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]);
+        $definition = new FlowDefinition('setup', [new FlowStepDefinition('subscribe', 'Subscribe')]);
         $completed = $transition->complete($definition, $initial, $completion);
         $replayed = $transition->complete($definition, $completed, $completion);
 
@@ -320,7 +320,7 @@ final class FlowEvaluatorTest extends TestCase
 
     public function test_deferred_pending_completion_remains_eligible_for_a_later_callback(): void
     {
-        $definition = new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]);
+        $definition = new FlowDefinition('setup', [new FlowStepDefinition('subscribe', 'Subscribe')]);
         $initial = new FlowState(FlowStatus::RUNNING, [
             'subscribe' => new StepState(FlowStepStatus::PENDING, attempts: 1, metadata: [
                 'deferred' => true,
@@ -355,7 +355,7 @@ final class FlowEvaluatorTest extends TestCase
         $completion = new FlowDeferredCompletion('setup', 'subscribe', 'callback-failed', StepResult::failed('Subscription failed', true));
 
         $result = (new FlowStateTransition())->complete(
-            new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]),
+            new FlowDefinition('setup', [new FlowStepDefinition('subscribe', 'Subscribe')]),
             $state,
             $completion,
         );
@@ -368,7 +368,7 @@ final class FlowEvaluatorTest extends TestCase
     public function test_deferred_completion_rejects_wrong_flow(): void
     {
         $transition = new FlowStateTransition();
-        $definition = new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]);
+        $definition = new FlowDefinition('setup', [new FlowStepDefinition('subscribe', 'Subscribe')]);
         $completion = new FlowDeferredCompletion('other', 'subscribe', 'callback-1', StepResult::completed());
 
         $this->expectException(\InvalidArgumentException::class);
@@ -380,7 +380,7 @@ final class FlowEvaluatorTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
 
         (new FlowStateTransition())->complete(
-            new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]),
+            new FlowDefinition('setup', [new FlowStepDefinition('subscribe', 'Subscribe')]),
             new FlowState(FlowStatus::RUNNING, [
                 'subscribe' => new StepState(FlowStepStatus::PENDING),
             ]),
@@ -417,15 +417,15 @@ final class FlowEvaluatorTest extends TestCase
     {
         $events = new CollectingFlowEventSink();
         $executor = new class implements FlowStepExecutor {
-            public function supports(StepDefinition $step): bool { return true; }
-            public function execute(StepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function supports(FlowStepDefinition $step): bool { return true; }
+            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
             {
                 return StepResult::deferred();
             }
         };
 
         (new FlowRunner(events: $events))->run(
-            new FlowDefinition('ordered', [new StepDefinition('one', 'One')]),
+            new FlowDefinition('ordered', [new FlowStepDefinition('one', 'One')]),
             new FlowState(FlowStatus::PENDING),
             new ArrayFlowContext(),
             [$executor],
@@ -433,7 +433,7 @@ final class FlowEvaluatorTest extends TestCase
 
         self::assertSame(
             ['started', 'step_started', 'step_deferred', 'started'],
-            array_map(static fn (\Webong\WebFlow\ValueObjects\FlowEvent $event): string => $event->type->value, $events->events()),
+            array_map(static fn (\Webong\WorkFlow\ValueObjects\FlowEvent $event): string => $event->type->value, $events->events()),
         );
     }
 }

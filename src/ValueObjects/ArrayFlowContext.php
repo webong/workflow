@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\ValueObjects;
+namespace Webong\WorkFlow\ValueObjects;
 
-use Webong\WebFlow\Contracts\FlowContext;
+use Webong\WorkFlow\Contracts\FlowContext;
 
 final readonly class ArrayFlowContext implements FlowContext
 {

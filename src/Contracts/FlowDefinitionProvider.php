@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Contracts;
+namespace Webong\WorkFlow\Contracts;
 
-use Webong\WebFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
 
 interface FlowDefinitionProvider
 {

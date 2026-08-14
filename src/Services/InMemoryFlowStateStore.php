@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
-use Webong\WebFlow\Contracts\FlowStateStore;
-use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\Contracts\FlowStateStore;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 /** Reference implementation for package consumers and conformance tests. */
 final class InMemoryFlowStateStore implements FlowStateStore

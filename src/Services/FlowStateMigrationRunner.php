@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
 use InvalidArgumentException;
-use Webong\WebFlow\Contracts\FlowStateMigrator;
-use Webong\WebFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\Contracts\FlowStateMigrator;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 final class FlowStateMigrationRunner
 {

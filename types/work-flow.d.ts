@@ -12,7 +12,7 @@ export type FlowEventType =
     | 'blocked'
     | 'reset';
 
-export interface StepDefinition {
+export interface FlowStepDefinition {
     id: string;
     label: string;
     critical: boolean;
@@ -25,7 +25,7 @@ export interface StepDefinition {
 export interface FlowDefinition {
     key: string;
     version: number;
-    steps: StepDefinition[];
+    steps: FlowStepDefinition[];
     metadata: Record<string, unknown>;
 }
 

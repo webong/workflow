@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Contracts;
+namespace Webong\WorkFlow\Contracts;
 
-use Webong\WebFlow\ValueObjects\FlowAction;
+use Webong\WorkFlow\ValueObjects\FlowAction;
 
 interface FlowActionAuthorizer
 {

@@ -2,9 +2,9 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\ValueObjects;
+namespace Webong\WorkFlow\ValueObjects;
 
-use Webong\WebFlow\Enums\FlowStepStatus;
+use Webong\WorkFlow\Enums\FlowStepStatus;
 
 final readonly class StepResult
 {

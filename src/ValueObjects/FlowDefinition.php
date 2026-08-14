@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\ValueObjects;
+namespace Webong\WorkFlow\ValueObjects;
 
 use InvalidArgumentException;
 
 final readonly class FlowDefinition
 {
     /**
-     * @param list<StepDefinition> $steps
+     * @param list<FlowStepDefinition> $steps
      * @param array<string, mixed> $metadata
      */
     public function __construct(
@@ -26,7 +26,7 @@ final readonly class FlowDefinition
             throw new InvalidArgumentException('A flow version must be positive.');
         }
 
-        $ids = array_map(static fn (StepDefinition $step): string => $step->id, $this->steps);
+        $ids = array_map(static fn (FlowStepDefinition $step): string => $step->id, $this->steps);
 
         if (count($ids) !== count(array_unique($ids))) {
             throw new InvalidArgumentException('Flow step ids must be unique.');
@@ -53,17 +53,17 @@ final readonly class FlowDefinition
         return new self(
             key: is_string($key) ? $key : '',
             steps: array_map(
-                static fn (array|StepDefinition $step): StepDefinition => $step instanceof StepDefinition
+                static fn (array|FlowStepDefinition $step): FlowStepDefinition => $step instanceof FlowStepDefinition
                     ? $step
-                    : StepDefinition::fromArray($step),
-                array_values(array_filter($steps, static fn (mixed $step): bool => is_array($step) || $step instanceof StepDefinition)),
+                    : FlowStepDefinition::fromArray($step),
+                array_values(array_filter($steps, static fn (mixed $step): bool => is_array($step) || $step instanceof FlowStepDefinition)),
             ),
             version: is_int($version) ? $version : 1,
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
         );
     }
 
-    public function step(string $id): ?StepDefinition
+    public function step(string $id): ?FlowStepDefinition
     {
         foreach ($this->steps as $step) {
             if ($step->id === $id) {
@@ -80,12 +80,12 @@ final readonly class FlowDefinition
         return [
             'key' => $this->key,
             'version' => $this->version,
-            'steps' => array_map(static fn (StepDefinition $step): array => $step->toArray(), $this->steps),
+            'steps' => array_map(static fn (FlowStepDefinition $step): array => $step->toArray(), $this->steps),
             'metadata' => $this->metadata,
         ];
     }
 
-    /** @param list<StepDefinition> $steps */
+    /** @param list<FlowStepDefinition> $steps */
     private function assertAcyclic(array $steps): void
     {
         $visiting = [];
@@ -109,7 +109,7 @@ final readonly class FlowDefinition
                 }
             }
 
-            if ($step instanceof StepDefinition) {
+            if ($step instanceof FlowStepDefinition) {
                 foreach ($step->dependsOn as $dependency) {
                     $visit($dependency);
                 }

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\ValueObjects;
+namespace Webong\WorkFlow\ValueObjects;
 
 use InvalidArgumentException;
 
-final readonly class StepDefinition
+final readonly class FlowStepDefinition
 {
     /**
      * @param list<string> $dependsOn

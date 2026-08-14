@@ -1,27 +1,31 @@
-# WebFlow
+# WorkFlow
 
-WebFlow is a framework-agnostic vocabulary and state evaluator for product
-flows. It can describe connection setup, onboarding, conversation policies,
-attention banners, and user actions without knowing about tenants, channels,
-connections, queues, databases, or a particular UI framework.
+WorkFlow is a framework- and delivery-surface-agnostic vocabulary and state
+evaluator for product flows. It can coordinate connection setup, onboarding,
+conversation policies, attention states, and actions across mobile apps, CLIs,
+GUIs, APIs, and background processes without depending on a transport,
+persistence layer, queue, or UI framework.
+
+- Composer package: `webong/work-flow`
+- PHP namespace: `Webong\WorkFlow`
 
 The package deliberately does not execute jobs or persist state. The host
-application supplies those adapters and stores the serialized state wherever
-its domain requires.
+runtime supplies those adapters and stores the serialized state wherever its
+domain requires.
 
 ## Core vocabulary
 
 - `FlowDefinition`: a named flow and its step definitions.
-- `StepDefinition`: a step's stable identity, label, dependencies, and policy.
+- `FlowStepDefinition`: a step's stable identity, label, dependencies, and policy.
 - `FlowState`: the evaluated state of a flow and its step states.
 - `FlowEvaluator`: derives a flow state from a definition and stored data.
 - `FlowPresentation`: a UI-neutral semantic message with severity, actions, and metadata.
 - `FlowAction`: a UI-neutral action descriptor.
 - `FlowDefinitionProvider`: resolves definitions supplied by the host domain.
 - `FlowPresentationResolver`: turns state into a presentation for a surface.
-- `FlowActionHandler`: lets the host application execute domain actions.
+- `FlowActionHandler`: lets the host runtime execute domain actions.
 - `FlowContext` and `ArrayFlowContext`: provide host-owned runtime context.
-- `FlowStepExecutor`: executes one domain step without coupling WebFlow to a
+- `FlowStepExecutor`: executes one domain step without coupling WorkFlow to a
   queue or framework.
 - `FlowDeferredCompletionHandler`: applies an asynchronous callback to the
   matching flow and deferred step while enforcing correlation and idempotency.
@@ -69,7 +73,7 @@ results remain deferred so a later callback can complete the same step.
 
 ## TypeScript contracts
 
-The package exposes `types/web-flow.d.ts` for consumers that want stable
-frontend contracts immediately. When the development dependency is installed,
-`composer types` regenerates `types/web-flow.generated.ts` using
+The package exposes `types/work-flow.d.ts` for consumers that want stable
+TypeScript contracts immediately. When the development dependency is installed,
+`composer types` regenerates `types/work-flow.generated.ts` using
 `paneon/php-to-typescript`; the generated file is checked by CI.

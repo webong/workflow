@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Services;
+namespace Webong\WorkFlow\Services;
 
 use RuntimeException;
-use Webong\WebFlow\Contracts\FlowActionAuthorizer;
-use Webong\WebFlow\Contracts\FlowActionHandler;
-use Webong\WebFlow\Contracts\FlowActionRegistry;
-use Webong\WebFlow\ValueObjects\FlowAction;
-use Webong\WebFlow\ValueObjects\FlowActionContext;
+use Webong\WorkFlow\Contracts\FlowActionAuthorizer;
+use Webong\WorkFlow\Contracts\FlowActionHandler;
+use Webong\WorkFlow\Contracts\FlowActionRegistry;
+use Webong\WorkFlow\ValueObjects\FlowAction;
+use Webong\WorkFlow\ValueObjects\FlowActionContext;
 
 final class FlowActionDispatcher
 {

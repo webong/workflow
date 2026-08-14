@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WebFlow\Enums;
+namespace Webong\WorkFlow\Enums;
 
 enum FlowStepStatus: string
 {
