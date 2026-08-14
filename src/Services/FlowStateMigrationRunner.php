@@ -29,7 +29,7 @@ final class FlowStateMigrationRunner
                 throw new InvalidArgumentException("No flow state migrator exists for version {$state->version}.");
             }
 
-            if ($migrator->toVersion() <= $state->version || $migrator->toVersion() > $targetVersion) {
+            if ($migrator->toVersion() !== $state->version + 1 || $migrator->toVersion() > $targetVersion) {
                 throw new InvalidArgumentException('Flow state migrators must advance one valid version at a time.');
             }
 

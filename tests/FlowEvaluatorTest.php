@@ -309,11 +309,52 @@ final class FlowEvaluatorTest extends TestCase
         $completion = new FlowDeferredCompletion('setup', 'subscribe', 'callback-1', StepResult::completed('Subscribed'));
         $transition = new FlowStateTransition();
 
-        $completed = $transition->completeDeferred($initial, $completion);
-        $replayed = $transition->completeDeferred($completed, $completion);
+        $definition = new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]);
+        $completed = $transition->complete($definition, $initial, $completion);
+        $replayed = $transition->complete($definition, $completed, $completion);
 
         self::assertSame(FlowStepStatus::COMPLETED, $completed->steps['subscribe']->status);
         self::assertSame($completed->toArray(), $replayed->toArray());
+    }
+
+    public function test_deferred_completion_applies_failed_results(): void
+    {
+        $state = new FlowState(FlowStatus::RUNNING, [
+            'subscribe' => new StepState(FlowStepStatus::PENDING, metadata: ['deferred' => true]),
+        ]);
+        $completion = new FlowDeferredCompletion('setup', 'subscribe', 'callback-failed', StepResult::failed('Subscription failed', true));
+
+        $result = (new FlowStateTransition())->complete(
+            new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]),
+            $state,
+            $completion,
+        );
+
+        self::assertSame(FlowStepStatus::FAILED, $result->steps['subscribe']->status);
+        self::assertSame('Subscription failed', $result->steps['subscribe']->error);
+    }
+
+    public function test_deferred_completion_rejects_wrong_flow(): void
+    {
+        $transition = new FlowStateTransition();
+        $definition = new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]);
+        $completion = new FlowDeferredCompletion('other', 'subscribe', 'callback-1', StepResult::completed());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $transition->complete($definition, new FlowState(FlowStatus::RUNNING), $completion);
+    }
+
+    public function test_deferred_completion_rejects_a_step_that_is_not_deferred(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+
+        (new FlowStateTransition())->complete(
+            new FlowDefinition('setup', [new StepDefinition('subscribe', 'Subscribe')]),
+            new FlowState(FlowStatus::RUNNING, [
+                'subscribe' => new StepState(FlowStepStatus::PENDING),
+            ]),
+            new FlowDeferredCompletion('setup', 'subscribe', 'callback-1', StepResult::completed()),
+        );
     }
 
     public function test_reset_clears_a_step_for_replay_without_mutating_the_original(): void

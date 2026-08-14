@@ -23,6 +23,8 @@ its domain requires.
 - `FlowContext` and `ArrayFlowContext`: provide host-owned runtime context.
 - `FlowStepExecutor`: executes one domain step without coupling WebFlow to a
   queue or framework.
+- `FlowDeferredCompletionHandler`: applies an asynchronous callback to the
+  matching flow and deferred step while enforcing correlation and idempotency.
 - `FlowRunner`: executes supported steps in order and respects dependencies.
 - `FlowStateTransition`: produces immutable running/completed/failed/reset states.
 - `FlowActionDispatcher`: delegates host-owned actions through a registry.
@@ -57,6 +59,12 @@ will arrive asynchronously. Executor exceptions are converted into failed step
 states using the step's retry policy; the host can persist the returned state
 and retry it later. `CollectingFlowEventSink` is available for tests, while
 production applications provide their own event sink.
+
+When an external callback completes a deferred step, the host passes a
+`FlowDefinition`, the stored `FlowState`, and a `FlowDeferredCompletion` to a
+`FlowDeferredCompletionHandler`. The handler rejects mismatched flows, unknown
+or non-deferred steps, applies the callback's completed/failed/pending result,
+and ignores duplicate idempotency keys.
 
 ## TypeScript contracts
 
