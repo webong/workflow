@@ -6,6 +6,7 @@ namespace Webong\WorkFlow\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
+use Webong\WorkFlow\Contracts\AtomicFlowStateStore;
 use Webong\WorkFlow\Contracts\FlowStateMigrator;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
@@ -15,6 +16,7 @@ use Webong\WorkFlow\Services\FlowStateMigrationRunner;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\StepState;
 
 final class FlowStatePersistenceTest extends TestCase
@@ -31,6 +33,28 @@ final class FlowStatePersistenceTest extends TestCase
         $store->put('setup', $second);
 
         self::assertSame($second, $store->get('setup'));
+
+        $store->forget('setup');
+
+        self::assertNull($store->get('setup'));
+    }
+
+    public function test_in_memory_store_supports_atomic_mutation_and_subject_identity(): void
+    {
+        $store = new InMemoryFlowStateStore();
+        $subject = new FlowStateSubject('channel', 'channel-1');
+
+        self::assertInstanceOf(AtomicFlowStateStore::class, $store);
+        self::assertSame('channel', $subject->type);
+        self::assertSame('channel-1', $subject->id);
+
+        $result = $store->mutate('setup', static fn (?FlowState $state): FlowState => new FlowState(
+            FlowStatus::COMPLETED,
+            metadata: ['was_missing' => $state === null],
+        ));
+
+        self::assertSame(FlowStatus::COMPLETED, $result->status);
+        self::assertTrue($store->get('setup')?->metadata['was_missing']);
     }
 
     public function test_serializer_preserves_nested_step_state_and_metadata(): void

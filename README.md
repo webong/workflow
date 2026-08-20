@@ -9,9 +9,11 @@ persistence layer, queue, or UI framework.
 - Composer package: `webong/work-flow`
 - PHP namespace: `Webong\WorkFlow`
 
-The package deliberately does not execute jobs or persist state. The host
-runtime supplies those adapters and stores the serialized state wherever its
-domain requires.
+The core package deliberately does not execute jobs or require a persistence
+backend. The host runtime supplies those adapters and stores the serialized
+state wherever its domain requires. An optional Laravel integration ships in
+this package for applications that want a polymorphic Eloquent database store
+or an atomic Redis store.
 
 ## Core vocabulary
 
@@ -41,7 +43,14 @@ domain requires.
 - `FlowEventSink`: receives lifecycle events without coupling the package to an
   event bus; the host can persist or publish them.
 - `FlowStateSerializer`: defines the durable array representation used by
-  stores, while the package leaves database and cache persistence to the host.
+  stores.
+- `FlowStateSubject`: identifies the polymorphic subject that owns a flow state
+  without exposing a framework model to the core.
+- `AtomicFlowStateStore`: adds a locked read-modify-write mutation operation
+  for asynchronous callbacks and concurrent workers.
+- `ForgettableFlowStateStore`: adds explicit flow-state deletion for lifecycle
+  cleanup without forcing every store implementation to support it.
+- `FlowStateStoreFactory`: creates a subject-bound store through an interface.
 - `FlowActionContext`: carries actor, resource, and host-owned authorization
   attributes into action handlers.
 
@@ -63,6 +72,32 @@ will arrive asynchronously. Executor exceptions are converted into failed step
 states using the step's retry policy; the host can persist the returned state
 and retry it later. `CollectingFlowEventSink` is available for tests, while
 production applications provide their own event sink.
+
+## Optional Laravel persistence
+
+Install the Laravel cache/database components when using the optional adapters,
+publish the migration, and add `HasWorkflowStates` to any Eloquent model that
+owns flow state:
+
+```php
+use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
+use Webong\WorkFlow\ValueObjects\FlowStateSubject;
+use Webong\WorkFlow\ValueObjects\FlowState;
+
+$store = $factory->for(new FlowStateSubject(
+    type: $model->getMorphClass(),
+    id: (string) $model->getKey(),
+));
+
+$store->mutate('setup', static function (?FlowState $state): FlowState {
+    // Return the next immutable state.
+});
+```
+
+Set `WORK_FLOW_STORE=database` (the default) for the Eloquent store or
+`WORK_FLOW_STORE=redis` for the lock-protected Redis store. Redis expiration is
+disabled by default because workflow state is authoritative; configure a TTL
+only when that lifecycle is intentional.
 
 When an external callback completes a deferred step, the host passes a
 `FlowDefinition`, the stored `FlowState`, and a `FlowDeferredCompletion` to a
