@@ -50,7 +50,8 @@ or an atomic Redis store.
   for asynchronous callbacks and concurrent workers.
 - `ForgettableFlowStateStore`: adds explicit flow-state deletion for lifecycle
   cleanup without forcing every store implementation to support it.
-- `FlowStateStoreFactory`: creates a subject-bound store through an interface.
+- `FlowStateStoreFactory`: creates a subject-bound, atomic, forgettable store
+  through an interface.
 - `FlowActionContext`: carries actor, resource, and host-owned authorization
   attributes into action handlers.
 
@@ -75,9 +76,26 @@ production applications provide their own event sink.
 
 ## Optional Laravel persistence
 
-Install the Laravel cache/database components when using the optional adapters,
-publish the migration, and add `HasWorkflowStates` to any Eloquent model that
-owns flow state:
+Install the optional Laravel components in the host application:
+
+```sh
+composer require illuminate/cache illuminate/database
+php artisan vendor:publish --tag=work-flow-config
+php artisan vendor:publish --tag=work-flow-migrations
+php artisan migrate
+```
+
+The provider is registered through Laravel package discovery. Set
+`WORK_FLOW_STORE=database` (the default) for Eloquent or
+`WORK_FLOW_STORE=redis` for Redis. The database connection can be selected with
+`WORK_FLOW_DATABASE_CONNECTION`; Redis uses `WORK_FLOW_REDIS_STORE` and
+`WORK_FLOW_REDIS_PREFIX`. Redis expiration is disabled by default because
+workflow state is authoritative; configure the published `ttl` only when that
+lifecycle is intentional.
+
+Add `HasWorkflowStates` to any Eloquent model that owns flow state. The subject
+type should use the model's resolved morph class, so custom morph maps remain
+compatible:
 
 ```php
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
@@ -94,10 +112,37 @@ $store->mutate('setup', static function (?FlowState $state): FlowState {
 });
 ```
 
-Set `WORK_FLOW_STORE=database` (the default) for the Eloquent store or
-`WORK_FLOW_STORE=redis` for the lock-protected Redis store. Redis expiration is
-disabled by default because workflow state is authoritative; configure a TTL
-only when that lifecycle is intentional.
+For adapter development, the default test suite uses SQLite and an in-memory
+lock provider. Production-driver coverage is available when services are
+configured:
+
+```sh
+WORK_FLOW_POSTGRES_DSN='pgsql:host=127.0.0.1;port=5432;dbname=workflow_test' \
+WORK_FLOW_POSTGRES_USER=workflow \
+WORK_FLOW_POSTGRES_PASSWORD=workflow \
+WORK_FLOW_REDIS_HOST=127.0.0.1 \
+WORK_FLOW_REDIS_PORT=6379 \
+vendor/bin/phpunit tests/Laravel/ProductionFlowStateStoreTest.php
+```
+
+The production-driver tests skip only when their corresponding environment
+variables are absent; CI provisions PostgreSQL and Redis services for them.
+
+## Docker test environment
+
+The repository includes an isolated PHP 8.3, PostgreSQL, and Redis test stack.
+It does not share containers or volumes with the CRM application:
+
+```sh
+make docker-test
+make docker-down
+```
+
+The container resolves development dependencies with PHP 8.3 on each test run,
+so validation does not depend on the host PHP version or its Composer lockfile.
+The Compose project uses `workflow_*` named volumes and maps PostgreSQL to
+port `55432` and Redis to `56379` by default. Override those host ports with
+`WORK_FLOW_POSTGRES_PORT` and `WORK_FLOW_REDIS_PORT_HOST` if needed.
 
 When an external callback completes a deferred step, the host passes a
 `FlowDefinition`, the stored `FlowState`, and a `FlowDeferredCompletion` to a

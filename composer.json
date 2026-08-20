@@ -9,6 +9,7 @@
     "require-dev": {
         "illuminate/cache": "^12.0",
         "illuminate/database": "^12.0",
+        "illuminate/redis": "^12.0",
         "paneon/php-to-typescript": "^2.3",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0"

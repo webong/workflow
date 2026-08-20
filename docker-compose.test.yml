@@ -1,0 +1,53 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    working_dir: /app
+    volumes:
+      - .:/app
+      - workflow_vendor:/app/vendor
+    environment:
+      WORK_FLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow_test
+      WORK_FLOW_POSTGRES_USER: workflow
+      WORK_FLOW_POSTGRES_PASSWORD: workflow
+      WORK_FLOW_REDIS_HOST: redis
+      WORK_FLOW_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: workflow_test
+      POSTGRES_USER: workflow
+      POSTGRES_PASSWORD: workflow
+    ports:
+      - "${WORK_FLOW_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - workflow_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow -d workflow_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${WORK_FLOW_REDIS_PORT_HOST:-56379}:6379"
+    volumes:
+      - workflow_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  workflow_vendor:
+  workflow_postgres:
+  workflow_redis:

@@ -1,0 +1,5 @@
+.git
+.github
+.phpunit.result.cache
+.phpunit.cache
+vendor
