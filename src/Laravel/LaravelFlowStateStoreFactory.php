@@ -8,9 +8,9 @@ use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Connection;
 use InvalidArgumentException;
-use Webong\WorkFlow\Contracts\AtomicFlowStateStore;
 use Webong\WorkFlow\Contracts\FlowStateSerializer;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
+use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
 use Webong\WorkFlow\Laravel\Models\WorkflowStateRecord;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 
@@ -27,7 +27,7 @@ final class LaravelFlowStateStoreFactory implements FlowStateStoreFactory
     ) {
     }
 
-    public function for(FlowStateSubject $subject): AtomicFlowStateStore
+    public function for(FlowStateSubject $subject): ForgettableFlowStateStore
     {
         return match ($this->driver) {
             'database' => $this->databaseStore($subject),

@@ -82,7 +82,13 @@ final class DatabaseFlowStateStore implements ForgettableFlowStateStore
 
     public function forget(string $flowKey): void
     {
-        $this->query($flowKey)->delete();
+        $this->connection->transaction(function () use ($flowKey): void {
+            $record = $this->record($flowKey, locked: true);
+
+            if ($record !== null) {
+                $record->delete();
+            }
+        });
     }
 
     /** @return Builder<WorkflowStateRecord> */

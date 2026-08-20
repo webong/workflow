@@ -6,8 +6,8 @@ namespace Webong\WorkFlow\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Webong\WorkFlow\Contracts\AtomicFlowStateStore;
 use Webong\WorkFlow\Contracts\FlowStateMigrator;
+use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
@@ -44,7 +44,7 @@ final class FlowStatePersistenceTest extends TestCase
         $store = new InMemoryFlowStateStore();
         $subject = new FlowStateSubject('channel', 'channel-1');
 
-        self::assertInstanceOf(AtomicFlowStateStore::class, $store);
+        self::assertInstanceOf(ForgettableFlowStateStore::class, $store);
         self::assertSame('channel', $subject->type);
         self::assertSame('channel-1', $subject->id);
 

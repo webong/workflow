@@ -29,17 +29,13 @@ final class RedisFlowStateStore implements ForgettableFlowStateStore
 
     public function get(string $flowKey): ?FlowState
     {
-        $payload = $this->cache->get($this->key($flowKey));
+        $payload = $this->payload($flowKey);
 
         if ($payload === null) {
             return null;
         }
 
-        if (! is_array($payload) || ! is_array($payload['state'] ?? null)) {
-            throw new \UnexpectedValueException('The stored workflow state payload is malformed.');
-        }
-
-        return $this->serializer->deserialize($this->stateData($payload['state']));
+        return $this->serializer->deserialize($payload['state']);
     }
 
     public function put(string $flowKey, FlowState $state): void
@@ -52,12 +48,13 @@ final class RedisFlowStateStore implements ForgettableFlowStateStore
         $result = $this->locks->lock($this->lockKey($flowKey), $this->lockSeconds)->block(
             $this->lockWaitSeconds,
             function () use ($flowKey, $transition): FlowState {
-                $current = $this->get($flowKey);
+                $payload = $this->payload($flowKey);
+                $current = $payload === null ? null : $this->serializer->deserialize($payload['state']);
                 $next = $transition($current);
                 $payload = [
                     'state' => $this->serializer->serialize($next),
                     'schema_version' => FlowState::SCHEMA_VERSION,
-                    'lock_version' => $next->version,
+                    'lock_version' => ($payload['lock_version'] ?? 0) + 1,
                 ];
 
                 if ($this->ttlSeconds === null) {
@@ -79,7 +76,14 @@ final class RedisFlowStateStore implements ForgettableFlowStateStore
 
     public function forget(string $flowKey): void
     {
-        $this->cache->forget($this->key($flowKey));
+        $result = $this->locks->lock($this->lockKey($flowKey), $this->lockSeconds)->block(
+            $this->lockWaitSeconds,
+            fn (): bool => $this->cache->forget($this->key($flowKey)),
+        );
+
+        if (! is_bool($result)) {
+            throw new LogicException('The WorkFlow Redis lock callback did not return a deletion result.');
+        }
     }
 
     private function key(string $flowKey): string
@@ -95,6 +99,25 @@ final class RedisFlowStateStore implements ForgettableFlowStateStore
     private function lockKey(string $flowKey): string
     {
         return $this->key($flowKey) . ':lock';
+    }
+
+    /** @return array{state: array<string, mixed>, lock_version: int}|null */
+    private function payload(string $flowKey): ?array
+    {
+        $payload = $this->cache->get($this->key($flowKey));
+
+        if ($payload === null) {
+            return null;
+        }
+
+        if (! is_array($payload) || ! is_array($payload['state'] ?? null)) {
+            throw new \UnexpectedValueException('The stored workflow state payload is malformed.');
+        }
+
+        return [
+            'state' => $this->stateData($payload['state']),
+            'lock_version' => is_int($payload['lock_version'] ?? null) ? $payload['lock_version'] : 0,
+        ];
     }
 
     /**

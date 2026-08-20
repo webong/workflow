@@ -8,5 +8,5 @@ use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 
 interface FlowStateStoreFactory
 {
-    public function for(FlowStateSubject $subject): AtomicFlowStateStore;
+    public function for(FlowStateSubject $subject): ForgettableFlowStateStore;
 }

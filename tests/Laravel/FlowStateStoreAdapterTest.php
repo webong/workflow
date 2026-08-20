@@ -11,6 +11,7 @@ use Illuminate\Database\Connection;
 use Illuminate\Database\Schema\Blueprint;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Contracts\FlowStateSerializer;
+use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Laravel\DatabaseFlowStateStore;
 use Webong\WorkFlow\Laravel\RedisFlowStateStore;
@@ -104,6 +105,27 @@ final class FlowStateStoreAdapterTest extends TestCase
         self::assertSame('completed', $store->get('setup')?->status->value);
 
         $store->forget('setup');
+        self::assertNull($store->get('setup'));
+    }
+
+    public function test_factory_exposes_the_forgettable_store_contract(): void
+    {
+        $arrayStore = new ArrayStore();
+        $factory = new \Webong\WorkFlow\Laravel\LaravelFlowStateStoreFactory(
+            serializer: $this->serializer,
+            driver: 'redis',
+            configuration: ['redis' => ['prefix' => 'test-flow']],
+            cache: new Repository($arrayStore),
+            locks: $arrayStore,
+        );
+
+        $store = $factory->for(new FlowStateSubject('channel', 'factory'));
+
+        self::assertInstanceOf(ForgettableFlowStateStore::class, $store);
+
+        $store->put('setup', new FlowState(FlowStatus::COMPLETED));
+        $store->forget('setup');
+
         self::assertNull($store->get('setup'));
     }
 
