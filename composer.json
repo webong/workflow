@@ -9,15 +9,18 @@
     "require-dev": {
         "illuminate/cache": "^12.0",
         "illuminate/database": "^12.0",
+        "illuminate/events": "^12.0",
         "illuminate/redis": "^12.0",
         "paneon/php-to-typescript": "^2.3",
         "phpstan/phpstan": "^2.0",
-        "phpunit/phpunit": "^12.0"
+        "phpunit/phpunit": "^12.0",
+        "spatie/eloquent-sortable": "^4.2"
     },
     "suggest": {
         "illuminate/cache": "Required to use the optional Laravel Redis WorkFlow store.",
         "illuminate/database": "Required to use the optional Laravel Eloquent WorkFlow store.",
-        "illuminate/support": "Required to register the optional Laravel WorkFlow service provider."
+        "illuminate/support": "Required to register the optional Laravel WorkFlow service provider.",
+        "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps."
     },
     "autoload": {
         "psr-4": {

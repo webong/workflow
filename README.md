@@ -79,7 +79,7 @@ production applications provide their own event sink.
 Install the optional Laravel components in the host application:
 
 ```sh
-composer require illuminate/cache illuminate/database
+composer require illuminate/cache illuminate/database spatie/eloquent-sortable
 php artisan vendor:publish --tag=work-flow-config
 php artisan vendor:publish --tag=work-flow-migrations
 php artisan migrate
@@ -111,6 +111,33 @@ $store->mutate('setup', static function (?FlowState $state): FlowState {
     // Return the next immutable state.
 });
 ```
+
+For persisted, editable definitions, `WorkflowDefinitionRecord` owns ordered
+`WorkflowStepDefinitionRecord` rows. The step model uses
+the optional `WorkflowSortable` trait on top of `spatie/eloquent-sortable`,
+scopes reordering to its parent definition, and
+converts the ordered records back to the framework-neutral `FlowDefinition`:
+
+```php
+$definition = WorkflowDefinitionRecord::with('steps')->findOrFail($id);
+$flow = $definition->toFlowDefinition();
+
+$definition->steps()->ordered()->get();
+$definition->steps()->findOrFail($stepId)->moveToStart();
+
+WorkflowStepDefinitionRecord::setNewOrderForDefinition(
+    $definition->getKey(),
+    [$firstStepId, $secondStepId],
+);
+```
+
+Creation and instance move operations are scoped to the parent definition. Use
+`setNewOrderForDefinition()` for bulk reordering so another definition cannot
+be changed accidentally. These scoped operations and `toFlowDefinition()`
+throw when a step would appear before one of its dependencies.
+
+The sortable dependency is only needed for this optional Eloquent definition
+adapter; the core evaluator and state stores do not depend on it.
 
 For adapter development, the default test suite uses SQLite and an in-memory
 lock provider. Production-driver coverage is available when services are

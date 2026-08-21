@@ -10,3 +10,10 @@ if (! function_exists('now')) {
         return Carbon\CarbonImmutable::now($timezone);
     }
 }
+
+if (! function_exists('config')) {
+    function config(string|array|null $key = null, mixed $default = null): mixed
+    {
+        return $default;
+    }
+}
