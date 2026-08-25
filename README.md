@@ -311,6 +311,59 @@ throw when a step would appear before one of its dependencies.
 The sortable dependency is only needed for this optional Eloquent definition
 adapter; the core evaluator and state stores do not depend on it.
 
+## Optional Temporal adapter
+
+The repository also contains an optional Temporal adapter under `ext/Temporal`.
+It keeps the core package independent from Temporal while providing a thin
+mapping for hosts that need durable, long-running execution:
+
+- `TemporalFlowWorkflow` runs the deterministic orchestration loop.
+- `TemporalFlowActivity` delegates one step to the host's existing
+  `FlowStepExecutor` instances.
+- `TemporalFlowCompletion` serializes deferred provider callbacks for a
+  Temporal Signal.
+- `TemporalFlowIdentity` creates a stable subject-and-flow Workflow ID.
+- `TemporalFlowInput` serializes a definition, initial state, and context.
+
+Install the SDK in the host application, not in WorkFlow's core runtime:
+
+```sh
+composer require temporal/sdk
+```
+
+The Temporal PHP SDK requires the `grpc` extension for clients and RoadRunner
+for workers. Register `TemporalFlowActivity` with the worker using the host's
+executors, then start `TemporalFlowWorkflow` with the arrays returned by
+`TemporalFlowInput::toArray()`. Signal deferred callbacks with
+`TemporalFlowCompletion::toArray()` and the workflow's `complete` signal.
+The adapter disables Temporal's default Activity retry loop so each execution
+is reported once and the WorkFlow step's `FlowRetryPolicy` controls retries.
+
+Laravel applications can publish `config/work-flow.php` and configure the
+Temporal connection and worker defaults through the optional `temporal` section:
+
+```dotenv
+WORK_FLOW_TEMPORAL_ENABLED=true
+WORK_FLOW_TEMPORAL_ADDRESS=127.0.0.1:7233
+WORK_FLOW_TEMPORAL_NAMESPACE=default
+WORK_FLOW_TEMPORAL_TASK_QUEUE=work-flow
+```
+
+The application owns the Temporal client and worker bootstrap; the package does
+not bind either one because `temporal/sdk` is optional. Read these values with
+`config('work-flow.temporal')` when constructing the host's client and worker,
+and register `TemporalFlowWorkflow` plus `TemporalFlowActivity` on the same
+task queue.
+
+Temporal's event history is authoritative for this adapter. Do not mutate the
+Laravel database or Redis WorkFlow stores from inside a Temporal Workflow;
+those stores may be used as projections for API and UI queries. Keep HTTP,
+database, Redis, and other side effects inside Activities.
+
+The regular PHP 8.3 test stack validates the SDK-neutral Temporal payload and
+identity helpers. Add the Temporal SDK, a Temporal development service, and a
+RoadRunner worker to run engine-level integration tests.
+
 ## Use Laravel Boost while integrating WorkFlow
 
 Laravel Boost is an optional development assistant for the Laravel application

@@ -20,11 +20,13 @@
         "illuminate/cache": "Required to use the optional Laravel Redis WorkFlow store.",
         "illuminate/database": "Required to use the optional Laravel Eloquent WorkFlow store.",
         "illuminate/support": "Required to register the optional Laravel WorkFlow service provider.",
-        "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps."
+        "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps.",
+        "temporal/sdk": "Required to use the optional Temporal WorkFlow adapter."
     },
     "autoload": {
         "psr-4": {
-            "Webong\\WorkFlow\\": "src/"
+            "Webong\\WorkFlow\\": "src/",
+            "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/"
         }
     },
     "autoload-dev": {

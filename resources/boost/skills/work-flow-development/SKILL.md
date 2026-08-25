@@ -97,6 +97,24 @@ polymorphic subject columns and flow key are jointly unique. Use the Redis
 adapter only with a lock-capable cache store, and leave TTL unset unless state
 expiration is explicitly part of the application's lifecycle.
 
+## Temporal adapter
+
+The optional Temporal integration lives under `ext/Temporal` and is loaded only
+when the host installs `temporal/sdk`. Keep Temporal Workflow code deterministic:
+`TemporalFlowWorkflow` may evaluate definitions and state, await timers, and
+receive Signals, but HTTP, database, Redis, and other side effects must run in
+`TemporalFlowActivity` through host-provided `FlowStepExecutor` instances.
+
+Use `TemporalFlowIdentity` for stable subject/flow Workflow IDs,
+`TemporalFlowInput` for serializable workflow arguments, and
+`TemporalFlowCompletion` for deferred callback Signal payloads. Temporal event
+history is the source of truth; do not use the Laravel state stores for
+read-modify-write inside a Temporal Workflow. Project state to those stores only
+from Activities or application listeners. The adapter disables Temporal's
+default Activity retry loop; let `FlowRetryPolicy` own step retries. In Laravel,
+read `config('work-flow.temporal')` for the address, namespace, task queue, and
+feature flag, while the host application owns SDK client and worker bootstrap.
+
 ## Validation
 
 Run all package validation in the PHP 8.3 container:

@@ -83,6 +83,20 @@ The published database migration provides the polymorphic subject columns and
 the unique subject/flow key needed to prevent duplicate state rows. Database
 mutations use row locks; Redis mutations use an atomic distributed lock.
 
+## Optional Temporal integration
+
+The repository includes an optional adapter under `ext/Temporal`. Install
+`temporal/sdk` only in a host that uses Temporal. `TemporalFlowWorkflow` owns
+deterministic orchestration, while `TemporalFlowActivity` delegates side
+effects to host-provided `FlowStepExecutor` instances. Use
+`TemporalFlowCompletion` as the serialized payload for the workflow's
+completion Signal. Temporal event history is authoritative; Laravel database
+and Redis stores are projections only for this adapter. The adapter disables
+Temporal's default Activity retries so `FlowRetryPolicy` remains authoritative.
+Laravel hosts may use `config('work-flow.temporal')` for the Temporal address,
+namespace, task queue, and feature flag; the package does not create the SDK
+client or worker.
+
 ## Testing
 
 Use the package's PHP 8.3 Docker environment for authoritative validation:
