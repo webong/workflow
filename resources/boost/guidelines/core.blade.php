@@ -68,7 +68,8 @@ duplicate callbacks are ignored. Wrap the transition in
 
 ## Optional Laravel integration
 
-The Laravel provider and adapters are optional. In a Laravel host:
+The Laravel provider and adapters are optional and live under `ext/Laravel`. In
+a Laravel host:
 
 1. Publish the WorkFlow config and migrations, then run `php artisan migrate`.
 2. Inject `FlowStateStoreFactory`; create a store using a neutral

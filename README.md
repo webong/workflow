@@ -253,7 +253,8 @@ php artisan vendor:publish --tag=work-flow-migrations
 php artisan migrate
 ```
 
-The provider is registered through Laravel package discovery. Set
+The provider and Eloquent/Redis adapters live under the optional `ext/Laravel`
+integration and are registered through Laravel package discovery. Set
 `WORK_FLOW_STORE=database` (the default) for Eloquent or
 `WORK_FLOW_STORE=redis` for Redis. The database connection can be selected with
 `WORK_FLOW_DATABASE_CONNECTION`; Redis uses `WORK_FLOW_REDIS_STORE` and

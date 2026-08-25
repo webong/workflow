@@ -18,7 +18,7 @@ final class WorkFlowServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->mergeConfigFrom(__DIR__ . '/../../config/work-flow.php', 'work-flow');
+        $this->mergeConfigFrom(__DIR__ . '/config/work-flow.php', 'work-flow');
 
         $this->app->singleton(FlowStateSerializer::class, DefaultFlowStateSerializer::class);
         $this->app->singleton(FlowStateStoreFactory::class, function (): LaravelFlowStateStoreFactory {
@@ -73,13 +73,13 @@ final class WorkFlowServiceProvider extends ServiceProvider
         }
 
         $this->publishes([
-            __DIR__ . '/../../config/work-flow.php' => $configPath . '/work-flow.php',
+            __DIR__ . '/config/work-flow.php' => $configPath . '/work-flow.php',
         ], 'work-flow-config');
 
         $this->publishes([
-            __DIR__ . '/../../database/migrations/2026_08_20_000000_create_workflow_states_table.php' => $databasePath . '/migrations/2026_08_20_000000_create_workflow_states_table.php',
-            __DIR__ . '/../../database/migrations/2026_08_21_000001_create_workflow_definitions_table.php' => $databasePath . '/migrations/2026_08_21_000001_create_workflow_definitions_table.php',
-            __DIR__ . '/../../database/migrations/2026_08_21_000002_create_workflow_definition_steps_table.php' => $databasePath . '/migrations/2026_08_21_000002_create_workflow_definition_steps_table.php',
+            __DIR__ . '/database/migrations/2026_08_20_000000_create_workflow_states_table.php' => $databasePath . '/migrations/2026_08_20_000000_create_workflow_states_table.php',
+            __DIR__ . '/database/migrations/2026_08_21_000001_create_workflow_definitions_table.php' => $databasePath . '/migrations/2026_08_21_000001_create_workflow_definitions_table.php',
+            __DIR__ . '/database/migrations/2026_08_21_000002_create_workflow_definition_steps_table.php' => $databasePath . '/migrations/2026_08_21_000002_create_workflow_definition_steps_table.php',
         ], 'work-flow-migrations');
     }
 }

@@ -78,7 +78,8 @@ transition, and serialize/write cycle.
 
 ## Laravel adapter
 
-The Laravel integration is optional and is registered by package discovery.
+The Laravel integration is optional, lives under `ext/Laravel`, and is
+registered by package discovery.
 Inject `FlowStateStoreFactory` rather than resolving a concrete adapter. Build a
 neutral subject from an Eloquent model only at the Laravel boundary:
 
