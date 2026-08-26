@@ -13,6 +13,7 @@ use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Temporal\TemporalFlowActivityHandler;
 use Webong\WorkFlow\Temporal\TemporalFlowCompletion;
+use Webong\WorkFlow\Temporal\TemporalFlowExecutionDriver;
 use Webong\WorkFlow\Temporal\TemporalFlowIdentity;
 use Webong\WorkFlow\Temporal\TemporalFlowInput;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
@@ -153,5 +154,30 @@ final class TemporalFlowAdapterTest extends TestCase
         self::assertSame(FlowStepStatus::FAILED->value, $result['status']);
         self::assertTrue($result['retriable']);
         self::assertSame(1, $result['attempts']);
+    }
+
+    public function test_temporal_execution_driver_serializes_the_workflow_start_request(): void
+    {
+        $captured = null;
+        $driver = new TemporalFlowExecutionDriver(
+            start: static function (string $workflowId, array $input) use (&$captured): string {
+                $captured = [$workflowId, $input];
+
+                return 'temporal-run-1';
+            },
+        );
+
+        $receipt = $driver->dispatch(new \Webong\WorkFlow\ValueObjects\FlowExecutionRequest(
+            definition: new FlowDefinition('setup', [new FlowStepDefinition('authorize', 'Authorize')]),
+            state: new FlowState(FlowStatus::PENDING),
+            context: ['source' => 'api'],
+            driver: 'temporal',
+            subject: new FlowStateSubject('channel', 'channel-1'),
+        ));
+
+        self::assertSame('temporal', $receipt->driver);
+        self::assertSame('temporal-run-1', $receipt->executionId);
+        self::assertSame('work-flow:channel:channel-1:setup', $captured[0]);
+        self::assertSame(['source' => 'api'], $captured[1]['context']);
     }
 }

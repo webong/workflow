@@ -96,7 +96,9 @@ and Redis stores are projections only for this adapter. The adapter disables
 Temporal's default Activity retries so `FlowRetryPolicy` remains authoritative.
 Laravel hosts may use `config('work-flow.temporal')` for the Temporal address,
 namespace, task queue, and feature flag; the package does not create the SDK
-client or worker.
+client or worker. Use `config('work-flow.execution.default')` only as the
+host's initial routing choice; register the concrete drivers in application
+bootstrap and persist the selected driver with the execution.
 
 ## Testing
 

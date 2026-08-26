@@ -115,6 +115,8 @@ from Activities or application listeners. The adapter disables Temporal's
 default Activity retry loop; let `FlowRetryPolicy` own step retries. In Laravel,
 read `config('work-flow.temporal')` for the address, namespace, task queue, and
 feature flag, while the host application owns SDK client and worker bootstrap.
+Use `config('work-flow.execution.default')` to choose the initial driver, then
+keep the recorded `execution_driver` unchanged for the lifetime of the flow.
 
 ## Validation
 

@@ -5,6 +5,10 @@ declare(strict_types=1);
 return [
     'driver' => env('WORK_FLOW_STORE', 'database'),
 
+    'execution' => [
+        'default' => env('WORK_FLOW_EXECUTION_DRIVER', 'inline'),
+    ],
+
     'database' => [
         'connection' => env('WORK_FLOW_DATABASE_CONNECTION'),
     ],

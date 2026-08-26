@@ -54,6 +54,11 @@ or an atomic Redis store.
   through an interface.
 - `FlowActionContext`: carries actor, resource, and host-owned authorization
   attributes into action handlers.
+- `FlowExecutionDriver`: dispatches a flow to an execution runtime by name.
+- `FlowExecutionDispatcher`: selects a registered driver and records the
+  selected runtime in the flow snapshot.
+- `FlowExecutionRequest` and `FlowExecutionReceipt`: serializable dispatch
+  input and outcome value objects.
 
 The same vocabulary can represent a failed webhook setup step or a
 conversation banner that asks an operator to use a template. Domain code owns
@@ -152,6 +157,42 @@ $state = (new FlowRunner())->run(
 The runner respects dependencies, retry policy, completed/skipped steps, and
 retry timestamps. It returns a new immutable state; persist that state and
 dispatch any host-owned follow-up work after the call.
+
+## Select an execution driver
+
+Execution routing is separate from state storage. The core dispatcher accepts
+named drivers, while adapters decide how a selected runtime is started:
+
+- `inline` uses `InlineFlowExecutionDriver` and runs `FlowRunner` immediately.
+- `queue` uses `LaravelQueueFlowExecutionDriver`; the host supplies the queue
+  job dispatch callback.
+- `temporal` uses `TemporalFlowExecutionDriver`; the host supplies the Temporal
+  SDK workflow-start callback.
+
+Choose the driver once when the flow starts. The dispatcher records it in the
+state metadata as `execution_driver` and rejects a later dispatch that attempts
+to move the same execution to another runtime:
+
+```php
+use Webong\WorkFlow\Services\FlowExecutionDispatcher;
+use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
+
+$receipt = (new FlowExecutionDispatcher([
+    $inlineDriver,
+    $queueDriver,
+    $temporalDriver,
+]))->dispatch(new FlowExecutionRequest(
+    definition: $definition,
+    state: $state,
+    context: ['channel_id' => 'channel-1'],
+    driver: 'temporal',
+    subject: $subject,
+));
+```
+
+The state-store driver (`database` or `redis`) remains independent from this
+execution driver. A Temporal execution can project state to PostgreSQL or
+Redis, while a queued execution can use either store.
 
 ## Handle deferred completion
 
@@ -341,20 +382,23 @@ The adapter disables Temporal's default Activity retry loop so each execution
 is reported once and the WorkFlow step's `FlowRetryPolicy` controls retries.
 
 Laravel applications can publish `config/work-flow.php` and configure the
-Temporal connection and worker defaults through the optional `temporal` section:
+execution default and Temporal connection/worker defaults through the optional
+`execution` and `temporal` sections:
 
 ```dotenv
+WORK_FLOW_EXECUTION_DRIVER=inline
 WORK_FLOW_TEMPORAL_ENABLED=true
 WORK_FLOW_TEMPORAL_ADDRESS=127.0.0.1:7233
 WORK_FLOW_TEMPORAL_NAMESPACE=default
 WORK_FLOW_TEMPORAL_TASK_QUEUE=work-flow
 ```
 
-The application owns the Temporal client and worker bootstrap; the package does
-not bind either one because `temporal/sdk` is optional. Read these values with
-`config('work-flow.temporal')` when constructing the host's client and worker,
-and register `TemporalFlowWorkflow` plus `TemporalFlowActivity` on the same
-task queue.
+The application owns driver registration and the Temporal client/worker
+bootstrap; the package does not bind either one because `temporal/sdk` is
+optional. Read `config('work-flow.execution.default')` when selecting a default
+driver and `config('work-flow.temporal')` when constructing the host's Temporal
+client and worker. Register `TemporalFlowWorkflow` plus `TemporalFlowActivity`
+on the same task queue.
 
 Temporal's event history is authoritative for this adapter. Do not mutate the
 Laravel database or Redis WorkFlow stores from inside a Temporal Workflow;

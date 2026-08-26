@@ -82,4 +82,19 @@ final readonly class FlowState
             version: $this->version,
         );
     }
+
+    /** @param array<string, mixed> $metadata */
+    public function withMetadata(array $metadata): self
+    {
+        return new self(
+            status: $this->status,
+            steps: $this->steps,
+            currentStep: $this->currentStep,
+            failedSteps: $this->failedSteps,
+            canRetryStep: $this->canRetryStep,
+            message: $this->message,
+            metadata: [...$this->metadata, ...$metadata],
+            version: $this->version,
+        );
+    }
 }
