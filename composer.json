@@ -1,5 +1,5 @@
 {
-    "name": "webong/work-flow",
+    "name": "webong/workflow",
     "description": "Framework-agnostic workflow definitions, state evaluation, presentations, and actions.",
     "type": "library",
     "license": "MIT",

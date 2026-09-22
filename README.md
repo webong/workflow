@@ -6,7 +6,7 @@ conversation policies, attention states, and actions across mobile apps, CLIs,
 GUIs, APIs, and background processes without depending on a transport,
 persistence layer, queue, or UI framework.
 
-- Composer package: `webong/work-flow`
+- Composer package: `webong/workflow`
 - PHP namespace: `Webong\WorkFlow`
 
 The core package deliberately does not execute jobs or require a persistence
@@ -70,7 +70,7 @@ Install the core package in any PHP application, command-line tool, worker, or
 API:
 
 ```sh
-composer require webong/work-flow
+composer require webong/workflow
 ```
 
 The core has no Laravel, queue, HTTP, database, or Redis runtime dependency.

@@ -3,7 +3,7 @@
 ## Unreleased
 
 - Renamed the package from `webong/web-flow` (`Webong\WebFlow`) to
-  `webong/work-flow` (`Webong\WorkFlow`) to reflect its delivery-surface-neutral
+  `webong/workflow` (`Webong\WorkFlow`) to reflect its delivery-surface-neutral
   scope.
 - Renamed `StepDefinition` to `FlowStepDefinition` for consistency with the
   package's other flow-specific public types.
