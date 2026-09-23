@@ -504,6 +504,14 @@ or non-deferred steps, applies the callback's completed/failed/pending result,
 re-evaluates the flow, and ignores duplicate idempotency keys. Pending callback
 results remain deferred so a later callback can complete the same step.
 
+## Standalone JSON-RPC module
+
+[`mod/README.md`](mod/README.md) documents the optional standalone Go server
+that embeds FrankenPHP and serves this package over authenticated JSON-RPC.
+It uses PHP 8.3 and a framework-neutral PDO PostgreSQL state store. The
+Laravel and Temporal adapters remain under `ext/`; using the module does not
+add either framework to the core package.
+
 ## TypeScript contracts
 
 The package exposes `types/work-flow.d.ts` for consumers that want stable

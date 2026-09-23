@@ -27,7 +27,8 @@
         "psr-4": {
             "Webong\\WorkFlow\\": "src/",
             "Webong\\WorkFlow\\Laravel\\": "ext/Laravel/",
-            "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/"
+            "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/",
+            "Webong\\WorkFlow\\Mod\\": "mod/php/src/"
         }
     },
     "autoload-dev": {

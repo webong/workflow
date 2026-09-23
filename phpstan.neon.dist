@@ -3,4 +3,5 @@ parameters:
     paths:
         - src
         - ext/Laravel
+        - mod/php/src
     treatPhpDocTypesAsCertain: false

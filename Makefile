@@ -20,7 +20,7 @@ analyse:
 	vendor/bin/phpstan analyse --no-progress
 
 lint:
-	@find src ext tests -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do $(PHP) -l "$$file"; done
+	@find src ext mod/php tests -type f -name '*.php' -print0 | while IFS= read -r -d '' file; do $(PHP) -l "$$file"; done
 
 docker-test:
 	docker compose -f docker-compose.test.yml up -d --build postgres redis php

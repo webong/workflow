@@ -1,0 +1,35 @@
+services:
+  workflowd:
+    build:
+      context: ..
+      dockerfile: mod/Dockerfile
+    environment:
+      WORKFLOW_RPC_LISTEN: 0.0.0.0:8080
+      WORKFLOW_RPC_TOKEN: ${WORKFLOW_RPC_TOKEN:-local-development-token}
+      WORKFLOW_BOOTSTRAP: /app/mod/php/bootstrap.example.php
+      WORKFLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow
+      WORKFLOW_POSTGRES_USER: workflow
+      WORKFLOW_POSTGRES_PASSWORD: workflow
+    ports:
+      - 127.0.0.1:18080:8080
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: workflow
+      POSTGRES_USER: workflow
+      POSTGRES_PASSWORD: workflow
+    volumes:
+      - workflow_rpc_postgres:/var/lib/postgresql/data
+      - ./php/schema/postgres.sql:/docker-entrypoint-initdb.d/01-workflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow -d workflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  workflow_rpc_postgres:
