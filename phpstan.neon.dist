@@ -4,4 +4,5 @@ parameters:
         - src
         - ext/Laravel
         - mod/php/src
+        - examples
     treatPhpDocTypesAsCertain: false
