@@ -3,3 +3,5 @@
 .phpunit.result.cache
 .phpactor.json
 /composer.lock
+/dist/
+__pycache__/

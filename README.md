@@ -66,6 +66,7 @@ repeated. Starting the process again uses a new run ID.
 | Temporal execution and durable timers | [Optional Temporal adapter](docs/temporal.md) |
 | Retry, cancellation, concurrency, and upgrade rules | [Run lifecycle](docs/run-lifecycle.md) |
 | Package development and testing | [Development guide](docs/development.md) |
+| CI platforms, downloadable artifacts, and Docker releases | [Distributions and releases](docs/releases.md) |
 
 Laravel and Temporal stay optional under `ext/`. The standalone service lives
 under `mod/` and accepts calls from trusted backends. Client-facing apps

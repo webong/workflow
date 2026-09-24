@@ -57,10 +57,11 @@ Docker builds the executable and shared library, compares both against PHP
 8.3 reference cases, and runs the Node integration tests. The build container
 includes Python and Node 22; you do not need them installed on your host.
 
-The current builds were tested on **Linux ARM64**, inside Docker. They need
-the matching PHP/PHPX and system shared libraries. There are no published npm
-or pip packages, portable release binaries, or validated static libraries yet.
-These are source examples, not production SDKs.
+CI targets **Linux AMD64 and ARM64**, inside Docker. The artifacts need
+matching PHP/PHPX and system shared libraries. Version-tag builds publish
+SDK archives and companion runtime images; see [releases](releases.md).
+There are no npm or pip packages, portable standalone binaries, or validated
+static libraries. These remain experimental examples, not production SDKs.
 
 ### Node: call the executable
 

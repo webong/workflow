@@ -2,15 +2,50 @@ name: WorkFlow CI
 
 on:
   push:
+    branches: ['**']
+    tags: ['v*']
     paths:
       - '**'
   pull_request:
     paths:
       - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: workflow-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Actions and shell syntax
+        run: |
+          docker run --rm -v "$PWD:/repo:ro" -w /repo rhysd/actionlint:1.7.7 -color
+          docker run --rm -v "$PWD:/repo:ro" -w /repo --entrypoint shellcheck rhysd/actionlint:1.7.7 tools/publish-release.sh
+      - name: Test release asset validation
+        run: python3 -m unittest discover -s tools/tests -v
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 tools/prepare-release.py --validate-tag "$RELEASE_TAG"
+
   test:
-    runs-on: ubuntu-latest
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      WORK_FLOW_POSTGRES_DSN: pgsql:host=127.0.0.1;port=5432;dbname=workflow_test
+      WORK_FLOW_POSTGRES_USER: workflow
+      WORK_FLOW_POSTGRES_PASSWORD: workflow
+      WORK_FLOW_REDIS_HOST: 127.0.0.1
+      WORK_FLOW_REDIS_PORT: 6379
     services:
       postgres:
         image: postgres:16
@@ -41,16 +76,148 @@ jobs:
           php-version: '8.3'
           extensions: pdo_pgsql, redis
           coverage: none
-      - name: Configure production-driver tests
-        run: |
-          echo "WORK_FLOW_POSTGRES_DSN=pgsql:host=127.0.0.1;port=5432;dbname=workflow_test" >> "$GITHUB_ENV"
-          echo "WORK_FLOW_POSTGRES_USER=workflow" >> "$GITHUB_ENV"
-          echo "WORK_FLOW_POSTGRES_PASSWORD=workflow" >> "$GITHUB_ENV"
-          echo "WORK_FLOW_REDIS_HOST=127.0.0.1" >> "$GITHUB_ENV"
-          echo "WORK_FLOW_REDIS_PORT=6379" >> "$GITHUB_ENV"
       - run: composer validate --strict
       - run: composer install --no-interaction --prefer-dist
       - run: composer analyse
       - run: composer test
       - run: composer types
       - run: git diff --exit-code -- types/work-flow.generated.ts
+
+  native:
+    name: Native (${{ matrix.arch }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build and verify native runtime
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: mod/typephp/Dockerfile
+          target: release
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: workflow-native:ci-${{ matrix.arch }}
+          cache-from: type=gha,scope=native-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=native-${{ matrix.arch }}
+      - name: Export SDK bundle
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: mod/typephp/Dockerfile
+          target: artifacts
+          platforms: linux/${{ matrix.arch }}
+          outputs: type=local,dest=dist/native
+      - name: Verify archive checksum and final image
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          (cd dist/native && sha256sum -c "workflow-native-linux-$ARCH.tar.gz.sha256")
+          printf '%s' '{"protocol":1,"operation":"start","run_id":"ci","definition":{"key":"empty"}}' |
+            docker run --rm -i "workflow-native:ci-$ARCH" |
+            python3 -c 'import json,sys; r=json.load(sys.stdin); assert r["ok"] and r["state"]["status"] == "completed"'
+      - name: Save tested runtime image for release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: docker save "workflow-native:ci-$ARCH" | gzip > "dist/native/workflow-native-image-linux-$ARCH.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: distribution-native-${{ matrix.arch }}
+          path: dist/native/*.gz*
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  rpc:
+    name: RPC (${{ matrix.arch }})
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    env:
+      WORKFLOW_RPC_IMAGE: workflow-rpc:ci-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build RPC image and run Go checks
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: mod/Dockerfile
+          platforms: linux/${{ matrix.arch }}
+          load: true
+          tags: ${{ env.WORKFLOW_RPC_IMAGE }}
+          cache-from: type=gha,scope=rpc-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=rpc-${{ matrix.arch }}
+      - name: Test HTTP lifecycle against PostgreSQL
+        run: |
+          docker compose -f mod/compose.ci.yml up -d --wait --wait-timeout 90 workflowd
+          docker compose -f mod/compose.ci.yml run --rm smoke
+      - name: Container diagnostics
+        if: failure()
+        run: docker compose -f mod/compose.ci.yml logs --no-color
+      - name: Stop isolated smoke stack
+        if: always()
+        run: docker compose -f mod/compose.ci.yml down --volumes
+      - name: Save tested RPC image for release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          mkdir -p dist/rpc
+          docker save "$WORKFLOW_RPC_IMAGE" | gzip > "dist/rpc/workflow-rpc-image-linux-$ARCH.tar.gz"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        with:
+          name: distribution-rpc-${{ matrix.arch }}
+          path: dist/rpc/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+  publish:
+    name: Publish versioned distributions
+    needs: [validate, test, native, rpc]
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: distribution-*
+          merge-multiple: true
+          path: dist/release
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish the tested images and SDK bundles
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPOSITORY: ${{ github.repository }}
+        run: bash tools/publish-release.sh

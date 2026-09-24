@@ -3,3 +3,5 @@
 .phpunit.result.cache
 .phpunit.cache
 vendor
+dist
+**/__pycache__

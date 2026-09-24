@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added Linux AMD64/ARM64 native and RPC CI builds, clean-runtime and HTTP
+  smoke tests, SDK/runtime artifacts, checksums, and version-tag-gated GHCR
+  and GitHub Release publishing. Fixed fresh-checkout RPC builds and the
+  inherited Caddy health check; added the package's declared MIT license text.
 - Added an experimental Composer-managed TypePHP build under `mod/typephp/`
   with native executable/shared-library targets, a C interface, runnable
   Node/Python examples, a language integration guide, and behavioral parity

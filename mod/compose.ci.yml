@@ -1,0 +1,35 @@
+name: workflow-rpc-ci
+
+services:
+  workflowd:
+    image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
+    environment:
+      WORKFLOW_RPC_LISTEN: 0.0.0.0:8080
+      WORKFLOW_RPC_TOKEN: ci-only-workflow-token
+      WORKFLOW_BOOTSTRAP: /app/mod/php/bootstrap.example.php
+      WORKFLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow
+      WORKFLOW_POSTGRES_USER: workflow
+      WORKFLOW_POSTGRES_PASSWORD: workflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: workflow
+      POSTGRES_USER: workflow
+      POSTGRES_PASSWORD: workflow
+    volumes:
+      - ./php/schema/postgres.sql:/docker-entrypoint-initdb.d/01-workflow.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow -d workflow"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  smoke:
+    image: python:3.12-slim-bookworm
+    volumes:
+      - ./tests/smoke.py:/tests/smoke.py:ro
+    command: ["python3", "/tests/smoke.py"]

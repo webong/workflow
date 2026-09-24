@@ -9,6 +9,8 @@ an `ext/` adapter.
 The single `workflowd` process serves `/rpc` and `/healthz`. Its Docker image
 includes the PHP 8.3 runtime and package code; the binary is not a standalone
 static executable and needs the compatible FrankenPHP/PHP shared libraries.
+CI builds and smoke-tests the image on Linux AMD64 and ARM64; version tags
+publish it to GHCR. See [distributions and releases](../docs/releases.md).
 
 ## Run the example locally
 
@@ -81,6 +83,10 @@ Use a different run ID when trying the sequence again.
 All calls are `POST /rpc` with `Content-Type: application/json`, a
 `Bearer` token, `jsonrpc: "2.0"`, and an `id`. The `params` object varies:
 
+Successful lifecycle responses put the snapshot in `result.state`; a missing
+run returns `result.state: null`. `flow.definition` uses `result.definition`.
+Check for a top-level JSON-RPC `error` before reading either field.
+
 | Method | Required params | Result |
 | --- | --- | --- |
 | `flow.definition` | `flow_key` | The host-defined flow definition |
@@ -143,6 +149,8 @@ is no automatic lease expiry or blind replay. See [run lifecycle](../docs/run-li
   `127.0.0.1:8080` outside Compose. `/healthz` has no authentication and
   exposes no flow data.
   It checks process liveness, not PHP execution or PostgreSQL readiness.
+- The Docker health check probes `/healthz` on port 8080. Set
+  `WORKFLOW_HEALTH_URL` as well if you change the internal listen address.
 - PostgreSQL connection settings in the example are `WORKFLOW_POSTGRES_DSN`,
   `WORKFLOW_POSTGRES_USER`, and `WORKFLOW_POSTGRES_PASSWORD`. Apply the schema
   before starting against an existing database. Back up the state table as
@@ -154,6 +162,9 @@ The module image build runs the Go RPC tests and vet, then compiles the
 PHP-linked binary in the PHP 8.3 FrankenPHP builder; the host may lack its
 native PHP headers. Run the PHP suite in the repository's PHP 8.3 test
 container with `make docker-test`.
+The Docker build copies `composer.json` and resolves its dependencies inside
+the image; it does not require the ignored root `composer.lock` to exist in
+a fresh checkout. PHP's root runtime requirement is currently only PHP itself.
 
 If a call returns `401`, check the bearer token. A JSON-RPC `-32601` means
 the method is unknown; `-32602` means parameters are invalid. An "Internal

@@ -13,6 +13,7 @@ services:
     build:
       context: ../..
       dockerfile: mod/typephp/Dockerfile
+      target: toolchain
     volumes:
       - ../..:/workspace:ro
       - native_build:/build

@@ -13,11 +13,12 @@ TypePHP compiles the existing PHP core into:
   included Python example calls it in-process using `ctypes`, with no HTTP
   server or PHP subprocess.
 
-The current target is Linux. Linux ARM64 has been tested. Other architectures,
-operating systems, static libraries, and fully static executables are not yet
-validated. The artifacts still depend on compatible PHP/PHPX and system shared
+CI builds and tests Linux AMD64 and ARM64. Other operating systems, musl,
+static libraries, and fully static executables are not supported by this
+pipeline. The artifacts still depend on compatible PHP/PHPX and system shared
 libraries; copying just the executable or `.so` onto a clean machine will not
-be sufficient.
+be sufficient. See [distributions and releases](../../docs/releases.md) for
+the SDK archives, companion runtime images, and version-tag publishing.
 
 ## Build and test
 
@@ -159,11 +160,16 @@ written using a local `$attempts` variable because TypePHP 0.9.3 miscompiled a
 coalesced argument inside a null-safe retry-policy call. The retry parity cases
 guard this behavior. No compiler fork or generated-source patch is required.
 
-Before publishing native releases, add a platform matrix, packaging of runtime
-dependencies and license notices, and further ABI/memory/stress validation.
-The root MIT license does not by itself describe all linked third-party
-components; review their licenses and redistribution requirements separately.
-The current image is a development toolchain, not a production runtime image.
+The Dockerfile has separate `toolchain`, `release`, and `artifacts` targets.
+Compose selects the development toolchain. CI builds a non-root runtime
+image, unpacks the SDK archive into it, and reruns the parity and Node tests
+without the compiler. The final image does not contain Node or Python.
+
+Native releases remain experimental and need further memory/stress validation.
+The SDK includes license notices and a dependency manifest; the Docker runtime
+supplies PHP and system libraries. The root MIT license does not by itself
+describe all linked third-party components; review their redistribution
+requirements when building a derived product.
 
 Upstream references: [TypePHP](https://github.com/swoole/typephp/tree/v0.9.3),
 [C library example](https://github.com/swoole/typephp/tree/v0.9.3/examples/lib-demo).

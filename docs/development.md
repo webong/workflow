@@ -29,3 +29,9 @@ services. Outside Compose, set `WORK_FLOW_POSTGRES_DSN`,
 For standalone JSON-RPC development, [`mod/README.md`](../mod/README.md)
 shows how to build the separate Go/FrankenPHP image and exercise its API.
 The image build runs the Go RPC unit tests and vet checks in its builder.
+
+GitHub Actions also builds the native and RPC images on separate Linux AMD64
+and ARM64 runners. The native image runs parity, C ABI, and Node tests in both
+the compiler image and a clean runtime. The RPC job runs the actual HTTP
+lifecycle against PostgreSQL. [The release guide](releases.md) explains
+artifact downloads, version tags, and publishing permissions.
