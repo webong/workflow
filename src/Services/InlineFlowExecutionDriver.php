@@ -41,6 +41,7 @@ final class InlineFlowExecutionDriver implements \Webong\WorkFlow\Contracts\Flow
 
     public function dispatch(FlowExecutionRequest $request): FlowExecutionReceipt
     {
+        $request = $request->withRecordedDriver();
         $state = $this->runner->run(
             definition: $request->definition,
             state: $request->state,

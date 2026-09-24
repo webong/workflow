@@ -49,6 +49,10 @@ func TestHandler(t *testing.T) {
 		{"invalid params", `{"jsonrpc":"2.0","method":"flow.get","params":[],"id":7}`, "secret", 200, `"code":-32602`, 0},
 		{"invalid id", `{"jsonrpc":"2.0","method":"flow.get","id":{}}`, "secret", 200, `"code":-32600`, 0},
 		{"notification", `{"jsonrpc":"2.0","method":"flow.get"}`, "secret", 204, "", 1},
+		{"start notification does not mutate", `{"jsonrpc":"2.0","method":"flow.start"}`, "secret", 204, "", 0},
+		{"completion notification does not mutate", `{"jsonrpc":"2.0","method":"flow.complete"}`, "secret", 204, "", 0},
+		{"resume notification does not mutate", `{"jsonrpc":"2.0","method":"flow.resume"}`, "secret", 204, "", 0},
+		{"cancel notification does not mutate", `{"jsonrpc":"2.0","method":"flow.cancel"}`, "secret", 204, "", 0},
 		{"batch", `[{"jsonrpc":"2.0","method":"flow.get","id":"one"},{"jsonrpc":"2.0","method":"unknown","id":"two"}]`, "secret", 200, `"code":-32601`, 2},
 		{"empty batch", `[]`, "secret", 200, `"code":-32600`, 0},
 	}

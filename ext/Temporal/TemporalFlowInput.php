@@ -20,6 +20,7 @@ final readonly class TemporalFlowInput
         public FlowState $state,
         public array $context = [],
     ) {
+        $state->run?->assertDefinition($definition);
     }
 
     /** @return array<string, mixed> */

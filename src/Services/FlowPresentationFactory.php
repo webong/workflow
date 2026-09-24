@@ -28,6 +28,7 @@ final class FlowPresentationFactory
             FlowStatus::ATTENTION => ['warning', 'Review this flow and take the required action.'],
             FlowStatus::BLOCKED => ['error', 'This flow is blocked until the issue is resolved.'],
             FlowStatus::COMPLETED => ['success', 'Flow completed successfully.'],
+            FlowStatus::CANCELLED => ['info', 'Flow cancelled.'],
         };
 
         return new FlowPresentation(

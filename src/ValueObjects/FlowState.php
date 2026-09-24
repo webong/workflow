@@ -23,12 +23,16 @@ final readonly class FlowState
         public ?string $message = null,
         public array $metadata = [],
         public int $version = 1,
+        public ?FlowRun $run = null,
     ) {
     }
 
     /** @param array<array-key, mixed> $data */
     public static function fromArray(array $data): self
     {
+        if (isset($data['run']) && ! is_array($data['run'])) {
+            throw new \InvalidArgumentException('Invalid flow run snapshot.');
+        }
         $steps = [];
 
         foreach (is_array($data['steps'] ?? null) ? $data['steps'] : [] as $id => $step) {
@@ -51,6 +55,7 @@ final readonly class FlowState
             message: is_string($message) ? $message : null,
             metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
             version: is_int($version) ? max(1, $version) : 1,
+            run: is_array($data['run'] ?? null) ? FlowRun::fromArray($data['run']) : null,
         );
     }
 
@@ -66,6 +71,7 @@ final readonly class FlowState
             'status_message' => $this->message,
             'metadata' => $this->metadata,
             'version' => $this->version,
+            'run' => $this->run?->toArray(),
         ];
     }
 
@@ -80,6 +86,7 @@ final readonly class FlowState
             message: $this->message,
             metadata: $this->metadata,
             version: $this->version,
+            run: $this->run,
         );
     }
 
@@ -95,6 +102,7 @@ final readonly class FlowState
             message: $this->message,
             metadata: [...$this->metadata, ...$metadata],
             version: $this->version,
+            run: $this->run,
         );
     }
 }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Services;
 
 use RuntimeException;
-use Throwable;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowEventSink;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
@@ -21,12 +20,13 @@ final class FlowRunner
     public function __construct(
         private readonly FlowEvaluator $evaluator = new FlowEvaluator(),
         private readonly FlowEventSink $events = new NullFlowEventSink(),
+        private readonly FlowStepExecution $execution = new FlowStepExecution(),
     )
     {
     }
 
     /**
-     * Executes each supported step once in definition order. The host can
+     * Executes each eligible step at most once, dependencies first. The host can
      * queue this operation or persist the returned state through its adapter.
      *
      * @param iterable<FlowStepExecutor> $executors
@@ -37,19 +37,24 @@ final class FlowRunner
         FlowContext $context,
         iterable $executors,
     ): FlowState {
+        $state->run?->assertDefinition($definition);
+        if (in_array($state->status, [\Webong\WorkFlow\Enums\FlowStatus::CANCELLED, \Webong\WorkFlow\Enums\FlowStatus::COMPLETED], true)) {
+            return $state;
+        }
         $executors = is_array($executors) ? $executors : iterator_to_array($executors, false);
         $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STARTED, $definition->key));
 
-        foreach ($definition->steps as $step) {
+        foreach ($definition->executionSteps() as $step) {
             $previous = $state->steps[$step->id] ?? new StepState();
 
-            if (in_array($previous->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
+            if (in_array($previous->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED, FlowStepStatus::RUNNING], true)
+                || ($previous->status === FlowStepStatus::PENDING && ($previous->metadata['deferred'] ?? false) === true)) {
                 continue;
             }
 
-            if ($step->retryPolicy instanceof \Webong\WorkFlow\ValueObjects\FlowRetryPolicy
-                && ! $step->retryPolicy->canRetry($previous->attempts)
-                && $previous->status === FlowStepStatus::FAILED) {
+            if ($previous->status === FlowStepStatus::FAILED
+                && (! ($previous->retriable ?? $step->retryPolicy->enabled ?? $step->retriable)
+                    || ! ($step->retryPolicy?->canRetry($previous->attempts) ?? true))) {
                 continue;
             }
 
@@ -74,17 +79,8 @@ final class FlowRunner
             }
 
             $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STEP_STARTED, $definition->key, $step->id));
-            $stepState = $this->execute($executor, $step, $context, $previous);
-            $state = $state->withStep($step->id, new StepState(
-                status: $stepState->status,
-                message: $stepState->message,
-                error: $stepState->error,
-                updatedAt: $stepState->updatedAt,
-                retriable: $stepState->retriable,
-                attempts: $previous->attempts + 1,
-                nextRetryAt: $stepState->nextRetryAt,
-                metadata: $stepState->metadata,
-            ));
+            $stepState = $this->execution->execute($executor, $step, $context, $previous, $definition->key, $state->run?->id);
+            $state = $state->withStep($step->id, $stepState);
             $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(
                 match ($stepState->status) {
                     FlowStepStatus::COMPLETED => FlowEventType::STEP_COMPLETED,
@@ -129,37 +125,4 @@ final class FlowRunner
         return true;
     }
 
-    private function execute(
-        FlowStepExecutor $executor,
-        \Webong\WorkFlow\ValueObjects\FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepState {
-        try {
-            $result = $executor->execute($step, $context, $previous);
-            $attempts = $previous->attempts + 1;
-            $policy = $step->retryPolicy;
-
-            if ($result->status === FlowStepStatus::FAILED && $policy instanceof \Webong\WorkFlow\ValueObjects\FlowRetryPolicy) {
-                $result = new \Webong\WorkFlow\ValueObjects\StepResult(
-                    status: $result->status,
-                    message: $result->message,
-                    error: $result->error,
-                    retriable: $policy->canRetry($attempts),
-                    attempts: $attempts,
-                    nextRetryAt: $policy->canRetry($attempts) ? time() + $policy->backoffSeconds : null,
-                    metadata: $result->metadata,
-                    deferred: $result->deferred,
-                );
-            }
-
-            return $result->toState();
-        } catch (Throwable $exception) {
-            return (new \Webong\WorkFlow\ValueObjects\StepResult(
-                status: FlowStepStatus::FAILED,
-                error: $exception->getMessage() !== '' ? $exception->getMessage() : 'Flow step failed.',
-                retriable: $step->retriable,
-            ))->toState();
-        }
-    }
 }

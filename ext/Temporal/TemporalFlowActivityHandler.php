@@ -6,8 +6,8 @@ namespace Webong\WorkFlow\Temporal;
 
 use InvalidArgumentException;
 use RuntimeException;
-use Throwable;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
+use Webong\WorkFlow\Services\FlowStepExecution;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
@@ -26,7 +26,7 @@ final class TemporalFlowActivityHandler
     private readonly array $executors;
 
     /** @param iterable<FlowStepExecutor> $executors */
-    public function __construct(iterable $executors)
+    public function __construct(iterable $executors, private readonly FlowStepExecution $execution = new FlowStepExecution())
     {
         $executorList = [];
 
@@ -67,43 +67,10 @@ final class TemporalFlowActivityHandler
         $context = new ArrayFlowContext(is_array($contextData) ? $this->stringKeyed($contextData) : []);
         $executor = $this->executorFor($step);
 
-        try {
-            $result = $executor->execute($step, $context, $previous);
-        } catch (Throwable $exception) {
-            $result = StepResult::failed(
-                error: $exception->getMessage() !== '' ? $exception->getMessage() : 'Flow step failed.',
-                retriable: $step->retriable,
-            );
-        }
-
-        $attempts = $previous->attempts + 1;
-
-        if ($result->status === FlowStepStatus::FAILED && $step->retryPolicy !== null) {
-            $canRetry = $step->retryPolicy->canRetry($attempts);
-            $result = new StepResult(
-                status: $result->status,
-                message: $result->message,
-                error: $result->error,
-                retriable: $canRetry,
-                attempts: $attempts,
-                nextRetryAt: $canRetry ? time() + $step->retryPolicy->backoffSeconds : null,
-                metadata: $result->metadata,
-                deferred: $result->deferred,
-            );
-        }
-
-        $state = $result->toState();
-
-        return (new StepState(
-            status: $state->status,
-            message: $state->message,
-            error: $state->error,
-            updatedAt: $state->updatedAt,
-            retriable: $state->retriable,
-            attempts: $attempts,
-            nextRetryAt: $state->nextRetryAt,
-            metadata: $state->metadata,
-        ))->toArray();
+        return $this->execution->execute(
+            $executor, $step, $context, $previous, $definition->key,
+            is_string($input['run_id'] ?? null) ? $input['run_id'] : null,
+        )->toArray();
     }
 
     private function executorFor(FlowStepDefinition $step): FlowStepExecutor

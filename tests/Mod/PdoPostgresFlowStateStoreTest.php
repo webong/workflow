@@ -15,6 +15,7 @@ use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 
 final class PdoPostgresFlowStateStoreTest extends TestCase
 {
+    use \Webong\WorkFlow\Tests\RunStoreAssertions;
     public function testItPersistsMutatesAndForgetsAPolymorphicState(): void
     {
         $dsn = getenv('WORK_FLOW_POSTGRES_DSN');
@@ -65,5 +66,6 @@ final class PdoPostgresFlowStateStoreTest extends TestCase
 
         $store->forget('approval');
         self::assertNull($secondStore->get('approval'));
+        $this->assertRunIsolation($store);
     }
 }

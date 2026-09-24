@@ -130,7 +130,7 @@ final class FlowEvaluatorTest extends TestCase
         $result = (new FlowRunner())->run($definition, new FlowState(FlowStatus::PENDING), new ArrayFlowContext(), [$executor]);
 
         self::assertSame(FlowStatus::ATTENTION, $result->status);
-        self::assertSame('provider unavailable', $result->steps['authorize']->error);
+        self::assertSame('Flow step failed.', $result->steps['authorize']->error);
         self::assertTrue($result->steps['authorize']->retriable);
     }
 
@@ -160,7 +160,12 @@ final class FlowEvaluatorTest extends TestCase
 
         self::assertSame(
             'ok',
-            (new FlowActionDispatcher($registry))->dispatch(new FlowAction('retry', 'Retry'), ['value' => 'ok']),
+            (new FlowActionDispatcher($registry, new class implements \Webong\WorkFlow\Contracts\FlowActionAuthorizer {
+                public function allows(FlowAction $action, array $context = []): bool
+                {
+                    return ($context['value'] ?? null) === 'ok';
+                }
+            }))->dispatch(new FlowAction('retry', 'Retry'), ['value' => 'ok']),
         );
     }
 

@@ -116,7 +116,11 @@ trait WorkflowSortable
         $byId = [];
 
         foreach ($siblings as $sibling) {
-            $byId[(string) $sibling->getKey()] = $sibling;
+            $key = $sibling->getKey();
+            if (! is_int($key) && ! is_string($key)) {
+                throw new InvalidArgumentException('Workflow steps must have a persisted key before reordering.');
+            }
+            $byId[(string) $key] = $sibling;
         }
 
         $ordered = [];
@@ -137,8 +141,8 @@ trait WorkflowSortable
             $seen[$key] = true;
         }
 
-        foreach ($siblings as $sibling) {
-            if (! isset($seen[(string) $sibling->getKey()])) {
+        foreach ($byId as $key => $sibling) {
+            if (! isset($seen[$key])) {
                 $ordered[] = $sibling;
             }
         }

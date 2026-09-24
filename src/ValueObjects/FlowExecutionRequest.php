@@ -19,6 +19,7 @@ final readonly class FlowExecutionRequest
         public ?string $executionId = null,
         public ?FlowStateSubject $subject = null,
     ) {
+        $state->run?->assertDefinition($definition);
         if ($this->driver === '') {
             throw new InvalidArgumentException('A flow execution request requires a driver.');
         }

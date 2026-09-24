@@ -33,12 +33,14 @@ final readonly class TemporalFlowExecutionDriver implements FlowExecutionDriver
 
     public function dispatch(FlowExecutionRequest $request): FlowExecutionReceipt
     {
+        $request = $request->withRecordedDriver();
         $workflowId = $request->executionId;
 
         if ($workflowId === null && $request->subject !== null) {
             $workflowId = (new TemporalFlowIdentity(
                 subject: $request->subject,
                 flowKey: $request->definition->key,
+                runId: $request->state->run?->id,
             ))->workflowId();
         }
 
@@ -61,6 +63,7 @@ final readonly class TemporalFlowExecutionDriver implements FlowExecutionDriver
             driver: $this->name(),
             status: FlowExecutionStatus::DISPATCHED,
             executionId: $startedId !== '' ? $startedId : $workflowId,
+            state: $request->state,
         );
     }
 }

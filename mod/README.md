@@ -29,12 +29,12 @@ Start it for an order:
 curl -sS http://127.0.0.1:18080/rpc \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer local-development-token' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"flow.start","params":{"flow_key":"demo_approval","subject":{"type":"order","id":"demo-1"}}}'
+  -d '{"jsonrpc":"2.0","id":1,"method":"flow.start","params":{"flow_key":"demo_approval","run_id":"approval-1","subject":{"type":"order","id":"demo-1"}}}'
 ```
 
 Look for `"status":"running"` and an `approve` step with
 `"status":"pending"`. The identity of this state is the combination of
-`subject.type`, `subject.id`, and `flow_key`.
+`subject.type`, `subject.id`, `flow_key`, and `run_id`.
 
 Read it again (even in a later process or request):
 
@@ -42,7 +42,7 @@ Read it again (even in a later process or request):
 curl -sS http://127.0.0.1:18080/rpc \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer local-development-token' \
-  -d '{"jsonrpc":"2.0","id":2,"method":"flow.get","params":{"flow_key":"demo_approval","subject":{"type":"order","id":"demo-1"}}}'
+  -d '{"jsonrpc":"2.0","id":2,"method":"flow.get","params":{"flow_key":"demo_approval","run_id":"approval-1","subject":{"type":"order","id":"demo-1"}}}'
 ```
 
 Simulate an approval event and finish the waiting step:
@@ -51,17 +51,30 @@ Simulate an approval event and finish the waiting step:
 curl -sS http://127.0.0.1:18080/rpc \
   -H 'Content-Type: application/json' \
   -H 'Authorization: Bearer local-development-token' \
-  -d '{"jsonrpc":"2.0","id":3,"method":"flow.complete","params":{"flow_key":"demo_approval","subject":{"type":"order","id":"demo-1"},"step_id":"approve","idempotency_key":"approval-1","result":{"status":"completed","message":"Approved"}}}'
+  -d '{"jsonrpc":"2.0","id":3,"method":"flow.complete","params":{"flow_key":"demo_approval","run_id":"approval-1","subject":{"type":"order","id":"demo-1"},"step_id":"approve","attempt":1,"idempotency_key":"approval-event-1","result":{"status":"completed","message":"Approved"}}}'
 ```
 
 Look for `"status":"completed"`. Calling `flow.complete` again with the
 same `idempotency_key` returns the same completed state. Calling `flow.start`
-again for the same subject and flow returns its existing state rather than
-running it from the beginning.
+again for the same subject, flow, and run ID returns its existing state. A new
+run ID starts another occurrence using the latest host definition.
+
+For a flow with dependent steps, completing a callback only records its
+result. Resume explicitly to run the next steps:
+
+```sh
+curl -sS http://127.0.0.1:18080/rpc \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer local-development-token' \
+  -d '{"jsonrpc":"2.0","id":4,"method":"flow.resume","params":{"flow_key":"demo_approval","run_id":"approval-1","subject":{"type":"order","id":"demo-1"}}}'
+```
+
+Resume uses the definition and initial context saved with the run. A completed
+run simply returns its existing state.
 
 Stop the example with `docker compose -f mod/compose.yml down`. The named
 PostgreSQL volume remains, so `demo-1` still has its state on the next start.
-Use a different subject ID when trying the sequence again.
+Use a different run ID when trying the sequence again.
 
 ## What can a caller do?
 
@@ -71,17 +84,21 @@ All calls are `POST /rpc` with `Content-Type: application/json`, a
 | Method | Required params | Result |
 | --- | --- | --- |
 | `flow.definition` | `flow_key` | The host-defined flow definition |
-| `flow.start` | `flow_key`, `subject` | Existing or newly started state; optional `context` object |
-| `flow.get` | `flow_key`, `subject` | Current state, or `null` before start |
-| `flow.complete` | `flow_key`, `subject`, `step_id`, `idempotency_key`, `result` | State after a deferred step completes |
+| `flow.start` | `flow_key`, `subject`, `run_id` | Existing or newly started run; optional initial `context` object |
+| `flow.get` | `flow_key`, `subject`, `run_id` | Current state, or `null` before start |
+| `flow.complete` | `flow_key`, `subject`, `run_id`, `step_id`, `attempt`, `idempotency_key`, `result` | State after a deferred step completes |
+| `flow.resume` | `flow_key`, `subject`, `run_id` | State after one eligible execution pass |
+| `flow.cancel` | `flow_key`, `subject`, `run_id` | Cancelled state; future callbacks and work stop |
 
 `subject` is an object with string `type` and `id` fields. `result.status`
 may be `completed`, `failed`, or `skipped`, with optional `message` and
-`error`. `flow.start` currently accepts only the `inline` execution driver;
-the API does not expose queue or Temporal execution yet. JSON-RPC batches and
-notifications are accepted, but use request IDs for operations whose result
-you need to inspect. Internal failures are logged and returned as generic
-JSON-RPC errors.
+`error`, a boolean `retriable`, and a `metadata` object. An explicit
+`retriable: false` prevents retry even when the step has a retry policy.
+`flow.start` currently accepts only the `inline` execution driver;
+the API does not expose queue or Temporal execution yet. JSON-RPC batches are
+accepted. Mutation notifications without an `id` do not execute; read
+notifications return no response. Internal failures return generic JSON-RPC
+errors. Initial context is saved for resume and omitted from responses.
 
 ## Replace the demo with your flows
 
@@ -102,11 +119,16 @@ callers. `WORKFLOW_PHP_PUBLIC` selects the bundled PHP bridge document root.
 
 `flow.start` currently supports the `inline` execution driver only. The
 Laravel queue and Temporal execution adapters remain separate; this module
-does not silently switch runtimes. Since the inline executor runs under the
-PostgreSQL state lock, keep it short and avoid irreversible external side
-effects inside it. Long-running or externally side-effecting steps should
-defer and complete through `flow.complete`; a future queue/Temporal module
-can take ownership of those execution semantics.
+does not silently switch runtimes. It persists an execution claim, runs the
+executor outside the PostgreSQL lock, and saves the result under that claim.
+Keep inline work short; return `deferred()` for an external wait and complete
+it through `flow.complete`. External operations still need their own stable
+idempotency keys.
+
+If a process stops or result persistence fails, `flow.get` exposes a non-null
+`execution_claim`. Other mutations receive `-32009`. The host must reconcile
+the provider's outcome before clearing the claim or replacing the run; there
+is no automatic lease expiry or blind replay. See [run lifecycle](../docs/run-lifecycle.md).
 
 ## Security and operations
 
@@ -120,6 +142,7 @@ can take ownership of those execution semantics.
 - Set `WORKFLOW_RPC_LISTEN` to change the address; it defaults to
   `127.0.0.1:8080` outside Compose. `/healthz` has no authentication and
   exposes no flow data.
+  It checks process liveness, not PHP execution or PostgreSQL readiness.
 - PostgreSQL connection settings in the example are `WORKFLOW_POSTGRES_DSN`,
   `WORKFLOW_POSTGRES_USER`, and `WORKFLOW_POSTGRES_PASSWORD`. Apply the schema
   before starting against an existing database. Back up the state table as

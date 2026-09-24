@@ -16,6 +16,8 @@ use Webong\WorkFlow\Temporal\TemporalFlowCompletion;
 use Webong\WorkFlow\Temporal\TemporalFlowExecutionDriver;
 use Webong\WorkFlow\Temporal\TemporalFlowIdentity;
 use Webong\WorkFlow\Temporal\TemporalFlowInput;
+use Webong\WorkFlow\Temporal\TemporalCompletionInbox;
+use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
@@ -75,6 +77,60 @@ final class TemporalFlowAdapterTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
 
         TemporalFlowCompletion::fromArray(['flow_key' => 'setup']);
+    }
+
+    public function test_run_identity_and_callback_attempt_survive_transport(): void
+    {
+        $subject = new FlowStateSubject('channel', '42');
+        $first = new TemporalFlowIdentity($subject, 'setup', 'one');
+        $second = new TemporalFlowIdentity($subject, 'setup', 'two');
+        self::assertNotSame($first->workflowId(), $second->workflowId());
+        $completion = new TemporalFlowCompletion(new FlowDeferredCompletion('setup', 'authorize', 'event', StepResult::completed(), 'one', 2));
+        $roundTrip = TemporalFlowCompletion::fromArray($completion->toArray());
+        self::assertSame('one', $roundTrip->completion->runId);
+        self::assertSame(2, $roundTrip->completion->attempt);
+
+        $definition = new FlowDefinition('setup', [new FlowStepDefinition('authorize', 'Authorize')], version: 3);
+        $input = new TemporalFlowInput($definition, (new FlowRun('one', $definition))->initialState());
+        self::assertSame($input->state->run->toArray(), TemporalFlowInput::fromArray($input->toArray())->state->run->toArray());
+    }
+
+    public function test_signal_inbox_preserves_progress_before_terminal_completion(): void
+    {
+        $inbox = new TemporalCompletionInbox();
+        $progress = new FlowDeferredCompletion('setup', 'authorize', 'progress', StepResult::pending('Almost'), 'one', 1);
+        $finished = new FlowDeferredCompletion('setup', 'authorize', 'done', StepResult::completed(), 'one', 1);
+        $inbox->push($progress);
+        $inbox->push($finished);
+        self::assertTrue($inbox->has('authorize'));
+        self::assertSame($progress, $inbox->shift('authorize'));
+        self::assertSame($finished, $inbox->shift('authorize'));
+        self::assertFalse($inbox->has('authorize'));
+        self::assertNull($inbox->shift('authorize'));
+    }
+
+    public function test_late_duplicates_cannot_starve_another_steps_callback(): void
+    {
+        $definition = new FlowDefinition('setup', [new FlowStepDefinition('a', 'A'), new FlowStepDefinition('b', 'B')]);
+        $waiting = new StepState(attempts: 1, metadata: ['deferred' => true]);
+        $state = (new FlowRun('one', $definition))->initialState()->withStep('a', $waiting)->withStep('b', $waiting);
+        $completed = new FlowDeferredCompletion('setup', 'a', 'event-a', StepResult::completed(), 'one', 1);
+        $state = (new \Webong\WorkFlow\Services\FlowStateTransition())->complete($definition, $state, $completed);
+        // Exercise signal admission without a Temporal runtime or activity stub.
+        $reflection = new \ReflectionClass(\Webong\WorkFlow\Temporal\TemporalFlowWorkflow::class);
+        $workflow = $reflection->newInstanceWithoutConstructor();
+        $inbox = new TemporalCompletionInbox();
+        foreach (['state' => $state, 'definition' => $definition, 'completions' => $inbox] as $property => $value) {
+            $reflection->getProperty($property)->setValue($workflow, $value);
+        }
+        for ($i = 0; $i < 1100; $i++) {
+            $workflow->complete((new TemporalFlowCompletion($completed))->toArray());
+        }
+        $next = new FlowDeferredCompletion('setup', 'b', 'event-b', StepResult::completed(), 'one', 1);
+        $workflow->complete((new TemporalFlowCompletion($next))->toArray());
+        self::assertFalse($inbox->has('a'));
+        self::assertSame('event-b', $inbox->shift('b')->idempotencyKey);
+        self::assertSame(0, $workflow->snapshot()['rejected_completions']);
     }
 
     public function test_activity_handler_delegates_to_a_host_executor(): void
@@ -154,6 +210,8 @@ final class TemporalFlowAdapterTest extends TestCase
         self::assertSame(FlowStepStatus::FAILED->value, $result['status']);
         self::assertTrue($result['retriable']);
         self::assertSame(1, $result['attempts']);
+        self::assertStringNotContainsString('Provider unavailable.', json_encode($result));
+        self::assertSame('step_execution_failed', $result['metadata']['error_code']);
     }
 
     public function test_temporal_execution_driver_serializes_the_workflow_start_request(): void

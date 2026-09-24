@@ -21,7 +21,7 @@ final readonly class FlowRetryPolicy
 
     public function canRetry(int $attempts): bool
     {
-        return $this->enabled && $attempts < $this->maxAttempts;
+        return $this->enabled && $this->idempotent && $attempts < $this->maxAttempts;
     }
 
     /** @return array<string, mixed> */

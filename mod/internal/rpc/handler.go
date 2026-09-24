@@ -127,6 +127,11 @@ func (h *Handler) process(ctx context.Context, payload json.RawMessage) *respons
 		invalid.ID = id
 	}
 
+	// State changes require a request ID so their outcome can be acknowledged.
+	if !hasID && (method == "flow.start" || method == "flow.complete" || method == "flow.resume" || method == "flow.cancel") {
+		return nil
+	}
+
 	params := fields["params"]
 	if len(params) == 0 {
 		params = json.RawMessage("{}")

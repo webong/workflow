@@ -17,6 +17,7 @@ $files = [
     'src/Enums/FlowEventType.php',
     'src/ValueObjects/FlowStepDefinition.php',
     'src/ValueObjects/FlowDefinition.php',
+    'src/ValueObjects/FlowRun.php',
     'src/ValueObjects/StepState.php',
     'src/ValueObjects/FlowState.php',
     'src/ValueObjects/FlowAction.php',

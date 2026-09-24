@@ -31,6 +31,7 @@ final readonly class LaravelQueueFlowExecutionDriver implements FlowExecutionDri
 
     public function dispatch(FlowExecutionRequest $request): FlowExecutionReceipt
     {
+        $request = $request->withRecordedDriver();
         $executionId = ($this->dispatch)($request);
 
         if ($executionId === '') {
@@ -45,6 +46,7 @@ final readonly class LaravelQueueFlowExecutionDriver implements FlowExecutionDri
             driver: $this->name(),
             status: FlowExecutionStatus::DISPATCHED,
             executionId: $executionId,
+            state: $request->state,
         );
     }
 }

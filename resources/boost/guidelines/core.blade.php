@@ -11,12 +11,15 @@ CLI commands, mobile backends, and other host runtimes.
   dependency.
 - Use `FlowStepDefinition` for step definitions. Do not introduce the former
   `StepDefinition` name in new code.
-- `FlowDefinition`, `FlowState`, `FlowStepDefinition`, `StepResult`, and related
+- `FlowRun`, `FlowDefinition`, `FlowState`, `FlowStepDefinition`, `StepResult`, and related
   value objects are framework-neutral and immutable.
 - The host application owns HTTP calls, queue dispatch, authorization, event
   publication, and presentation-specific rendering.
 - Persist state through `FlowStateStore`; use `AtomicFlowStateStore::mutate()`
   for read-modify-write transitions that may run concurrently.
+- Create `FlowRun` with an explicit ID and wrap the subject's store in
+  `RunScopedFlowStateStore`. Resume and complete using the saved definition
+  snapshot; a new occurrence gets a new run ID.
 
 ## Defining and running a flow
 
@@ -26,12 +29,11 @@ dependencies must refer to existing steps and definitions reject cycles. Use
 `FlowStepExecutor` implementations to execute supported steps.
 
 <code-snippet name="Define and run a flow" lang="php">
-use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Services\FlowEvaluator;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
-use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 
 $definition = new FlowDefinition(
@@ -44,7 +46,7 @@ $definition = new FlowDefinition(
 
 $state = (new FlowEvaluator())->evaluate(
     $definition,
-    new FlowState(FlowStatus::PENDING),
+    (new FlowRun('channel-1-setup-1', $definition))->initialState(),
 );
 
 $state = (new FlowRunner())->run(
@@ -62,9 +64,19 @@ follow-up work through the host application's queue or process manager.
 
 Return `StepResult::deferred()` when an external provider callback must finish a
 step. Complete the step with `FlowDeferredCompletion` and
-`FlowStateTransition::complete()`. Always provide a stable idempotency key;
-duplicate callbacks are ignored. Wrap the transition in
+`FlowStateTransition::complete()`. Provide the run ID, step ID, original attempt,
+and stable event ID; exact duplicates are ignored and conflicting/stale events
+are rejected. Wrap the transition in
 `AtomicFlowStateStore::mutate()` when callbacks can race.
+
+Resume explicitly after recording completion. The runner leaves deferred work
+waiting, respects non-retriable failures, and never resets a tracked run for
+replay. Keep external effects outside mutation locks and use host execution
+claims/outbox delivery when workers can overlap.
+
+Supply `FlowActionAuthorizer` to `FlowActionDispatcher`. Use
+`FlowFailureReporter` for private exception diagnostics; step error messages
+and metadata are public-facing values.
 
 ## Optional Laravel integration
 
@@ -74,6 +86,7 @@ a Laravel host:
 1. Publish the WorkFlow config and migrations, then run `php artisan migrate`.
 2. Inject `FlowStateStoreFactory`; create a store using a neutral
    `FlowStateSubject` made from `$model->getMorphClass()` and `$model->getKey()`.
+   Wrap it in `RunScopedFlowStateStore` with the selected run ID.
 3. Use the database driver for polymorphic Eloquent state or the Redis driver
    for lock-protected atomic state.
 4. Keep Eloquent `Model` and morph APIs inside the Laravel adapter boundary;

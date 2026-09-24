@@ -50,6 +50,10 @@ final class FlowStateMigrationRunner
                 throw new InvalidArgumentException('A flow state migrator must return its declared target version.');
             }
 
+            if ($state->run?->toArray() !== $migrated->run?->toArray()) {
+                throw new InvalidArgumentException('State schema migrations must preserve the run and its pinned definition.');
+            }
+
             $state = $migrated;
         }
 

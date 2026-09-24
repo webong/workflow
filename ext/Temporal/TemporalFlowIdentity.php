@@ -15,19 +15,26 @@ final readonly class TemporalFlowIdentity
     public function __construct(
         public FlowStateSubject $subject,
         public string $flowKey,
+        public ?string $runId = null,
     ) {
-        if ($this->flowKey === '') {
+        if ($this->flowKey === '' || $this->runId === '') {
             throw new InvalidArgumentException('A Temporal flow identity requires a flow key.');
         }
     }
 
     public function workflowId(): string
     {
-        return implode(':', [
+        $parts = [
             'work-flow',
             rawurlencode($this->subject->type),
             rawurlencode($this->subject->id),
             rawurlencode($this->flowKey),
-        ]);
+        ];
+
+        if ($this->runId !== null) {
+            $parts[] = rawurlencode($this->runId);
+        }
+
+        return implode(':', $parts);
     }
 }

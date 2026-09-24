@@ -74,6 +74,34 @@ final readonly class FlowDefinition
         return null;
     }
 
+    /** @return list<FlowStepDefinition> Dependencies first, retaining declaration order where possible. */
+    public function executionSteps(): array
+    {
+        $ordered = [];
+        $visited = [];
+        $visit = function (FlowStepDefinition $step) use (&$visit, &$ordered, &$visited): void {
+            if (isset($visited[$step->id])) {
+                return;
+            }
+
+            foreach ($step->dependsOn as $dependency) {
+                $dependencyStep = $this->step($dependency);
+                if ($dependencyStep !== null) {
+                    $visit($dependencyStep);
+                }
+            }
+
+            $visited[$step->id] = true;
+            $ordered[] = $step;
+        };
+
+        foreach ($this->steps as $step) {
+            $visit($step);
+        }
+
+        return $ordered;
+    }
+
     /** @return array<string, mixed> */
     public function toArray(): array
     {

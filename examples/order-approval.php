@@ -4,14 +4,15 @@ declare(strict_types=1);
 
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\FlowStateTransition;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;
+use Webong\WorkFlow\Services\RunScopedFlowStateStore;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
@@ -39,11 +40,12 @@ $executor = new class implements FlowStepExecutor {
     }
 };
 
-$store = new InMemoryFlowStateStore();
+$run = new FlowRun('approval-42-1', $definition);
+$store = new RunScopedFlowStateStore(new InMemoryFlowStateStore(), $run->id);
 $runner = new FlowRunner();
 $context = new ArrayFlowContext(['order_id' => 'order-42']);
 
-$state = $runner->run($definition, new FlowState(FlowStatus::PENDING), $context, [$executor]);
+$state = $runner->run($definition, $run->initialState(), $context, [$executor]);
 $store->put($definition->key, $state);
 printf("After start: %s; approve: %s\n", $state->status->value, $state->steps['approve']->status->value);
 
@@ -57,6 +59,8 @@ $state = $store->mutate(
             stepId: 'approve',
             idempotencyKey: 'approval-event-1',
             result: StepResult::completed('Order approved'),
+            runId: $run->id,
+            attempt: 1,
         ),
     ),
 );

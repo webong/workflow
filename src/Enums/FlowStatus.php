@@ -11,4 +11,5 @@ enum FlowStatus: string
     case ATTENTION = 'attention';
     case COMPLETED = 'completed';
     case BLOCKED = 'blocked';
+    case CANCELLED = 'cancelled';
 }

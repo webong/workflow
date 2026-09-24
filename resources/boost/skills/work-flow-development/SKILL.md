@@ -21,13 +21,15 @@ Important contracts and services:
 
 - `FlowDefinition` contains a versioned flow and ordered `FlowStepDefinition`
   instances.
+- `FlowRun` identifies one occurrence and pins its complete definition snapshot.
+  `RunScopedFlowStateStore` isolates it within any subject-bound store.
 - `FlowEvaluator` derives a `FlowState` from a definition and stored state.
 - `FlowRunner` executes host-provided `FlowStepExecutor` instances and returns
   a new state.
 - `FlowStateStore` reads and writes state; `AtomicFlowStateStore::mutate()`
   protects concurrent read-modify-write transitions.
-- `FlowStateTransition` creates running, completed, failed, reset, and deferred
-  completion states.
+- `FlowStateTransition` applies deferred completion and cancellation. Replay
+  of a tracked run uses a new run ID; reset is only for legacy states.
 - `FlowStateStoreFactory` returns a subject-bound
   `ForgettableFlowStateStore`.
 
@@ -67,9 +69,15 @@ a queue.
 
 Return `StepResult::deferred()` for operations completed by a webhook or other
 external callback. Construct a `FlowDeferredCompletion` with the flow key, step
-ID, stable idempotency key, and callback result. Apply it through
+ID, run ID, original attempt number, stable event ID, and callback result. The
+executor context's `_workflow` entry supplies outbound correlation values.
+Apply it using the saved run definition through
 `FlowStateTransition::complete()` and persist the result inside
 `AtomicFlowStateStore::mutate()`.
+
+An exact duplicate is a no-op; a conflicting payload or stale attempt is
+rejected. Resume explicitly after completion; a waiting deferred step is not
+re-executed. Preserve old run records for the provider's callback retry window.
 
 Never perform a callback transition as an unlocked `get()` followed by `put()`;
 that can lose a concurrent update. The database adapter uses a transaction and
@@ -85,12 +93,13 @@ neutral subject from an Eloquent model only at the Laravel boundary:
 
 <code-snippet name="Create a subject-bound Laravel store" lang="php">
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
+use Webong\WorkFlow\Services\RunScopedFlowStateStore;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 
-$store = $factory->for(new FlowStateSubject(
+$store = new RunScopedFlowStateStore($factory->for(new FlowStateSubject(
     type: $model->getMorphClass(),
     id: (string) $model->getKey(),
-));
+)), $runId);
 </code-snippet>
 
 Publish the config and migrations before using the Eloquent store. The
@@ -106,7 +115,7 @@ when the host installs `temporal/sdk`. Keep Temporal Workflow code deterministic
 receive Signals, but HTTP, database, Redis, and other side effects must run in
 `TemporalFlowActivity` through host-provided `FlowStepExecutor` instances.
 
-Use `TemporalFlowIdentity` for stable subject/flow Workflow IDs,
+Use `TemporalFlowIdentity` for stable subject/flow/run Workflow IDs,
 `TemporalFlowInput` for serializable workflow arguments, and
 `TemporalFlowCompletion` for deferred callback Signal payloads. Temporal event
 history is the source of truth; do not use the Laravel state stores for
@@ -117,6 +126,24 @@ read `config('work-flow.temporal')` for the address, namespace, task queue, and
 feature flag, while the host application owns SDK client and worker bootstrap.
 Use `config('work-flow.execution.default')` to choose the initial driver, then
 keep the recorded `execution_driver` unchanged for the lifetime of the flow.
+Persist driver selection before dispatch under the host's concurrency policy;
+a receipt snapshot must not overwrite state already advanced by a worker.
+
+## Actions and failures
+
+Provide a host `FlowActionAuthorizer` to `FlowActionDispatcher`; action
+visibility is not authorization. Route private exceptions through
+`FlowFailureReporter`, and keep explicit `StepResult` messages safe to show.
+Use idempotent retry policies with bounded attempts. Side effects execute
+outside storage locks under the host's claim/outbox and delivery strategy.
+
+## Upgrade checks
+
+For an existing integration, read `docs/run-lifecycle.md` in the installed
+package before adopting run-aware storage. Preserve legacy rows, add callback
+run/attempt correlation, and verify a saved v1 run still completes after the
+host publishes v2. For RPC consumers, use `run_id` on all run operations and
+`attempt` on completion; use request IDs for mutations.
 
 ## Validation
 

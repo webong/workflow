@@ -24,6 +24,7 @@ use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 
 final class ProductionFlowStateStoreTest extends TestCase
 {
+    use \Webong\WorkFlow\Tests\RunStoreAssertions;
     public function test_postgres_store_uses_the_production_database_driver(): void
     {
         $connection = $this->postgresConnection();
@@ -56,6 +57,7 @@ final class ProductionFlowStateStoreTest extends TestCase
 
         self::assertSame('completed', $store->get('setup')?->status->value);
         self::assertSame('running', $store->get('setup')?->metadata['previous']);
+        $this->assertRunIsolation($store);
     }
 
     public function test_redis_store_uses_the_production_lock_provider(): void
@@ -84,6 +86,7 @@ final class ProductionFlowStateStoreTest extends TestCase
 
         self::assertSame('completed', $store->get('setup')?->status->value);
         self::assertSame('running', $store->get('setup')?->metadata['previous']);
+        $this->assertRunIsolation($store);
 
         $store->forget('setup');
     }

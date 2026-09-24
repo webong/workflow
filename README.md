@@ -1,316 +1,116 @@
 # WorkFlow
 
-WorkFlow helps an application track a multi-step process: which steps are
-ready, waiting, completed, or failed. For example, an order approval can wait
-for a human decision before notifying a customer. The same state can be read
-from an API, CLI, mobile app, or GUI.
+WorkFlow helps your application run and track a process that takes several
+steps: authorize a provider, wait for its webhook, then verify a connection.
+Your API, CLI, or UI can read the same progress and show what needs attention.
 
-The package is `webong/workflow` (PHP 8.3+). Its core does not choose a web
-framework, state store, queue, or UI. Your application supplies the business
-steps and decides when to run or resume them.
-
-## Choose how to use it
-
-| You want to... | Start here |
-| --- | --- |
-| Run flows inside any PHP application or CLI | [PHP guide](docs/php-library.md) |
-| Persist state in a Laravel database or Redis | [Laravel guide](docs/laravel.md) |
-| Call flows over JSON-RPC from a trusted backend | [Standalone Go/FrankenPHP guide](mod/README.md) |
-| Run long-lived flows through Temporal | [Temporal guide](docs/temporal.md) |
-| Work on this package | [Development and PHP 8.3 tests](docs/development.md) |
-
-## See one flow work
-
-The executable [order approval example](examples/order-approval.php) starts a
-flow, waits for an approval callback, then resumes to notify the customer.
-From a fresh checkout, run it in the repository's PHP 8.3 container:
-
-```sh
-docker compose -f docker-compose.test.yml run --rm php sh -lc 'composer update --no-interaction --prefer-dist && php examples/order-approval.php'
-docker compose -f docker-compose.test.yml down
-```
-
-If you already installed Composer dependencies with PHP 8.3+, you can instead
-run `php examples/order-approval.php` locally.
-
-It prints:
-
-```text
-After start: running; approve: pending
-After callback: running; approve: completed
-After resume: completed; notify: completed
-```
-
-The example uses memory for clarity; it loses state when the process exits.
-In a real app, replace that store with a durable one and have your webhook,
-job, or action apply the deferred completion. See the [PHP guide](docs/php-library.md)
-for that handoff.
-
-## Install in an application
+Install it in any PHP 8.3+ application:
 
 ```sh
 composer require webong/workflow
 ```
 
-Then define a `FlowDefinition`, provide `FlowStepExecutor` implementations,
-run with `FlowRunner`, and persist the returned `FlowState`. The runner does
-not create a queue job, save state, or resume itself. If you only need remote
-calls, deploy the separate [`mod/` service](mod/README.md) instead of exposing
-the PHP library directly to mobile or CLI users.
+Your application supplies the business operations and decides when to resume
+them. The core has no Laravel, database, queue, HTTP, or UI dependency.
 
-## API reference
+## See a complete flow work
 
-The examples below show the lower-level pieces. For a first integration,
-start with the complete example and one of the guides above.
+The [channel setup example](examples/channel-setup.php) includes starting a
+run, reading saved state, waiting for a webhook, and resuming. It uses simulated
+provider responses and an in-memory store.
 
-## Define and evaluate a flow
+From this repository, use the PHP 8.3 container:
 
-Create a versioned definition from immutable step value objects. Dependencies
-must refer to existing steps and cycles are rejected when the definition is
-constructed:
-
-```php
-use Webong\WorkFlow\Enums\FlowStatus;
-use Webong\WorkFlow\Services\FlowEvaluator;
-use Webong\WorkFlow\ValueObjects\FlowDefinition;
-use Webong\WorkFlow\ValueObjects\FlowRetryPolicy;
-use Webong\WorkFlow\ValueObjects\FlowState;
-use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
-
-$definition = new FlowDefinition(
-    key: 'channel_setup',
-    version: 1,
-    steps: [
-        new FlowStepDefinition(
-            id: 'authorize',
-            label: 'Authorize the channel',
-            retryPolicy: new FlowRetryPolicy(maxAttempts: 3, backoffSeconds: 30),
-        ),
-        new FlowStepDefinition(
-            id: 'verify',
-            label: 'Verify the channel',
-            dependsOn: ['authorize'],
-        ),
-    ],
-);
-
-$state = (new FlowEvaluator())->evaluate(
-    $definition,
-    new FlowState(FlowStatus::PENDING),
-);
+```sh
+docker compose -f docker-compose.test.yml up -d php postgres redis
+docker compose -f docker-compose.test.yml exec -T php composer install
+docker compose -f docker-compose.test.yml exec -T php php examples/channel-setup.php
 ```
 
-`FlowEvaluator` is pure: it derives the current flow status from a definition
-and a previously stored `FlowState`. The host decides where definitions and
-states come from and where the returned state is persisted.
+Expected output:
 
-## Execute supported steps
-
-Implement `FlowStepExecutor` for domain operations. WorkFlow does not perform
-HTTP calls, dispatch jobs, or choose a queue driver for you:
-
-```php
-use Webong\WorkFlow\Contracts\FlowContext;
-use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\Services\FlowRunner;
-use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
-use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
-use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
-
-$executor = new class implements FlowStepExecutor {
-    public function supports(FlowStepDefinition $step): bool
-    {
-        return $step->id === 'authorize';
-    }
-
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
-        // Call the host application's provider here.
-        return StepResult::completed('Channel authorized.');
-    }
-};
-
-$state = (new FlowRunner())->run(
-    definition: $definition,
-    state: $state,
-    context: new ArrayFlowContext(['channel_id' => 'channel-1']),
-    executors: [$executor],
-);
+```text
+Started channel-42-setup-1: running; webhook: pending
+Resume while waiting: webhook attempts = 1
+Webhook received: running
+After resume: completed; verify: completed
 ```
 
-The runner respects dependencies, retry policy, completed/skipped steps, and
-retry timestamps. It returns a new immutable state; persist that state and
-dispatch any host-owned follow-up work after the call.
+Add `--fail-verification` to the last command to see a failure that needs an
+operator to correct the provider settings. For a shorter example, run
+[order approval](examples/order-approval.php).
 
-## Select an execution driver
+## How it fits together
 
-Execution routing is separate from state storage. The core dispatcher accepts
-named drivers, while adapters decide how a selected runtime is started:
+1. Define the process with `FlowDefinition` and `FlowStepDefinition`.
+2. Create a `FlowRun` with a unique ID. It saves the definition used by this
+   occurrence, so publishing a later version cannot change an active run.
+3. Implement `FlowStepExecutor` for your operations. Return `completed()`,
+   `failed()`, `skipped()`, or `deferred()`.
+4. Run eligible steps with `FlowRunner` and save the returned `FlowState`.
+5. Apply a callback with its run ID, step ID, attempt, and event ID. Then
+   explicitly resume to execute the next eligible steps.
 
-- `inline` uses `InlineFlowExecutionDriver` and runs `FlowRunner` immediately.
-- `queue` uses `LaravelQueueFlowExecutionDriver`; the host supplies the queue
-  job dispatch callback.
-- `temporal` uses `TemporalFlowExecutionDriver`; the host supplies the Temporal
-  SDK workflow-start callback.
+A deferred step stays waiting when you resume. Completed steps are not
+repeated. Starting the process again uses a new run ID.
 
-Choose the driver once when the flow starts. The dispatcher records it in the
-state metadata as `execution_driver` and rejects a later dispatch that attempts
-to move the same execution to another runtime:
+## Choose your integration
 
-```php
-use Webong\WorkFlow\Services\FlowExecutionDispatcher;
-use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
+| Your application needs | Guide |
+| --- | --- |
+| Flows inside a PHP application or CLI | [PHP library: start, save, complete, resume](docs/php-library.md) |
+| Laravel models with database or Redis state | [Laravel installation and example](docs/laravel.md) |
+| Calls from another language or backend | [Go/FrankenPHP JSON-RPC service](mod/README.md) |
+| Temporal execution and durable timers | [Optional Temporal adapter](docs/temporal.md) |
+| Retry, cancellation, concurrency, and upgrade rules | [Run lifecycle](docs/run-lifecycle.md) |
+| Package development and testing | [Development guide](docs/development.md) |
 
-$receipt = (new FlowExecutionDispatcher([
-    $inlineDriver,
-    $queueDriver,
-    $temporalDriver,
-]))->dispatch(new FlowExecutionRequest(
-    definition: $definition,
-    state: $state,
-    context: ['channel_id' => 'channel-1'],
-    driver: 'temporal',
-    subject: $subject,
-));
-```
+Laravel and Temporal stay optional under `ext/`. The standalone service lives
+under `mod/` and accepts calls from trusted backends. Client-facing apps
+authenticate their users and authorize the subject before invoking it.
 
-The state-store driver (`database` or `redis`) remains independent from this
-execution driver. A Temporal execution can project state to PostgreSQL or
-Redis, while a queued execution can use either store.
+## Choose execution and storage separately
 
-## Handle deferred completion
+`FlowExecutionDriver` chooses where the **run** executes: inline, a host queue
+job, or Temporal. `FlowStateStore` chooses where ordinary run state is saved.
+Use `RunScopedFlowStateStore` around a subject-bound store to keep repeated
+runs separate; it works with the included database, Redis, PDO, and memory
+stores.
 
-An executor can return `StepResult::deferred()` when an external callback will
-finish the step later. Store the returned state, then apply a correlated
-completion from the callback handler:
+Temporal owns its runs through its event history. A database or Redis copy of
+a Temporal run is a read projection. Installing the adapter does not start
+a Temporal server or worker.
 
-```php
-use Webong\WorkFlow\Services\FlowStateTransition;
-use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
-use Webong\WorkFlow\ValueObjects\StepResult;
+WorkFlow core does not schedule retries, deliver an outbox, or guarantee
+exactly-once external effects. Your host owns those guarantees. See the
+[lifecycle guide](docs/run-lifecycle.md) before adding concurrent workers.
 
-$waiting = StepResult::deferred(
-    message: 'Waiting for the provider callback.',
-    metadata: ['request_id' => 'req-123'],
-);
-// Return $waiting from FlowStepExecutor::execute() and persist the runner's state.
+## Actions and errors
 
-$completion = new FlowDeferredCompletion(
-    flowKey: 'channel_setup',
-    stepId: 'authorize',
-    idempotencyKey: 'provider-event-123',
-    result: StepResult::completed('Provider callback received.'),
-);
+`FlowAction` and `FlowPresentation` describe what a host may show.
+`FlowActionDispatcher` requires a host `FlowActionAuthorizer` before invoking
+a handler. A visible action is not permission to execute it.
 
-$state = (new FlowStateTransition())->complete(
-    definition: $definition,
-    state: $state,
-    completion: $completion,
-);
-```
+Unexpected executor exceptions become a safe failure message with an error
+code and correlation ID. Supply `FlowFailureReporter` to send the original
+exception to private logs. Explicit messages returned by your executors must
+also be safe to display.
 
-Completions are correlated by flow and step, and repeated idempotency keys are
-ignored. Use `AtomicFlowStateStore::mutate()` around this transition when
-callbacks can arrive concurrently.
+## Laravel Boost and TypeScript
 
-## Persist state through an interface
+The package includes [Laravel Boost guidelines and a skill](docs/laravel.md#laravel-boost)
+to help apps integrate the run, callback, and persistence contracts.
 
-The core persistence contract is intentionally small:
+[types/work-flow.d.ts](types/work-flow.d.ts) describes the serialized API.
+`composer types` regenerates the PHP-derived contracts used by CI.
 
-```php
-use Webong\WorkFlow\Contracts\FlowStateStore;
-use Webong\WorkFlow\ValueObjects\FlowDefinition;
-use Webong\WorkFlow\ValueObjects\FlowState;
-
-function saveFlowState(FlowStateStore $store, FlowDefinition $definition, FlowState $state): void
-{
-    $store->put($definition->key, $state);
-}
-```
-
-For concurrent workers and asynchronous callbacks, use an
-`AtomicFlowStateStore` (or the `ForgettableFlowStateStore` returned by the
-factory):
-
-```php
-use Webong\WorkFlow\Contracts\AtomicFlowStateStore;
-use Webong\WorkFlow\Enums\FlowStatus;
-use Webong\WorkFlow\Services\FlowStateTransition;
-use Webong\WorkFlow\ValueObjects\FlowState;
-
-/** @var AtomicFlowStateStore $store */
-$state = $store->mutate('channel_setup', function (?FlowState $current) use ($definition, $completion): FlowState {
-    return (new FlowStateTransition())->complete(
-        definition: $definition,
-        state: $current ?? new FlowState(FlowStatus::PENDING),
-        completion: $completion,
-    );
-});
-```
-
-The in-memory store is useful for local workflows and conformance tests. The
-optional Laravel adapters below provide durable database and Redis-backed
-implementations.
-
-## Host integration
-
-The host maps its existing step definitions into `FlowDefinition`, reads its
-stored metadata into `FlowState`, and provides one `FlowStepExecutor` per
-domain step. `FlowRunner` returns a new evaluated state; the host persists it
-and may dispatch each executor through its own queue system.
-
-Definitions are versioned and validate duplicate ids, unknown dependencies, and
-dependency cycles at construction time. Step state includes attempts and the
-next retry timestamp, and a step can return a deferred result when completion
-will arrive asynchronously. Executor exceptions are converted into failed step
-states using the step's retry policy; the host can persist the returned state
-and retry it later. `CollectingFlowEventSink` is available for tests, while
-production applications provide their own event sink.
-
-## Optional Laravel persistence
-
-The optional provider binds `FlowStateStoreFactory` to a polymorphic Eloquent
-database store or an atomic Redis store. See the [Laravel guide](docs/laravel.md)
-for install commands, configuration, model identity, and the optional editable
-definition models. Laravel is not required for the core PHP library.
-
-## Optional Temporal adapter
-
-Temporal is an optional **execution** adapter, not a state store. It requires
-host-owned client and worker setup; setting an environment variable does not
-make the standalone RPC module use it. See the [Temporal guide](docs/temporal.md)
-for the actual boundary and prerequisites.
-
-## Use Laravel Boost while integrating WorkFlow
-
-The package ships optional Boost guidelines and a skill that Laravel hosts can
-discover. They help inspect the host app; they do not create executors or
-authorize actions. See [Laravel integration](docs/laravel.md#laravel-boost).
-
-## Docker test environment
-
-Use the isolated PHP 8.3, PostgreSQL, and Redis test stack:
+## Test the package
 
 ```sh
 make docker-test
 make docker-down
 ```
 
-See [development](docs/development.md) for focused tests and the executable
-example in the container.
-
-## Standalone JSON-RPC module
-
-[`mod/README.md`](mod/README.md) is the end-to-end guide to the optional
-Go/FrankenPHP JSON-RPC service. The PHP library itself has no HTTP server.
-
-## TypeScript contracts
-
-The package exposes `types/work-flow.d.ts` for consumers that want stable
-TypeScript contracts immediately. When the development dependency is installed,
-`composer types` regenerates `types/work-flow.generated.ts` using
-`paneon/php-to-typescript`; the generated file is checked by CI.
+The test stack uses PHP 8.3, PostgreSQL, and Redis. See
+[upgrade notes](docs/run-lifecycle.md#upgrading-existing-integrations) for the
+run-aware RPC and authorization changes.

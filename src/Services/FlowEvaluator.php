@@ -14,6 +14,10 @@ final class FlowEvaluator
 {
     public function evaluate(FlowDefinition $definition, ?FlowState $stored = null): FlowState
     {
+        $stored?->run?->assertDefinition($definition);
+        if ($stored?->status === FlowStatus::CANCELLED) {
+            return $stored;
+        }
         $storedSteps = $stored instanceof FlowState ? $stored->steps : [];
         $steps = [];
         $failedSteps = [];
@@ -27,8 +31,8 @@ final class FlowEvaluator
 
             $dependencyPending = array_filter(
                 $definitionStep->dependsOn,
-                static fn (string $dependency): bool => ! isset($steps[$dependency])
-                    || ! in_array($steps[$dependency]->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true),
+                static fn (string $dependency): bool => ! isset($storedSteps[$dependency])
+                    || ! in_array($storedSteps[$dependency]->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true),
             );
 
             if ($dependencyPending !== [] && $step->status === FlowStepStatus::PENDING) {
@@ -43,8 +47,8 @@ final class FlowEvaluator
                     $criticalFailed[] = $definitionStep->id;
                 }
 
-                $canRetry = $definitionStep->retryPolicy?->canRetry($step->attempts)
-                    ?? ($step->retriable ?? $definitionStep->retriable);
+                $canRetry = ($step->retriable ?? $definitionStep->retryPolicy->enabled ?? $definitionStep->retriable)
+                    && ($definitionStep->retryPolicy?->canRetry($step->attempts) ?? true);
 
                 if ($canRetryStep === null && $canRetry) {
                     $canRetryStep = $definitionStep->id;
@@ -53,7 +57,7 @@ final class FlowEvaluator
                 continue;
             }
 
-            if ($definitionStep->critical && ! in_array($step->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
+            if (! in_array($step->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
                 $criticalPending[] = $definitionStep->id;
             }
         }
@@ -84,6 +88,7 @@ final class FlowEvaluator
             message: $message,
             metadata: $stored instanceof FlowState ? $stored->metadata : [],
             version: $stored instanceof FlowState ? $stored->version : FlowState::SCHEMA_VERSION,
+            run: $stored?->run,
         );
     }
 }

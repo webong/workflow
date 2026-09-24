@@ -15,7 +15,7 @@ final class FlowActionDispatcher
 {
     public function __construct(
         private readonly FlowActionRegistry $registry,
-        private readonly ?FlowActionAuthorizer $authorizer = null,
+        private readonly FlowActionAuthorizer $authorizer,
     )
     {
     }
@@ -27,7 +27,7 @@ final class FlowActionDispatcher
             throw new RuntimeException("Flow action '{$action->key}' is disabled.");
         }
 
-        if ($this->authorizer instanceof FlowActionAuthorizer && ! $this->authorizer->allows($action, $context)) {
+        if (! $this->authorizer->allows($action, $context)) {
             throw new RuntimeException("Flow action '{$action->key}' is not authorized.");
         }
 

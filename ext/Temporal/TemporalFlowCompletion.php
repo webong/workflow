@@ -27,6 +27,8 @@ final readonly class TemporalFlowCompletion
             'flow_key' => $this->completion->flowKey,
             'step_id' => $this->completion->stepId,
             'idempotency_key' => $this->completion->idempotencyKey,
+            'run_id' => $this->completion->runId,
+            'attempt' => $this->completion->attempt,
             'result' => [
                 'status' => $result->status->value,
                 'message' => $result->message,
@@ -50,15 +52,19 @@ final readonly class TemporalFlowCompletion
         }
 
         $status = $result['status'] ?? null;
+        $parsedStatus = is_string($status) ? FlowStepStatus::tryFrom($status) : null;
+        if ($parsedStatus === null) {
+            throw new InvalidArgumentException('Invalid Temporal completion status.');
+        }
 
         return new self(new FlowDeferredCompletion(
             flowKey: is_string($data['flow_key'] ?? null) ? $data['flow_key'] : '',
             stepId: is_string($data['step_id'] ?? null) ? $data['step_id'] : '',
             idempotencyKey: is_string($data['idempotency_key'] ?? null) ? $data['idempotency_key'] : '',
+            runId: is_string($data['run_id'] ?? null) ? $data['run_id'] : null,
+            attempt: is_int($data['attempt'] ?? null) ? $data['attempt'] : null,
             result: new StepResult(
-                status: is_string($status)
-                    ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING
-                    : FlowStepStatus::PENDING,
+                status: $parsedStatus,
                 message: is_string($result['message'] ?? null) ? $result['message'] : null,
                 error: is_string($result['error'] ?? null) ? $result['error'] : null,
                 retriable: is_bool($result['retriable'] ?? null) ? $result['retriable'] : null,

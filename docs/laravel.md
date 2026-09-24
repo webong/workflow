@@ -85,11 +85,12 @@ use App\Models\Order;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Services\FlowRunner;
+use Webong\WorkFlow\Services\RunScopedFlowStateStore;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
@@ -101,7 +102,7 @@ final readonly class OrderApprovalService
     {
     }
 
-    public function start(Order $order): FlowState
+    public function start(Order $order, string $runId): FlowState
     {
         $definition = new FlowDefinition('order_approval', [
             new FlowStepDefinition('approve', 'Approve the order'),
@@ -118,15 +119,15 @@ final readonly class OrderApprovalService
             }
         };
 
-        $store = $this->stores->for(new FlowStateSubject(
+        $store = new RunScopedFlowStateStore($this->stores->for(new FlowStateSubject(
             type: $order->getMorphClass(),
             id: (string) $order->getKey(),
-        ));
+        )), $runId);
 
         return $store->mutate('order_approval', static fn (?FlowState $current): FlowState => $current
             ?? (new FlowRunner())->run(
                 $definition,
-                new FlowState(FlowStatus::PENDING),
+                (new FlowRun($runId, $definition))->initialState(),
                 new ArrayFlowContext(['order_id' => (string) $order->getKey()]),
                 [$executor],
             ));
@@ -134,16 +135,21 @@ final readonly class OrderApprovalService
 }
 ```
 
-Call `start($order)` from a controller, command, or job after authorizing the
+Call `start($order, $runId)` from a controller, command, or job after authorizing the
 caller. It returns a running state with a pending `approve` step; a second
-call returns the same state. When your approval event arrives, apply a
+call with the same run ID returns the same state. This executor only creates
+waiting state and does no external work, so the mutation stays short. If you
+add network calls, execute them outside the mutation under a host-owned claim.
+When your approval event arrives, apply a
 `FlowDeferredCompletion` through `FlowStateTransition::complete()` using
-the same subject-bound store, as in the
+the same subject/run-bound store and saved definition, as in the
 [executable PHP example](../examples/order-approval.php). For a multi-step
 flow, run the runner again after completion so newly eligible steps execute.
 
 `get('order_approval')` reads the current state; `forget('order_approval')`
 deletes it. Both database and Redis stores expose the same interface.
+Deleting also removes callback deduplication history, so retain old runs for
+your provider's retry window and never reuse a deleted run ID.
 
 Use `mutate($flowKey, $transition)` for concurrent updates, especially deferred
 callbacks. It locks the database row or uses a Redis lock; keep work inside
@@ -170,6 +176,11 @@ If product users must edit and order steps in the database, install
 ordered definition to the framework-neutral runner. For fixed application
 flows, construct `FlowDefinition` in code instead; no definition table is
 required by the runner.
+
+These models are mutable authoring records. A `FlowRun` pins the complete
+definition snapshot at start, so edits and reordering cannot change a saved
+run. Publish new versions through your host's publication policy and keep
+compatible executor code available for old runs.
 
 ## Laravel Boost
 

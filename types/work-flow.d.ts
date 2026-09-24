@@ -1,4 +1,4 @@
-export type FlowStatus = 'pending' | 'running' | 'attention' | 'completed' | 'blocked';
+export type FlowStatus = 'pending' | 'running' | 'attention' | 'completed' | 'blocked' | 'cancelled';
 export type FlowStepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 export type FlowEventType =
     | 'started'
@@ -49,6 +49,12 @@ export interface FlowState {
     can_retry_step: string | null;
     status_message: string | null;
     metadata: Record<string, unknown>;
+    run: FlowRun | null;
+}
+
+export interface FlowRun {
+    id: string;
+    definition: FlowDefinition;
 }
 
 export interface FlowAction {

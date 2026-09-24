@@ -1,8 +1,14 @@
 parameters:
-    level: 8
+    level: 9
     paths:
         - src
         - ext/Laravel
+        - ext/Temporal/TemporalCompletionInbox.php
+        - ext/Temporal/TemporalFlowActivityHandler.php
+        - ext/Temporal/TemporalFlowCompletion.php
+        - ext/Temporal/TemporalFlowExecutionDriver.php
+        - ext/Temporal/TemporalFlowIdentity.php
+        - ext/Temporal/TemporalFlowInput.php
         - mod/php/src
         - examples
     treatPhpDocTypesAsCertain: false
