@@ -186,6 +186,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
     private function withStepResult(FlowState $state, string $stepId, StepResult $result, ?FlowDefinition $definition): FlowState
     {
         $previous = $state->steps[$stepId] ?? null;
+        $attempts = $previous->attempts ?? 0;
         $metadata = $result->metadata;
         if ($result->status === FlowStepStatus::PENDING) {
             $metadata = [...($previous->metadata ?? []), ...$metadata, 'deferred' => true];
@@ -198,7 +199,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         $step = $definition?->step($stepId);
         if ($result->status === FlowStepStatus::FAILED && $step !== null) {
             $retriable = ($retriable ?? $step->retryPolicy->enabled ?? $step->retriable)
-                && ($step->retryPolicy?->canRetry($previous->attempts ?? 0) ?? true);
+                && ($step->retryPolicy?->canRetry($attempts) ?? true);
             $now = $this->clock !== null ? ($this->clock)() : time();
             $nextRetryAt = $retriable
                 ? max($nextRetryAt ?? 0, $now + ($step->retryPolicy->backoffSeconds ?? 0))
@@ -211,7 +212,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             error: $result->error,
             updatedAt: $this->timestamp !== null ? ($this->timestamp)() : date(DATE_ATOM),
             retriable: $retriable,
-            attempts: $previous->attempts ?? 0,
+            attempts: $attempts,
             nextRetryAt: $nextRetryAt,
             metadata: $metadata,
         ));

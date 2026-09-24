@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Added an experimental Composer-managed TypePHP build under `mod/typephp/`
+  with native executable/shared-library targets, a C interface, runnable
+  Node/Python examples, a language integration guide, and behavioral parity
+  checks against PHP 8.3.
 - Added explicit `FlowRun` identity, pinned definition snapshots, run-scoped
   storage, cancellation, and attempt-correlated deferred completions.
 - Fixed deferred replay, dependency ordering, permanent failure retry, exception

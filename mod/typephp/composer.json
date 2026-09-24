@@ -1,0 +1,13 @@
+{
+    "name": "webong/workflow-native-build",
+    "description": "Isolated, experimental TypePHP build toolchain for WorkFlow.",
+    "type": "project",
+    "license": "MIT",
+    "require-dev": {
+        "swoole/typephp": "0.9.3"
+    },
+    "config": {
+        "allow-plugins": false,
+        "sort-packages": true
+    }
+}

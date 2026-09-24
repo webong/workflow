@@ -1,0 +1,24 @@
+name: workflow-native
+
+services:
+  baseline:
+    image: php:8.3-cli
+    volumes:
+      - ../..:/workspace:ro
+      - native_build:/build
+    working_dir: /workspace
+    command: ["php", "mod/typephp/tests/export-cases.php"]
+
+  native:
+    build:
+      context: ../..
+      dockerfile: mod/typephp/Dockerfile
+    volumes:
+      - ../..:/workspace:ro
+      - native_build:/build
+    working_dir: /workspace
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+
+volumes:
+  native_build:

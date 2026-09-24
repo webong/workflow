@@ -2,7 +2,7 @@ PHP ?= php
 COMPOSER ?= composer
 PHPUNIT ?= vendor/bin/phpunit
 
-.PHONY: install test test-filter types analyse lint docker-test docker-down
+.PHONY: install test test-filter types analyse lint docker-test docker-down native-test
 
 install:
 	$(COMPOSER) install --no-interaction
@@ -28,3 +28,8 @@ docker-test:
 
 docker-down:
 	docker compose -f docker-compose.test.yml down
+
+native-test:
+	docker compose -f mod/typephp/compose.yml build native
+	docker compose -f mod/typephp/compose.yml run --rm baseline
+	docker compose -f mod/typephp/compose.yml run --rm native

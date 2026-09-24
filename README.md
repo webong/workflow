@@ -60,7 +60,9 @@ repeated. Starting the process again uses a new run ID.
 | --- | --- |
 | Flows inside a PHP application or CLI | [PHP library: start, save, complete, resume](docs/php-library.md) |
 | Laravel models with database or Redis state | [Laravel installation and example](docs/laravel.md) |
+| Choosing between PHP, Node, Python, and other languages | [Language integration guide with runnable examples](docs/languages.md) |
 | Calls from another language or backend | [Go/FrankenPHP JSON-RPC service](mod/README.md) |
+| Experimental local executable or in-process shared library | [TypePHP native builds](mod/typephp/README.md) |
 | Temporal execution and durable timers | [Optional Temporal adapter](docs/temporal.md) |
 | Retry, cancellation, concurrency, and upgrade rules | [Run lifecycle](docs/run-lifecycle.md) |
 | Package development and testing | [Development guide](docs/development.md) |

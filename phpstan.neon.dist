@@ -10,5 +10,8 @@ parameters:
         - ext/Temporal/TemporalFlowIdentity.php
         - ext/Temporal/TemporalFlowInput.php
         - mod/php/src
+        - mod/typephp/php/NativeFlow.php
+        - mod/typephp/php/api.php
+        - mod/typephp/php/main.php
         - examples
     treatPhpDocTypesAsCertain: false

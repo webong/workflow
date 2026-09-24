@@ -1,0 +1,11 @@
+name: workflow_native
+mode: lib
+php-version: "8.5"
+build-dir: /build/lib
+output: /build/libworkflow_native.so
+cxx-std: c++17
+sources:
+  - ../../src
+  - php/NativeFlow.php
+  - php/api.php
+  - cpp
