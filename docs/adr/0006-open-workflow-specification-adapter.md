@@ -1,0 +1,113 @@
+---
+status: proposed
+---
+
+# Open Workflow Specification adapter as an optional module
+
+We add OWS support through an optional `ext/OpenWorkflow` module, not by changing the core coordination model or adding a new state-store driver. The module pins one specification version, validates documents, reports unsupported constructs explicitly, and executes a small, well-defined subset with correct data-flow semantics.
+
+## Context
+
+The Open Workflow Specification (OWS) defines a vendor-neutral workflow language with JSON/YAML definitions, schemas, and multiple runtime implementations. Supporting it would let callers author workflows in a shared format instead of learning our PHP objects or proprietary serialized definition.
+
+Key constraints from research:
+
+- **Version pinning is mandatory.** The homepage advertises DSL 1.0.3; the v1.0.3 GitHub release is marked pre-release; `main` already uses 1.0.4 in examples. We must pin an exact version and source revision (e.g., `specification@v1.0.3` or a specific commit SHA).
+- **The linked PHP SDK targets 0.8** and does not execute workflows. Installing it would not give us current OWS support; we must implement validation and execution ourselves.
+- **OWS execution semantics are richer than our current model:** ordered tasks with `then`/`switch`, automatic task-output-to-next-input pipeline, `for` iteration, `fork` concurrency, `wait`/`listen` for external events, `try`/`catch` with retry policies, and `call`/`run` for protocol and script execution. Our current `FlowDefinition` is a fixed acyclic step graph with integer versioning — these are not equivalent models.
+- **Conformance requires the full CTK.** The specification provides a Conformance Test Kit (Gherkin scenarios). A schema-valid document or a handful of passing scenarios is not evidence of conformance.
+
+## Decision
+
+### Module placement and scope
+
+- Create `ext/OpenWorkflow` as an optional package (similar to `ext/Laravel` and `ext/Temporal`).
+- It depends on the core contracts (`FlowDefinitionProvider`, `FlowStepExecutor`, `FlowExecutionDriver`) but does not replace them.
+- It is **not** a state-store driver. State stores implement `FlowStateStore`; this module translates OWS documents into core definitions and executes them through existing drivers.
+
+### Version and schema
+
+- Pin **OWS DSL 1.0.3** at the tagged release `specification@v1.0.3` (commit `a1b2c3d...`). Update only by explicit decision with migration tests.
+- Bundle the JSON Schema (`workflow.json`) for validation. Use a PHP JSON Schema validator (e.g., `justinrainbow/json-schema` or equivalent) — no external service calls during validation.
+
+### Validation and capability reporting
+
+- Accept an OWS document (JSON or YAML) and return a **CapabilityReport**:
+  - `valid: bool` — schema validation passed
+  - `version: string` — the pinned OWS version used
+  - `supported: string[]` — feature identifiers we execute (e.g., `sequential-task`, `switch`, `then:exit`)
+  - `unsupported: {feature: string, path: string, reason: string}[]` — every construct we reject, with its JSON Pointer path and reason
+  - `warnings: string[]` — non-blocking issues (e.g., deprecated fields)
+- **Never silently discard** unsupported constructs. Rejection is explicit and documented.
+
+### Supported subset (initial milestone)
+
+Only the following are executed. Everything else is reported as unsupported.
+
+| Feature | OWS construct | Execution behavior |
+|---------|---------------|-------------------|
+| Sequential tasks | `do: [task1, task2, ...]` | Tasks run in declaration order; each task's transformed output becomes the next task's raw input. |
+| Conditional routing | `switch` / `case` / `default` / `then` | Evaluate `switch` expression; run matching `case` body; `then` targets `exit`, `end`, or a task in the current scope. |
+| Task execution | `call`, `run` (HTTP/script/container) | Map to host-provided `FlowStepExecutor` implementations. Expression evaluation uses `jq` semantics via a safe evaluator (no arbitrary code). |
+| Identity | `document.namespace`, `document.name`, `document.version` (semver) | Preserved without coercion to integer. Registered under a composite key `namespace/name@version`. |
+
+**Explicitly excluded from initial scope:** `for` (iteration), `fork` (concurrency), `wait`/`listen` (durations/events), `try`/`catch` (structured error handling), `run` (sub-workflow), lifecycle events, expressions beyond what the safe evaluator supports.
+
+### Data flow implementation
+
+- The OWS rule "task output → next task input" is **not** provided by our current dependency graph. The adapter must implement this pipeline explicitly:
+  - Each executed step receives the previous step's transformed output as its `FlowContext` input.
+  - `export.as` replaces the workflow context; the adapter tracks this separately from step state.
+  - Expression evaluation (input/output transformations, `switch` conditions) uses a `jq`-compatible evaluator with defined error behavior.
+
+### Host-controlled registration
+
+- Definition registration remains host-controlled. The RPC contract does **not** become an unrestricted workflow-upload or code-execution endpoint.
+- The module exposes a `registerOwsDefinition(string $yamlOrJson): CapabilityReport` method; the host decides whether to persist the resulting `FlowDefinition` and make it runnable.
+
+### Conformance fixtures
+
+- Vendor the pinned CTK scenarios as test fixtures.
+- Build a test harness that binds CTK steps to the adapter.
+- Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why.
+- Describe the initial product as a **limited OWS importer**, not a conforming OWS runtime.
+
+### Future work (not in this ADR)
+
+- Loops (`for`), concurrency (`fork`), event correlation (`wait`/`listen`), structured recovery (`try`/`catch`), sub-workflows (`run`), and lifecycle events require additional runtime capabilities in the core or execution drivers.
+- Full CTK conformance is a separate product milestone.
+- The TypePHP native target (`mod/typephp`) compiles the core and excludes optional adapters. This module would not be available through the native binary/shared library unless explicitly included in the build.
+
+## Consequences
+
+### Positive
+
+- Callers can author workflows in a standard format without learning WorkFlow internals.
+- Clear boundary: validation is separate from execution; unsupported features are documented, not ignored.
+- The core coordination model remains stable; optional runtime capabilities can grow independently.
+
+### Negative
+
+- Initial subset is small. Teams expecting full OWS support will be disappointed unless the supported-feature matrix is consulted.
+- Maintaining the pinned version and CTK fixtures adds ongoing maintenance.
+- Expression evaluation (`jq`) requires a safe, well-tested implementation or a carefully sandboxed dependency.
+
+### Neutral
+
+- Does not affect existing Laravel, Temporal, or standalone RPC deployments.
+- Does not change `FlowDefinition`, `FlowRun`, or `FlowStateStore` contracts.
+
+## Open questions
+
+1. **Which `jq` evaluator?** Options: `jmespath/jmespath.php` (JMESPath, not jq), a WebAssembly jq, or a minimal custom evaluator for the subset we need. Decision affects dependency weight and correctness.
+2. **YAML parsing dependency?** If we accept YAML, add `symfony/yaml` or similar. JSON-only is simpler.
+3. **Registration API shape:** Should `registerOwsDefinition` return a `FlowDefinition` directly, or only the `CapabilityReport` with the host calling a separate import step?
+4. **Namespace collision:** If a host registers `acme/order@1.0.0` via OWS and also defines `acme/order@1` via native PHP, how do we distinguish? Composite key `namespace/name@version` helps but host policy is needed.
+
+## References
+
+- [Open Workflow Specification research note](../open-workflow-specification.md)
+- [ADR 0001: Core is a coordination library](0001-core-is-a-coordination-library.md)
+- [ADR 0002: Runs have identity and pinned definitions](0002-runs-have-identity-and-pinned-definitions.md)
+- [ADR 0003: JSON-RPC is private server-to-server](0003-rpc-is-private-server-to-server.md)
+- [ADR 0004: Execution runtime owns authoritative state](0004-execution-runtime-owns-authoritative-state.md)

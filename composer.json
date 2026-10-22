@@ -11,10 +11,12 @@
         "illuminate/database": "^12.0",
         "illuminate/events": "^12.0",
         "illuminate/redis": "^12.0",
+        "justinrainbow/json-schema": "^5.2",
         "paneon/php-to-typescript": "^2.3",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
-        "spatie/eloquent-sortable": "^4.2"
+        "spatie/eloquent-sortable": "^4.2",
+        "symfony/yaml": "^7.0"
     },
     "suggest": {
         "illuminate/cache": "Required to use the optional Laravel Redis WorkFlow store.",
@@ -28,7 +30,8 @@
             "Webong\\WorkFlow\\": "src/",
             "Webong\\WorkFlow\\Laravel\\": "ext/Laravel/",
             "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/",
-            "Webong\\WorkFlow\\Mod\\": "mod/php/src/"
+            "Webong\\WorkFlow\\Mod\\": "mod/php/src/",
+            "Webong\\WorkFlow\\OpenWorkflow\\": "ext/OpenWorkflow/"
         }
     },
     "autoload-dev": {
