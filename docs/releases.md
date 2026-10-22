@@ -73,7 +73,7 @@ printf '%s' '{"protocol":1,"operation":"start","run_id":"example-1","definition"
 
 Docker selects the matching architecture. The result should have `ok: true`
 and state status `completed`. This image handles one JSON request per process;
-it is not an HTTP server. For the server image, follow the [RPC guide](../mod/README.md)
+it is not an HTTP server. For the server image, follow the [RPC guide](../app/README.md)
 to supply a trusted bootstrap, PostgreSQL connection, and bearer token.
 
 To use downloaded archives offline, first verify `SHA256SUMS` in the directory

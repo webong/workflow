@@ -9,7 +9,7 @@ parameters:
         - ext/Temporal/TemporalFlowExecutionDriver.php
         - ext/Temporal/TemporalFlowIdentity.php
         - ext/Temporal/TemporalFlowInput.php
-        - mod/php/src
+        - app/src
         - mod/typephp/php/NativeFlow.php
         - mod/typephp/php/api.php
         - mod/typephp/php/main.php

@@ -161,7 +161,7 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           context: .
-          file: mod/Dockerfile
+          file: app/Dockerfile
           platforms: linux/${{ matrix.arch }}
           load: true
           tags: ${{ env.WORKFLOW_RPC_IMAGE }}
@@ -169,14 +169,14 @@ jobs:
           cache-to: type=gha,mode=max,scope=rpc-${{ matrix.arch }}
       - name: Test HTTP lifecycle against PostgreSQL
         run: |
-          docker compose -f mod/compose.ci.yml up -d --wait --wait-timeout 90 workflowd
-          docker compose -f mod/compose.ci.yml run --rm smoke
+          docker compose -f app/compose.ci.yml up -d --wait --wait-timeout 90 workflowd
+          docker compose -f app/compose.ci.yml run --rm smoke
       - name: Container diagnostics
         if: failure()
-        run: docker compose -f mod/compose.ci.yml logs --no-color
+        run: docker compose -f app/compose.ci.yml logs --no-color
       - name: Stop isolated smoke stack
         if: always()
-        run: docker compose -f mod/compose.ci.yml down --volumes
+        run: docker compose -f app/compose.ci.yml down --volumes
       - name: Save tested RPC image for release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:

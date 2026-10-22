@@ -2,13 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Tests\Mod;
+namespace Webong\WorkFlow\Tests\App;
 
 use PDO;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
 use Webong\WorkFlow\Enums\FlowStatus;
-use Webong\WorkFlow\Mod\PdoPostgresFlowStateStoreFactory;
+use Webong\WorkFlow\App\PdoPostgresFlowStateStoreFactory;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
@@ -29,7 +29,7 @@ final class PdoPostgresFlowStateStoreTest extends TestCase
             getenv('WORK_FLOW_POSTGRES_PASSWORD') ?: null,
             [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
         );
-        $schema = file_get_contents(dirname(__DIR__, 2).'/mod/php/schema/postgres.sql');
+        $schema = file_get_contents(dirname(__DIR__, 2).'/app/schema/postgres.sql');
         if (! is_string($schema)) {
             throw new RuntimeException('Unable to read the workflow RPC schema');
         }

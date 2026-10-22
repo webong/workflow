@@ -39,7 +39,7 @@ background for you.
 disappears when the PHP process exits. For durable state, use a
 `FlowStateStoreFactory` implementation. Laravel database and Redis adapters
 are described in [the Laravel guide](laravel.md); the standalone service has
-a PDO PostgreSQL store in [`mod/`](../mod/README.md).
+a PDO PostgreSQL store in [`app/`](../app/README.md).
 
 ## Finish a deferred step
 
@@ -75,7 +75,7 @@ and records that name in the state snapshot. `InlineFlowExecutionDriver` runs
 `FlowRunner` immediately. `LaravelQueueFlowExecutionDriver` and
 `TemporalFlowExecutionDriver` accept host-provided dispatch callbacks; merely
 installing this package does not create jobs, workers, or a Temporal client.
-The standalone JSON-RPC module currently exposes only inline execution.
+The standalone JSON-RPC application currently exposes only inline execution.
 
 ## Useful types
 

@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\Mod\FlowRpcApplication;
-use Webong\WorkFlow\Mod\RpcFailure;
+use Webong\WorkFlow\App\FlowRpcApplication;
+use Webong\WorkFlow\App\RpcFailure;
 
-require_once dirname(__DIR__, 3).'/vendor/autoload.php';
+require_once dirname(__DIR__, 2).'/vendor/autoload.php';
 
 header('Content-Type: application/json');
 

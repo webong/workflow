@@ -5,8 +5,8 @@ declare(strict_types=1);
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\Mod\FlowRpcApplication;
-use Webong\WorkFlow\Mod\PdoPostgresFlowStateStoreFactory;
+use Webong\WorkFlow\App\FlowRpcApplication;
+use Webong\WorkFlow\App\PdoPostgresFlowStateStoreFactory;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
@@ -16,7 +16,7 @@ use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
-require_once dirname(__DIR__, 2).'/vendor/autoload.php';
+require_once dirname(__DIR__).'/vendor/autoload.php';
 
 $dsn = getenv('WORKFLOW_POSTGRES_DSN');
 if (! is_string($dsn) || $dsn === '') {

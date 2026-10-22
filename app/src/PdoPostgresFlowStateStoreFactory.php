@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Mod;
+namespace Webong\WorkFlow\App;
 
 use PDO;
 use Webong\WorkFlow\Contracts\FlowStateSerializer;

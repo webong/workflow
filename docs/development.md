@@ -26,7 +26,7 @@ services. Outside Compose, set `WORK_FLOW_POSTGRES_DSN`,
 `WORK_FLOW_REDIS_HOST`, and `WORK_FLOW_REDIS_PORT` before running
 `tests/Laravel/ProductionFlowStateStoreTest.php`.
 
-For standalone JSON-RPC development, [`mod/README.md`](../mod/README.md)
+For standalone JSON-RPC development, [`app/README.md`](../app/README.md)
 shows how to build the separate Go/FrankenPHP image and exercise its API.
 The image build runs the Go RPC unit tests and vet checks in its builder.
 

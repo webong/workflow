@@ -10,7 +10,7 @@ they do not have the same hosting or persistence contract.
 | Integration | How your application calls it | Who saves state? |
 | --- | --- | --- |
 | PHP library | PHP objects installed with Composer | Your PHP application, using a store interface |
-| JSON-RPC module | HTTP from any trusted backend | The server; its example uses PostgreSQL |
+| JSON-RPC application | HTTP from any trusted backend | The server; its example uses PostgreSQL |
 | Experimental native module | Local executable or shared C library | Your application, after every transition |
 
 Use the **PHP library** in PHP applications. Use **JSON-RPC** when several
@@ -163,7 +163,7 @@ for all operations, result fields, and restrictions.
 ## Any language: use the JSON-RPC server instead
 
 Node, Python, PHP, Go, or another backend can use an HTTP client to call the
-[JSON-RPC module](../mod/README.md). That guide includes Docker startup,
+[JSON-RPC application](../app/README.md). That guide includes Docker startup,
 authentication, and complete `curl` requests you can translate to your client.
 
 The difference matters: RPC calls reference a server-registered `flow_key`

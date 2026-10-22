@@ -31,7 +31,7 @@
             "Webong\\WorkFlow\\": "src/",
             "Webong\\WorkFlow\\Laravel\\": "ext/Laravel/",
             "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/",
-            "Webong\\WorkFlow\\Mod\\": "mod/php/src/",
+            "Webong\\WorkFlow\\App\\": "app/src/",
             "Webong\\WorkFlow\\OpenWorkflow\\": "ext/OpenWorkflow/"
         }
     },

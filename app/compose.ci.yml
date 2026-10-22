@@ -1,17 +1,15 @@
+name: workflow-rpc-ci
+
 services:
   workflowd:
-    build:
-      context: ..
-      dockerfile: mod/Dockerfile
+    image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
     environment:
       WORKFLOW_RPC_LISTEN: 0.0.0.0:8080
-      WORKFLOW_RPC_TOKEN: ${WORKFLOW_RPC_TOKEN:-local-development-token}
-      WORKFLOW_BOOTSTRAP: /app/mod/php/bootstrap.example.php
+      WORKFLOW_RPC_TOKEN: ci-only-workflow-token
+      WORKFLOW_BOOTSTRAP: /app/app/bootstrap.example.php
       WORKFLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow
       WORKFLOW_POSTGRES_USER: workflow
       WORKFLOW_POSTGRES_PASSWORD: workflow
-    ports:
-      - 127.0.0.1:18080:8080
     depends_on:
       postgres:
         condition: service_healthy
@@ -23,13 +21,15 @@ services:
       POSTGRES_USER: workflow
       POSTGRES_PASSWORD: workflow
     volumes:
-      - workflow_rpc_postgres:/var/lib/postgresql/data
-      - ./php/schema/postgres.sql:/docker-entrypoint-initdb.d/01-workflow.sql:ro
+      - ./schema/postgres.sql:/docker-entrypoint-initdb.d/01-workflow.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U workflow -d workflow"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
+      interval: 2s
+      timeout: 3s
+      retries: 30
 
-volumes:
-  workflow_rpc_postgres:
+  smoke:
+    image: python:3.12-slim-bookworm
+    volumes:
+      - ./tests/smoke.py:/tests/smoke.py:ro
+    command: ["python3", "/tests/smoke.py"]

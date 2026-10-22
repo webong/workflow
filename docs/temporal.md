@@ -40,7 +40,7 @@ store may serve API/UI projections, but Temporal's event history owns the
 Temporal execution. Keep HTTP, database, Redis, and other side effects inside
 Activities, not deterministic Workflow code.
 
-The standalone JSON-RPC module in [`mod/`](../mod/README.md) currently
+The standalone JSON-RPC application in [`app/`](../app/README.md) currently
 accepts only `inline` for `flow.start`; setting Temporal environment variables
 does not enable Temporal there.
 

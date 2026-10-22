@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/dunglas/frankenphp"
-	"github.com/webong/workflow/mod/internal/rpc"
+	"github.com/webong/workflow/app/internal/rpc"
 )
 
 type phpInvoker struct {
@@ -77,7 +77,7 @@ func run() error {
 
 	root := os.Getenv("WORKFLOW_PHP_PUBLIC")
 	if root == "" {
-		root = "mod/php/public"
+		root = "app/public"
 	}
 	root, err := filepath.Abs(root)
 	if err != nil {

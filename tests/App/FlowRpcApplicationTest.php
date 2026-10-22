@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Tests\Mod;
+namespace Webong\WorkFlow\Tests\App;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
@@ -11,8 +11,8 @@ use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
-use Webong\WorkFlow\Mod\FlowRpcApplication;
-use Webong\WorkFlow\Mod\RpcFailure;
+use Webong\WorkFlow\App\FlowRpcApplication;
+use Webong\WorkFlow\App\RpcFailure;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;

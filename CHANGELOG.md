@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Moved the JSON-RPC application from `mod/` to `app/` (`Webong\WorkFlow\App`)
+  so `mod/` holds only TypePHP native builds.
 - Added Linux AMD64/ARM64 native and RPC CI builds, clean-runtime and HTTP
   smoke tests, SDK/runtime artifacts, checksums, and version-tag-gated GHCR
   and GitHub Release publishing. Fixed fresh-checkout RPC builds and the

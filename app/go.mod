@@ -1,4 +1,4 @@
-module github.com/webong/workflow/mod
+module github.com/webong/workflow/app
 
 go 1.26.0
 
