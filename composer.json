@@ -4,7 +4,8 @@
     "type": "library",
     "license": "MIT",
     "require": {
-        "php": "^8.3 || ^8.4 || ^8.5"
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "wikimedia/zest-jq": "^1.1"
     },
     "require-dev": {
         "illuminate/cache": "^12.0",

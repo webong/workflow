@@ -7,25 +7,31 @@ namespace Webong\WorkFlow\OpenWorkflow\Expression;
 use Webong\WorkFlow\Contracts\FlowContext;
 
 /**
- * Minimal jq-like expression evaluator for the OWS initial subset.
+ * Expression evaluator for OWS expressions.
  *
- * Supported grammar:
+ * Uses zest-jq (wikimedia/zest-jq) as the primary backend for jq expression evaluation,
+ * with support for OWS-specific variable references ($workflow, $task, $context).
+ *
+ * Supported grammar (via zest-jq):
  * - Property access: .field, .field.subfield
- * - Array iteration/projection: .items[] | {id, name}
+ * - Array iteration/projection: .items[] | {id, name}, .items | map(...)
  * - Pipe: expr1 | expr2
  * - Comparison: ==, !=, <, >, <=, >=
- * - Boolean: and, or, not
+ * - Boolean: and, or
  * - Literals: strings, numbers, true, false, null
- * - Variable references: $workflow, $task, $context, $variableName
+ * - Variable references: $variableName (zest-jq native)
  * - Parentheses: (expr)
  * - Object construction: {key: expr, ...}
  * - Array construction: [expr, ...]
+ * - If-then-else: if cond then a else b end
+ * - Select/filter: select(...)
+ * - Functions: length, keys, add, map, select
  *
- * NOT supported (throws UnsupportedExpressionException):
- * - Regex: match(), test(), capture()
- * - Arithmetic: +, -, *, /, %
- * - Functions: length, keys, map, reduce, group_by, etc.
- * - Recursion, modules, shell commands
+ * NOT supported (throws ExpressionEvaluationException):
+ * - Regex: test(), match(), capture() (not implemented in zest-jq)
+ * - not() function (use != false instead)
+ * - reduce, group_by, flatten, etc.
+ * - Module system (import, include, module)
  * - Alternative operators: //, ?
  */
 final class ExpressionEvaluator
@@ -38,6 +44,7 @@ final class ExpressionEvaluator
         private readonly array $workflowData = [],
         private readonly array $taskData = [],
         private readonly ?FlowContext $context = null,
+        private readonly ZestJqEvaluator $zestJq = new ZestJqEvaluator(),
     ) {}
 
     /**
@@ -52,14 +59,56 @@ final class ExpressionEvaluator
             return null;
         }
 
-        $parser = new ExpressionParser($expression);
-        $ast = $parser->parse();
+        // Pre-process OWS variable references to zest-jq field access
+        // $workflow -> .workflow, $task -> .task, $context -> .context
+        $expression = $this->preprocessVariables($expression);
 
-        return $this->evaluateNode($ast, $this->buildRootContext());
+        // Build input data for zest-jq
+        // Merge workflow data at root for bare property access (.status)
+        // Add workflow, task, context as explicit fields
+        $inputData = array_merge(
+            $this->workflowData,
+            [
+                'workflow' => $this->workflowData,
+                'task' => $this->taskData,
+                'context' => $this->context?->all() ?? [],
+            ]
+        );
+
+        $result = $this->zestJq->evaluate($expression, $inputData);
+        return $this->normalizeResult($result);
     }
 
     /**
-     * Check if an expression uses only supported features (for validation).
+     * Normalize zest-jq results (stdClass -> array, recursively).
+     */
+    private function normalizeResult(mixed $value): mixed
+    {
+        if (is_object($value)) {
+            return $this->normalizeResult(json_decode(json_encode($value), true));
+        }
+        if (is_array($value)) {
+            return array_map([$this, 'normalizeResult'], $value);
+        }
+        return $value;
+    }
+
+    /**
+     * Convert OWS variable references ($workflow, $task, $context)
+     * to zest-jq field access (.workflow, .task, .context).
+     */
+    private function preprocessVariables(string $expression): string
+    {
+        // Replace $workflow. with .workflow., $workflow at end with .workflow
+        $expression = preg_replace('/\\$workflow\b/', '.workflow', $expression);
+        $expression = preg_replace('/\\$task\b/', '.task', $expression);
+        $expression = preg_replace('/\\$context\b/', '.context', $expression);
+
+        return $expression;
+    }
+
+    /**
+     * Check if an expression uses only supported features.
      *
      * @return array{supported: bool, unsupportedFeatures: list<string>}
      */
@@ -70,264 +119,16 @@ final class ExpressionEvaluator
             return ['supported' => true, 'unsupportedFeatures' => []];
         }
 
-        try {
-            $parser = new ExpressionParser($expression);
-            $ast = $parser->parse();
-            $analyzer = new ExpressionAnalyzer();
-            $analyzer->analyze($ast);
-            return [
-                'supported' => count($analyzer->unsupportedFeatures) === 0,
-                'unsupportedFeatures' => $analyzer->unsupportedFeatures,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'supported' => false,
-                'unsupportedFeatures' => ['parse-error: ' . $e->getMessage()],
-            ];
-        }
-    }
+        // Check with zest-jq
+        $result = $this->zestJq->analyze($expression);
 
-    /**
-     * @return array<string, mixed>
-     */
-    private function buildRootContext(): array
-    {
-        $ctx = [];
-
-        // $workflow - the workflow input/document
-        $ctx['$workflow'] = $this->workflowData;
-
-        // $task - the current task's input
-        $ctx['$task'] = $this->taskData;
-
-        // $context - the FlowContext (if provided)
-        if ($this->context !== null) {
-            $ctx['$context'] = $this->context->all();
+        // Additionally check for OWS-specific variable references
+        // that zest-jq might not recognize as valid
+        if ($result['supported']) {
+            // Our variable references ($workflow, $task, $context) are just
+            // regular variables in zest-jq, so they're fine
         }
 
-        // Merge workflow data at root level for bare property access
-        // e.g., .status reads from workflow input
-        $ctx = array_merge($this->workflowData, $ctx);
-
-        return $ctx;
-    }
-
-    /**
-     * @param array<string, mixed> $context
-     * @return mixed
-     */
-    private function evaluateNode(ExpressionNode $node, array $context): mixed
-    {
-        return match ($node->type) {
-            ExpressionType::LITERAL => $node->value,
-            ExpressionType::VARIABLE => $this->resolveVariable($node->name, $context),
-            ExpressionType::PROPERTY_ACCESS => $this->evaluatePropertyAccess($node, $context),
-            ExpressionType::ARRAY_PROJECTION => $this->evaluateArrayProjection($node, $context),
-            ExpressionType::PIPE => $this->evaluatePipe($node, $context),
-            ExpressionType::COMPARISON => $this->evaluateComparison($node, $context),
-            ExpressionType::BOOLEAN => $this->evaluateBoolean($node, $context),
-            ExpressionType::OBJECT_CONSTRUCTION => $this->evaluateObjectConstruction($node, $context),
-            ExpressionType::ARRAY_CONSTRUCTION => $this->evaluateArrayConstruction($node, $context),
-            ExpressionType::PARENTHESIZED => $this->evaluateNode($node->child, $context),
-            default => throw new ExpressionEvaluationException("Unknown node type: {$node->type->value}"),
-        };
-    }
-
-    private function resolveVariable(string $name, array $context): mixed
-    {
-        if (! isset($context[$name])) {
-            throw ExpressionEvaluationException::evaluationError(
-                "\${$name}",
-                "Variable '{$name}' not found in context"
-            );
-        }
-        return $context[$name];
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return mixed
-     */
-    private function evaluatePropertyAccess(ExpressionNode $node, array $context): mixed
-    {
-        $base = $node->base !== null
-            ? $this->evaluateNode($node->base, $context)
-            : $context;
-
-        if (! is_array($base) && ! is_object($base)) {
-            return null;
-        }
-
-        $path = $node->path; // e.g., ['field', 'subfield']
-        $current = $base;
-
-        foreach ($path as $segment) {
-            if (is_array($current)) {
-                if (! array_key_exists($segment, $current)) {
-                    return null;
-                }
-                $current = $current[$segment];
-            } elseif (is_object($current)) {
-                if (! property_exists($current, $segment)) {
-                    return null;
-                }
-                $current = $current->$segment;
-            } else {
-                return null;
-            }
-        }
-
-        return $current;
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return array<int, mixed>
-     */
-    private function evaluateArrayProjection(ExpressionNode $node, array $context): array
-    {
-        $source = $this->evaluateNode($node->base, $context);
-
-        if (! is_array($source)) {
-            throw ExpressionEvaluationException::evaluationError(
-                $node->raw ?? '',
-                'Array projection ([]) requires an array source'
-            );
-        }
-
-        $results = [];
-        foreach ($source as $item) {
-            $itemContext = array_merge($context, ['$' => $item, '$item' => $item]);
-            $result = $this->evaluateNode($node->projection, $itemContext);
-            if (is_array($result)) {
-                $results = array_merge($results, $result);
-            } else {
-                $results[] = $result;
-            }
-        }
-
-        return $results;
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return mixed
-     */
-    private function evaluatePipe(ExpressionNode $node, array $context): mixed
-    {
-        $left = $this->evaluateNode($node->left, $context);
-        $rightContext = array_merge($context, ['$' => $left, '$it' => $left]);
-        return $this->evaluateNode($node->right, $rightContext);
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return bool
-     */
-    private function evaluateComparison(ExpressionNode $node, array $context): bool
-    {
-        $left = $this->evaluateNode($node->left, $context);
-        $right = $this->evaluateNode($node->right, $context);
-
-        return match ($node->operator) {
-            '==' => $this->looseEqual($left, $right),
-            '!=' => ! $this->looseEqual($left, $right),
-            '<' => $this->compare($left, $right) < 0,
-            '>' => $this->compare($left, $right) > 0,
-            '<=' => $this->compare($left, $right) <= 0,
-            '>=' => $this->compare($left, $right) >= 0,
-            default => throw new ExpressionEvaluationException("Unknown comparison operator: {$node->operator}"),
-        };
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return bool
-     */
-    private function evaluateBoolean(ExpressionNode $node, array $context): bool
-    {
-        return match ($node->operator) {
-            'and' => $this->toBool($this->evaluateNode($node->left, $context))
-                && $this->toBool($this->evaluateNode($node->right, $context)),
-            'or' => $this->toBool($this->evaluateNode($node->left, $context))
-                || $this->toBool($this->evaluateNode($node->right, $context)),
-            'not' => ! $this->toBool($this->evaluateNode($node->child, $context)),
-            default => throw new ExpressionEvaluationException("Unknown boolean operator: {$node->operator}"),
-        };
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return array<string, mixed>
-     */
-    private function evaluateObjectConstruction(ExpressionNode $node, array $context): array
-    {
-        $result = [];
-        foreach ($node->properties as $key => $valueNode) {
-            $result[$key] = $this->evaluateNode($valueNode, $context);
-        }
         return $result;
-    }
-
-    /**
-     * @param ExpressionNode $node
-     * @param array<string, mixed> $context
-     * @return array<int, mixed>
-     */
-    private function evaluateArrayConstruction(ExpressionNode $node, array $context): array
-    {
-        $result = [];
-        foreach ($node->elements as $elementNode) {
-            $result[] = $this->evaluateNode($elementNode, $context);
-        }
-        return $result;
-    }
-
-    private function looseEqual(mixed $a, mixed $b): bool
-    {
-        if (is_null($a) || is_null($b)) {
-            return $a === $b;
-        }
-        if (is_bool($a) || is_bool($b)) {
-            return (bool) $a === (bool) $b;
-        }
-        if (is_numeric($a) && is_numeric($b)) {
-            return (float) $a === (float) $b;
-        }
-        return (string) $a === (string) $b;
-    }
-
-    private function compare(mixed $a, mixed $b): int
-    {
-        if (is_numeric($a) && is_numeric($b)) {
-            return (float) $a <=> (float) $b;
-        }
-        return strcmp((string) $a, (string) $b);
-    }
-
-    private function toBool(mixed $value): bool
-    {
-        if (is_null($value)) {
-            return false;
-        }
-        if (is_bool($value)) {
-            return $value;
-        }
-        if (is_numeric($value)) {
-            return $value !== 0;
-        }
-        if (is_string($value)) {
-            return $value !== '' && strtolower($value) !== 'false';
-        }
-        if (is_array($value)) {
-            return count($value) > 0;
-        }
-        return true;
     }
 }
