@@ -51,12 +51,19 @@ final readonly class OwsDocument
     public function do(): array
     {
         $do = $this->data['do'] ?? [];
-        if (! is_array($do)) {
-            return [];
-        }
+        return is_array($do) ? self::normalizeTaskItems($do) : [];
+    }
 
+    /**
+     * Normalize an OWS task list: each item is an object keyed by task name.
+     *
+     * @param list<mixed> $items
+     * @return list<array<string, mixed>>
+     */
+    public static function normalizeTaskItems(array $items): array
+    {
         $normalized = [];
-        foreach ($do as $taskItem) {
+        foreach ($items as $taskItem) {
             if (! is_array($taskItem)) {
                 continue;
             }

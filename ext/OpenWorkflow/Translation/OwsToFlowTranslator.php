@@ -122,14 +122,9 @@ final class OwsToFlowTranslator
         }
 
         if (isset($task['switch'])) {
-            // Switch is a control flow construct, not a single step
-            // It expands to multiple steps with conditional execution
-            $this->addUnsupported(
-                feature: 'switch',
-                path: "/do/{$index}",
-                reason: 'Switch control flow requires runtime support; translated as sequential steps with conditions in metadata'
-            );
-            // Fall through to create a step with switch metadata
+            // Conditional routing is in the ADR 0006 initial subset. The switch
+            // cases are preserved as step metadata; evaluating `when` at
+            // runtime and honoring `then` routing is a runtime concern.
             return $this->translateGenericTask($task, $index, $previousTaskId);
         }
 
@@ -174,6 +169,24 @@ final class OwsToFlowTranslator
                 feature: 'set',
                 path: "/do/{$index}",
                 reason: 'Variable assignment (set) not supported in initial subset'
+            );
+            return null;
+        }
+
+        if (isset($task['emit'])) {
+            $this->addUnsupported(
+                feature: 'emit',
+                path: "/do/{$index}",
+                reason: 'Event emission (emit) not supported in initial subset'
+            );
+            return null;
+        }
+
+        if (isset($task['raise'])) {
+            $this->addUnsupported(
+                feature: 'raise',
+                path: "/do/{$index}",
+                reason: 'Error raising (raise) not supported in initial subset'
             );
             return null;
         }
@@ -310,6 +323,21 @@ final class OwsToFlowTranslator
             'ows_original_index' => $index,
         ];
 
+        // Conditional routing is in the ADR 0006 subset: preserve the full
+        // switch structure (named cases with when/then) as step metadata so a
+        // runtime can evaluate and honor it.
+        if (isset($task['switch'])) {
+            $metadata['ows_type'] = 'switch';
+            $metadata['ows_switch'] = $task['switch'];
+        }
+
+        // Composite tasks carry a nested task list. The composite itself
+        // translates as one step, but nested constructs must not be silently
+        // accepted: flag anything the adapter cannot execute.
+        if (isset($task['do']) && is_array($task['do'])) {
+            $this->flagUnsupportedInNestedTasks($task['do'], "/do/{$index}/{$taskId}/do");
+        }
+
         if (isset($task['then'])) {
             $metadata['ows_then'] = $task['then'];
         }
@@ -385,5 +413,47 @@ final class OwsToFlowTranslator
             path: $path,
             reason: $reason,
         );
+    }
+
+    /**
+     * Flag unsupported constructs inside nested task lists (composite `do`
+     * bodies) so they are reported with their nested document path instead of
+     * being silently accepted.
+     *
+     * @param list<mixed> $tasks
+     */
+    private function flagUnsupportedInNestedTasks(array $tasks, string $basePath): void
+    {
+        foreach (OwsDocument::normalizeTaskItems($tasks) as $i => $task) {
+            $path = "{$basePath}/{$i}";
+            $name = is_string($task['name'] ?? null) ? $task['name'] : (string) $i;
+
+            if (isset($task['for'])) {
+                $this->addUnsupported('for', $path, 'Iteration (for) not supported in initial subset');
+            }
+            if (isset($task['fork'])) {
+                $this->addUnsupported('fork', $path, 'Concurrency (fork) not supported in initial subset');
+            }
+            if (isset($task['wait']) || isset($task['listen'])) {
+                $this->addUnsupported('wait|listen', $path, 'Duration waits and event listening not supported in initial subset');
+            }
+            if (isset($task['try'])) {
+                $this->addUnsupported('try', $path, 'Structured error handling (try/catch) not supported in initial subset');
+            }
+            if (isset($task['set'])) {
+                $this->addUnsupported('set', $path, 'Variable assignment (set) not supported in initial subset');
+            }
+            if (isset($task['emit'])) {
+                $this->addUnsupported('emit', $path, 'Event emission (emit) not supported in initial subset');
+            }
+            if (isset($task['raise'])) {
+                $this->addUnsupported('raise', $path, 'Error raising (raise) not supported in initial subset');
+            }
+
+            // Recurse into deeper composite bodies
+            if (isset($task['do']) && is_array($task['do'])) {
+                $this->flagUnsupportedInNestedTasks($task['do'], "{$path}/{$name}/do");
+            }
+        }
     }
 }

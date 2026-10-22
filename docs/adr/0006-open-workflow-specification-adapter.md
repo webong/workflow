@@ -67,10 +67,12 @@ Only the following are executed. Everything else is reported as unsupported.
 
 ### Conformance fixtures
 
-- Vendor the pinned CTK scenarios as test fixtures.
-- Build a test harness that binds CTK steps to the adapter.
-- Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why.
+- Vendor the pinned CTK scenarios as test fixtures (delivered: `ext/OpenWorkflow/Conformance/features/`, `specification@v1.0.3`).
+- Build a test harness that binds CTK steps to the adapter (delivered: `CtkParser` + `CtkRunner`, run by `tests/OpenWorkflow/CtkConformanceTest.php`; regenerate the matrix with `php tools/generate-ctk-matrix.php`).
+- Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why (delivered: `docs/open-workflow-ctk-matrix.md`, pinned by test so it cannot go stale).
 - Describe the initial product as a **limited OWS importer**, not a conforming OWS runtime.
+
+Current CTK posture (see the matrix for detail): scenarios whose definitions stay inside this subset (`call`, HTTP/OpenAPI data-flow plumbing) validate, translate, and hold their statically-checkable assertions; every construct outside the subset (`set`, `for`, `fork`, `try`/`catch`, `emit`, `raise`) is reported with its document path. All 21 pinned scenarios assert execution results, so full conformance additionally requires an executing runtime.
 
 ### Future work (not in this ADR)
 

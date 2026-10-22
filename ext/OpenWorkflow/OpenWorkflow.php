@@ -243,29 +243,52 @@ final class OpenWorkflow
      */
     private function analyzeValueExpressions(mixed $value, string $path, array &$issues): void
     {
-        if (is_string($value) && $this->looksLikeExpression($value)) {
-            $analysis = $this->expressionEvaluator->analyze($value);
-            if (! $analysis['supported']) {
-                foreach ($analysis['unsupportedFeatures'] as $feature) {
-                    $issues[] = [
-                        'path' => $path,
-                        'reason' => "Unsupported expression feature: {$feature}",
-                    ];
-                }
+        if (is_string($value)) {
+            $trimmed = trim($value);
+
+            // OWS runtime expressions are wrapped in `${ ... }`; analyze the
+            // inner jq expression. Simple `{placeholder}` interpolation in
+            // strings (e.g. URI templates) is plain data, not a jq expression.
+            if (preg_match('/^\$\{(.*)\}$/s', $trimmed, $m) === 1) {
+                $this->recordIfUnsupported(trim($m[1]), $path, 'jq runtime expression', $issues);
+                return;
             }
-        } elseif (is_array($value)) {
+
+            // Expression-holding fields per the OWS DSL hold a jq expression
+            // directly (no ${} wrapper): input.from, output.as, export.as,
+            // and switch-case `when` conditions.
+            $lastSegment = substr($path, (int) strrpos($path, '/') + 1);
+            if (in_array($lastSegment, ['as', 'from', 'when'], true)) {
+                $this->recordIfUnsupported($trimmed, $path, 'jq expression', $issues);
+            }
+            return;
+        }
+
+        if (is_array($value)) {
             foreach ($value as $key => $item) {
-                $itemPath = is_int($key) ? "{$path}/{$key}" : "{$path}/{$key}";
+                $itemPath = "{$path}/{$key}";
                 $this->analyzeValueExpressions($item, $itemPath, $issues);
             }
         }
     }
 
-    private function looksLikeExpression(string $value): bool
+    /**
+     * @param list<array{path: string, reason: string}> $issues
+     */
+    private function recordIfUnsupported(string $jq, string $path, string $kind, array &$issues): void
     {
-        $trimmed = trim($value);
-        // Heuristic: expressions often contain ., |, $, {, }, [, ], ==, !=, and, or, not
-        return preg_match('/[\.|\$\{\[\(]|(==|!=|<=|>=|<|>)\b|(and|or|not)\b/', $trimmed) === 1;
+        if ($jq === '') {
+            return;
+        }
+        $analysis = $this->expressionEvaluator->analyze($jq);
+        if (! $analysis['supported']) {
+            foreach ($analysis['unsupportedFeatures'] as $feature) {
+                $issues[] = [
+                    'path' => $path,
+                    'reason' => "Unsupported {$kind} feature: {$feature}",
+                ];
+            }
+        }
     }
 
     /**

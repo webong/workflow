@@ -76,7 +76,7 @@ final class OwsValidator
         // Validate each task in do array
         $tasks = $document->do();
         foreach ($tasks as $index => $task) {
-            $this->validateTask($task, $index, $errors, $warnings);
+            $this->validateTask($task, $index, $errors, $warnings, "/do/{$index}");
         }
 
         return [
@@ -90,10 +90,10 @@ final class OwsValidator
      * @param list<string> $errors
      * @param list<string> $warnings
      */
-    private function validateTask(array $task, int $index, array &$errors, array &$warnings): void
+    private function validateTask(array $task, int $index, array &$errors, array &$warnings, string $path): void
     {
         if (! isset($task['name']) || ! is_string($task['name']) || $task['name'] === '') {
-            $errors[] = "/do/{$index}: Task must have a 'name' field";
+            $errors[] = "{$path}: Task must have a 'name' field";
             return;
         }
 
@@ -101,15 +101,22 @@ final class OwsValidator
         $unsupportedTypes = ['for', 'fork', 'wait', 'listen', 'try', 'raise', 'emit', 'set'];
         foreach ($unsupportedTypes as $type) {
             if (isset($task[$type])) {
-                $warnings[] = "/do/{$index}/{$type}: '{$type}' is not supported in initial subset";
+                $warnings[] = "{$path}/{$type}: '{$type}' is not supported in initial subset";
             }
         }
 
-        // Check switch - supported but with limitations
-        if (isset($task['switch'])) {
-            if (! is_string($task['switch'])) {
-                $errors[] = "/do/{$index}/switch: Must be a string expression";
+        // Recurse into nested composite tasks so nested constructs are not
+        // silently accepted.
+        if (isset($task['do']) && is_array($task['do'])) {
+            foreach (OwsDocument::normalizeTaskItems($task['do']) as $nestedIndex => $nestedTask) {
+                $this->validateTask($nestedTask, $nestedIndex, $errors, $warnings, "{$path}/{$task['name']}/do/{$nestedIndex}");
             }
+        }
+
+        // Check switch - supported; OWS 1.0.3 switch is an object of named
+        // cases (each with optional `when`/`then`), not a string expression.
+        if (isset($task['switch']) && ! is_array($task['switch']) && ! is_string($task['switch'])) {
+            $errors[] = "{$path}/switch: Must be an object of named cases or a string expression";
         }
 
         // Check call or run
@@ -119,7 +126,7 @@ final class OwsValidator
         if (! $hasCall && ! $hasRun) {
             // Generic task with action is OK
             if (! isset($task['action']) && ! isset($task['do'])) {
-                $warnings[] = "/do/{$index}: Task has no 'call', 'run', 'action', or 'do' field";
+                $warnings[] = "{$path}: Task has no 'call', 'run', 'action', or 'do' field";
             }
         }
 
@@ -127,10 +134,10 @@ final class OwsValidator
         if (isset($task['retry']) && is_array($task['retry'])) {
             $retry = $task['retry'];
             if (isset($retry['maxAttempts']) && (! is_int($retry['maxAttempts']) || $retry['maxAttempts'] < 1)) {
-                $errors[] = "/do/{$index}/retry/maxAttempts: Must be a positive integer";
+                $errors[] = "{$path}/retry/maxAttempts: Must be a positive integer";
             }
             if (isset($retry['backoff']) && (! is_int($retry['backoff']) || $retry['backoff'] < 0)) {
-                $errors[] = "/do/{$index}/retry/backoff: Must be a non-negative integer";
+                $errors[] = "{$path}/retry/backoff: Must be a non-negative integer";
             }
         }
 
@@ -138,7 +145,7 @@ final class OwsValidator
         if (isset($task['dependsOn']) && is_array($task['dependsOn'])) {
             foreach ($task['dependsOn'] as $dep) {
                 if (! is_string($dep)) {
-                    $errors[] = "/do/{$index}/dependsOn: All dependencies must be strings";
+                    $errors[] = "{$path}/dependsOn: All dependencies must be strings";
                 }
             }
         }
