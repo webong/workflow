@@ -174,10 +174,16 @@ class ExpressionEvaluatorTest extends TestCase
     public function testAnalyzeUnsupported(): void
     {
         $evaluator = new ExpressionEvaluator();
-        // The parser doesn't support regex, so this should fail or be unsupported
+        // zest-jq cannot parse test(...) without the regex builtins; the
+        // multi-backend reports this as unsupported with a reason.
         $result = $evaluator->analyze('.name | test("foo")');
-        // Since test() is not implemented, it should be unsupported
-        // The parser may not even parse this correctly
+
+        if ($result['supported']) {
+            // shell jq is present and accepts the expression
+            $this->assertEmpty($result['unsupportedFeatures']);
+        } else {
+            $this->assertNotEmpty($result['unsupportedFeatures']);
+        }
     }
 
     public function testWorkflowAndTaskDataMerge(): void

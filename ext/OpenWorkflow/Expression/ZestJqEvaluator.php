@@ -11,8 +11,13 @@ use Wikimedia\ZestJQ\JQError;
  * Wrapper around wikimedia/zest-jq for jq expression evaluation.
  * Handles the subset of jq that zest-jq supports well.
  */
-final class ZestJqEvaluator
+final class ZestJqEvaluator implements EvaluatorBackend
 {
+    public function getName(): string
+    {
+        return 'zest-jq';
+    }
+
     /**
      * Evaluate a jq expression against input data.
      *

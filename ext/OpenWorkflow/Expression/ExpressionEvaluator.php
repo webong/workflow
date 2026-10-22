@@ -9,17 +9,19 @@ use Webong\WorkFlow\Contracts\FlowContext;
 /**
  * Expression evaluator for OWS expressions.
  *
- * Uses zest-jq (wikimedia/zest-jq) as the primary backend for jq expression evaluation,
- * with support for OWS-specific variable references ($workflow, $task, $context).
+ * Uses a multi-backend chain with automatic fallback:
+ * 1. **Shell jq** (system binary) - 100% jq compatibility when installed
+ * 2. **zest-jq** (wikimedia/zest-jq) - pure PHP, good coverage
+ * 3. **Builtin minimal evaluator** - zero deps, basic subset
  *
- * Supported grammar (via zest-jq):
+ * Supported grammar (best available backend):
  * - Property access: .field, .field.subfield
  * - Array iteration/projection: .items[] | {id, name}, .items | map(...)
  * - Pipe: expr1 | expr2
  * - Comparison: ==, !=, <, >, <=, >=
  * - Boolean: and, or
  * - Literals: strings, numbers, true, false, null
- * - Variable references: $variableName (zest-jq native)
+ * - Variable references: $workflow, $task, $context (mapped to .workflow, .task, .context)
  * - Parentheses: (expr)
  * - Object construction: {key: expr, ...}
  * - Array construction: [expr, ...]
@@ -27,10 +29,11 @@ use Webong\WorkFlow\Contracts\FlowContext;
  * - Select/filter: select(...)
  * - Functions: length, keys, add, map, select
  *
- * NOT supported (throws ExpressionEvaluationException):
- * - Regex: test(), match(), capture() (not implemented in zest-jq)
- * - not() function (use != false instead)
- * - reduce, group_by, flatten, etc.
+ * With shell jq: full jq 1.8+ support including regex, reduce, group_by, modules, etc.
+ * With zest-jq: see zest-jq docs (passes 524 upstream jq tests)
+ * NOT supported in zest-jq/builtin:
+ * - Regex: test(), match(), capture()
+ * - not() function (use == false instead)
  * - Module system (import, include, module)
  * - Alternative operators: //, ?
  */
@@ -44,8 +47,10 @@ final class ExpressionEvaluator
         private readonly array $workflowData = [],
         private readonly array $taskData = [],
         private readonly ?FlowContext $context = null,
-        private readonly ZestJqEvaluator $zestJq = new ZestJqEvaluator(),
-    ) {}
+        private ?EvaluatorBackend $backend = null,
+    ) {
+        $this->backend = $backend ?? new MultiBackendEvaluator();
+    }
 
     /**
      * Evaluate an expression against the current data context.
@@ -59,11 +64,11 @@ final class ExpressionEvaluator
             return null;
         }
 
-        // Pre-process OWS variable references to zest-jq field access
+        // Pre-process OWS variable references
         // $workflow -> .workflow, $task -> .task, $context -> .context
         $expression = $this->preprocessVariables($expression);
 
-        // Build input data for zest-jq
+        // Build input data
         // Merge workflow data at root for bare property access (.status)
         // Add workflow, task, context as explicit fields
         $inputData = array_merge(
@@ -75,12 +80,12 @@ final class ExpressionEvaluator
             ]
         );
 
-        $result = $this->zestJq->evaluate($expression, $inputData);
+        $result = $this->backend->evaluate($expression, $inputData);
         return $this->normalizeResult($result);
     }
 
     /**
-     * Normalize zest-jq results (stdClass -> array, recursively).
+     * Normalize results (stdClass -> array, recursively).
      */
     private function normalizeResult(mixed $value): mixed
     {
@@ -95,7 +100,7 @@ final class ExpressionEvaluator
 
     /**
      * Convert OWS variable references ($workflow, $task, $context)
-     * to zest-jq field access (.workflow, .task, .context).
+     * to field access (.workflow, .task, .context).
      */
     private function preprocessVariables(string $expression): string
     {
@@ -119,16 +124,21 @@ final class ExpressionEvaluator
             return ['supported' => true, 'unsupportedFeatures' => []];
         }
 
-        // Check with zest-jq
-        $result = $this->zestJq->analyze($expression);
+        // Pre-process variables before analysis
+        $expression = $this->preprocessVariables($expression);
 
-        // Additionally check for OWS-specific variable references
-        // that zest-jq might not recognize as valid
-        if ($result['supported']) {
-            // Our variable references ($workflow, $task, $context) are just
-            // regular variables in zest-jq, so they're fine
+        // Check with multi-backend
+        return $this->backend->analyze($expression);
+    }
+
+    /**
+     * Get the name of the active backend.
+     */
+    public function getActiveBackend(): string
+    {
+        if ($this->backend instanceof MultiBackendEvaluator) {
+            return $this->backend->getActiveBackend();
         }
-
-        return $result;
+        return get_class($this->backend);
     }
 }
