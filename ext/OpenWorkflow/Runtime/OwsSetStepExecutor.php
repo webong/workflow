@@ -12,13 +12,19 @@ use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
- * Executes OWS `set` tasks: evaluates each key's jq expression against the
- * workflow data (optionally filtered by `input.from`) and merges the results
- * into the OwsWorkflowContext so subsequent steps observe them.
+ * Executes OWS `set` tasks per the 1.0.3 data flow model:
  *
- * This is the adapter's execution-aware data subset (ADR 0006): set tasks are
- * pure data transformation with no side effects, so they are safe to execute
- * in-process through the core FlowRunner.
+ * - raw input = the chain predecessor's output (`ows_previous`), or the
+ *   workflow input for the first task;
+ * - `input.from` filters the raw input into the task input (jq `.`);
+ * - each `set` value is a literal or a `${ ... }` runtime expression
+ *   evaluated against the task input;
+ * - the task's output is the resulting map, recorded so the next task in the
+ *   chain consumes it; the workflow context is not modified (no `export.as`
+ *   in this subset).
+ *
+ * Set tasks are pure data transformation with no side effects, so they are
+ * safe to execute in-process through the core FlowRunner (ADR 0006).
  */
 final class OwsSetStepExecutor implements FlowStepExecutor
 {
@@ -38,34 +44,38 @@ final class OwsSetStepExecutor implements FlowStepExecutor
     ): StepResult {
         $set = $step->metadata['ows_set'] ?? [];
         if (! is_array($set) || $set === []) {
-            return StepResult::completed('set task with no assignments', ['ows_set_data' => []]);
+            $this->recordOutput($context, $step->id, null);
+            return StepResult::completed('set task with no assignments', ['ows_output' => null]);
         }
 
-        // Determine the data scope: workflow data, optionally filtered by
-        // the task's `input.from` expression (OWS input filtering). The
-        // filtered value becomes the jq `.` for the set expressions.
-        $scope = $context->all();
+        // Raw input: the chain predecessor's output, or the workflow input
+        // for the first task in the chain.
+        $predecessor = $step->metadata['ows_previous'] ?? null;
+        $rawInput = $context instanceof OwsWorkflowContext
+            ? (is_string($predecessor) && $predecessor !== ''
+                ? $context->stepOutput($predecessor)
+                : $context->workflowInput())
+            : $context->all();
+
+        // Task input: `input.from` filters the raw input (jq `.`).
+        $taskInput = $rawInput;
         $inputExpression = $step->metadata['ows_input_expression'] ?? null;
         if (is_string($inputExpression) && $inputExpression !== '') {
-            // `input.from` holds a bare jq expression; the filtered value
-            // becomes the data scope (jq `.`) for this task's set expressions.
-            $scope = $this->evaluate($inputExpression, $scope, $step->id);
+            $taskInput = $this->evaluate($inputExpression, $rawInput, $step->id);
         }
 
-        $results = [];
+        $output = [];
         foreach ($set as $key => $value) {
-            $results[(string) $key] = is_string($value)
-                ? $this->evaluateOrLiteral($value, $scope, $step->id)
+            $output[(string) $key] = is_string($value)
+                ? $this->evaluateOrLiteral($value, $taskInput, $step->id)
                 : $value; // numbers, bools, null, arrays: literal assignment
         }
 
-        if ($context instanceof OwsWorkflowContext) {
-            $context->merge($results);
-        }
+        $this->recordOutput($context, $step->id, $output);
 
         return StepResult::completed(
-            "set " . count($results) . " data key(s)",
-            ['ows_set_data' => $results],
+            "set " . count($output) . " data key(s)",
+            ['ows_output' => $output],
         );
     }
 
@@ -73,19 +83,19 @@ final class OwsSetStepExecutor implements FlowStepExecutor
      * OWS set values are literals unless wrapped as `${ ... }` runtime
      * expressions; plain strings (e.g. `shape: circle`) assign as-is.
      */
-    private function evaluateOrLiteral(string $value, mixed $scope, string $taskId): mixed
+    private function evaluateOrLiteral(string $value, mixed $taskInput, string $taskId): mixed
     {
         $trimmed = trim($value);
         if (preg_match('/^\$\{(.*)\}$/s', $trimmed, $m) !== 1) {
             return $value; // literal
         }
-        return $this->evaluate(trim($m[1]), $scope, $taskId, false);
+        return $this->evaluate(trim($m[1]), $taskInput, $taskId);
     }
 
     /**
-     * @param mixed $scope The jq input (`.`) for the expression
+     * @param mixed $input The jq input (`.`) for the expression
      */
-    private function evaluate(string $expression, mixed $scope, string $taskId): mixed
+    private function evaluate(string $expression, mixed $input, string $taskId): mixed
     {
         $expression = trim($expression);
         if ($expression === '') {
@@ -93,13 +103,20 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         }
 
         try {
-            return $this->expressionEvaluator->evaluateAgainstInput($expression, $scope);
+            return $this->expressionEvaluator->evaluateAgainstInput($expression, $input);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 "OWS set task '{$taskId}' failed to evaluate expression '{$expression}': {$e->getMessage()}",
                 0,
                 $e,
             );
+        }
+    }
+
+    private function recordOutput(FlowContext $context, string $taskId, mixed $output): void
+    {
+        if ($context instanceof OwsWorkflowContext) {
+            $context->recordStepOutput($taskId, $output);
         }
     }
 }

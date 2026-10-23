@@ -10,8 +10,8 @@ parameters:
         - ext/Temporal/TemporalFlowIdentity.php
         - ext/Temporal/TemporalFlowInput.php
         - app/src
-        - mod/typephp/php/NativeFlow.php
-        - mod/typephp/php/api.php
-        - mod/typephp/php/main.php
+        - mod/native/php/NativeFlow.php
+        - mod/native/php/api.php
+        - mod/native/php/main.php
         - examples
     treatPhpDocTypesAsCertain: false

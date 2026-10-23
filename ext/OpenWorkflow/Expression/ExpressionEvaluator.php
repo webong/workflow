@@ -95,6 +95,12 @@ final class ExpressionEvaluator
         }
         $expression = $this->preprocessVariables($expression);
 
+        // OWS workflow data is a jq object: an empty PHP array must encode as
+        // `{}`, not `[]`, or field access on empty data errors.
+        if (is_array($input) && $input === []) {
+            $input = new \stdClass();
+        }
+
         $result = $this->backend->evaluate($expression, $input);
         return $this->normalizeResult($result);
     }

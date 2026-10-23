@@ -7,6 +7,7 @@ namespace Webong\WorkFlow\Services;
 use Throwable;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowFailureReporter;
+use Webong\WorkFlow\Contracts\FlowMutableContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
@@ -23,12 +24,19 @@ final readonly class FlowStepExecution
 
     public function execute(FlowStepExecutor $executor, FlowStepDefinition $step, FlowContext $context, StepState $previous, string $flowKey, ?string $runId = null): StepState
     {
-        $context = new ArrayFlowContext([...$context->all(), '_workflow' => [
+        $workflowMeta = [
             'flow_key' => $flowKey,
             'run_id' => $runId,
             'step_id' => $step->id,
             'attempt' => $previous->attempts + 1,
-        ]]);
+        ];
+        // Read-only contexts stay isolated (previous behavior). Mutable
+        // contexts get a write-through overlay view so opt-in data flow
+        // (e.g. OWS `set` tasks) propagates between steps while still seeing
+        // the per-step `_workflow` metadata.
+        $context = $context instanceof FlowMutableContext
+            ? $context->withOverlay(['_workflow' => $workflowMeta])
+            : new ArrayFlowContext([...$context->all(), '_workflow' => $workflowMeta]);
         try {
             $result = $executor->execute($step, $context, $previous);
         } catch (Throwable $exception) {

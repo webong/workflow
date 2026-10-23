@@ -65,6 +65,32 @@ Only the following are executed. Everything else is reported as unsupported.
 - Definition registration remains host-controlled. The RPC contract does **not** become an unrestricted workflow-upload or code-execution endpoint.
 - The module exposes a `registerOwsDefinition(string $yamlOrJson): CapabilityReport` method; the host decides whether to persist the resulting `FlowDefinition` and make it runnable.
 
+### Execution-aware data subset (delivered)
+
+The adapter's first executing capability is the OWS 1.0.3 data-flow model for
+`set` tasks, per the specification's Data Flow section:
+
+- Task raw input = the chain predecessor's transformed output; the first
+  task's raw input is the workflow input. Translation records the chain in
+  `ows_previous` metadata and orders the chain following `then` directives
+  (`then: end`/`exit` terminate it).
+- `input.from` filters a task's raw input; the filtered value is the jq `.`
+  for the task's expressions.
+- `set` values are literals or `${ ... }` runtime expressions; the set task's
+  output is the resulting map.
+- The workflow output is the last task's transformed output; the workflow
+  context is untouched (no `export.as` in this subset).
+
+Execution runs through the core FlowRunner unchanged. To let step outputs
+propagate between steps without breaking core isolation, the core gained an
+opt-in `FlowMutableContext` contract: hosts passing such a context get a
+write-through overlay view in `FlowStepExecution`; read-only contexts keep
+the previous isolated-snapshot behavior (ADR 0001 boundary preserved).
+`ext/OpenWorkflow/Runtime` provides `OwsWorkflowContext` (implements the
+contract, records the output chain) and `OwsSetStepExecutor`. CTK scenarios
+covering this subset execute end-to-end against their pinned expected output
+(`tests/OpenWorkflow/OwsRuntimeTest.php`).
+
 ### Conformance fixtures
 
 - Vendor the pinned CTK scenarios as test fixtures (delivered: `ext/OpenWorkflow/Conformance/features/`, `specification@v1.0.3`).
@@ -72,7 +98,13 @@ Only the following are executed. Everything else is reported as unsupported.
 - Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why (delivered: `docs/open-workflow-ctk-matrix.md`, pinned by test so it cannot go stale).
 - Describe the initial product as a **limited OWS importer**, not a conforming OWS runtime.
 
-Current CTK posture (see the matrix for detail): scenarios whose definitions stay inside this subset (`call`, HTTP/OpenAPI data-flow plumbing) validate, translate, and hold their statically-checkable assertions; every construct outside the subset (`set`, `for`, `fork`, `try`/`catch`, `emit`, `raise`) is reported with its document path. All 21 pinned scenarios assert execution results, so full conformance additionally requires an executing runtime.
+Current CTK posture (see the matrix for detail): 13 of 21 scenarios validate,
+translate, and hold their statically-checkable assertions; 2 more (switch
+routing) translate but their ordering assertions depend on runtime case
+evaluation; 6 remain blocked by constructs outside the subset (`for`, `fork`,
+`try`/`catch`, `emit`, `raise`). Scenarios covered by the data subset execute
+end-to-end against their pinned expected output; full conformance still
+requires the remaining runtime capabilities.
 
 ### Future work (not in this ADR)
 

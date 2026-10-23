@@ -21,11 +21,11 @@ final class ZestJqEvaluator implements EvaluatorBackend
     /**
      * Evaluate a jq expression against input data.
      *
-     * @param array<string, mixed> $inputData
+     * @param mixed $inputData Any JSON-encodable value (object, array, scalar)
      * @return mixed
      * @throws ExpressionEvaluationException
      */
-    public function evaluate(string $expression, array $inputData): mixed
+    public function evaluate(string $expression, mixed $inputData): mixed
     {
         $json = json_encode($inputData, JSON_THROW_ON_ERROR);
 

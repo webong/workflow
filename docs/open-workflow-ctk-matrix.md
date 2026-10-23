@@ -8,9 +8,9 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 
 | Status | Scenarios |
 | --- | --- |
-| static pass | 7 / 21 |
-| static assertion failure | 0 / 21 |
-| unsupported feature | 14 / 21 |
+| static pass | 13 / 21 |
+| static assertion failure | 2 / 21 |
+| unsupported feature | 6 / 21 |
 | validation failure | 0 / 21 |
 | parse failure | 0 / 21 |
 | **Total** | **21** |
@@ -25,19 +25,19 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 | call | Call HTTP With Response Output | static pass | required | — |
 | call | Call OpenAPI With Content Output | static pass | required | — |
 | call | Call OpenAPI With Response Output | static pass | required | — |
-| data-flow | Input Filtering | unsupported feature | required | `set (/do/0)` |
+| data-flow | Input Filtering | static pass | required | — |
 | data-flow | Output Filtering | static pass | required | — |
 | data-flow | Use Non-object Output | static pass | required | — |
-| do | Task With Sequential Sub Tasks | unsupported feature | required | `set (/do/0/compositeExample/do/0)`, `set (/do/0/compositeExample/do/1)`, `set (/do/0/compositeExample/do/2)` |
+| do | Task With Sequential Sub Tasks | static pass | required | — |
 | emit | Emit Task | unsupported feature | required | `emit (/do/0)` |
-| flow | Explicit Sequence Flow | unsupported feature | required | `set (/do/0)`, `set (/do/1)`, `set (/do/2)` |
-| flow | Implicit Sequence Flow | unsupported feature | required | `set (/do/0)`, `set (/do/1)`, `set (/do/2)` |
+| flow | Explicit Sequence Flow | static pass | required | — |
+| flow | Implicit Sequence Flow | static pass | required | — |
 | for | For Task | unsupported feature | required | `for (/do/0)` |
 | raise | Raise task with inline error | unsupported feature | required | `raise (/do/0)` |
-| set | Set Task | unsupported feature | required | `set (/do/0)` |
-| switch | Switch task with explicit default case | unsupported feature | required | `set (/do/1)`, `set (/do/2)`, `set (/do/3)`, `set (/do/4)` |
-| switch | Switch task with implicit default case | unsupported feature | required | `set (/do/1)`, `set (/do/2)`, `set (/do/3)` |
-| switch | Switch task with matching case | unsupported feature | required | `set (/do/1)`, `set (/do/2)`, `set (/do/3)` |
+| set | Set Task | static pass | required | — |
+| switch | Switch task with explicit default case | static pass | required | — |
+| switch | Switch task with implicit default case | static assertion failure | required | failed: switchColor should run last |
+| switch | Switch task with matching case | static assertion failure | required | failed: setRed should run last |
 | try | Try Handle Caught Error | unsupported feature | required | `try (/do/0)` |
 | try | Try Raise Uncaught Error | unsupported feature | required | `try (/do/0)` |
 

@@ -4,57 +4,63 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
+use ArrayObject;
+use Webong\WorkFlow\Contracts\FlowMutableContext;
 
 /**
- * Mutable workflow context implementing OWS data semantics.
+ * Workflow context implementing the OWS 1.0.3 data flow model.
  *
- * The core runner treats FlowContext as read-only and passes the same
- * instance to every step, so OWS data-flow (set tasks merging results into
- * the workflow data) is provided by this richer context implementation
- * rather than by mutating the core contract (ADR 0001, ADR 0006).
+ * Per the specification's Data Flow section:
+ * - The first task's raw input is the (transformed) workflow input.
+ * - Each task's raw input is the transformed output of the previous task.
+ * - The workflow's output is the last task's transformed output (unless the
+ *   workflow configures its own `output`).
+ * - The workflow context (`$context` argument) only changes via `export.as`
+ *   (not yet supported); set tasks do NOT accumulate into it.
  *
- * The workflow data starts as the run input; each executed `set` task
- * evaluates its jq expressions against this data and merges the results
- * back, so subsequent steps observe the updated data.
+ * State lives in ArrayObject stores so `withOverlay()` views (handed to
+ * executors by the core execution wrapper) share writes with this instance,
+ * letting step outputs propagate between steps (ADR 0001, ADR 0006).
  */
-final class OwsWorkflowContext implements FlowContext
+final class OwsWorkflowContext implements FlowMutableContext
 {
-    /** @var array<string, mixed> */
-    private array $data;
+    /** @var ArrayObject<string, mixed> */
+    private ArrayObject $data;
+
+    /** @var ArrayObject<string, mixed> */
+    private ArrayObject $outputs;
 
     /** @var array<string, mixed> */
-    private array $stepOutputs = [];
+    private array $overlay = [];
 
     /**
      * @param array<string, mixed> $input The workflow run input
      */
     public function __construct(array $input = [])
     {
-        $this->data = $input;
+        $this->data = new ArrayObject($input);
+        $this->outputs = new ArrayObject([]);
     }
 
     public function has(string $key): bool
     {
-        return array_key_exists($key, $this->data);
+        return array_key_exists($key, $this->overlay) || array_key_exists($key, $this->data);
     }
 
     public function get(string $key, mixed $default = null): mixed
     {
+        if (array_key_exists($key, $this->overlay)) {
+            return $this->overlay[$key];
+        }
         return $this->data[$key] ?? $default;
     }
 
     /** @return array<string, mixed> */
     public function all(): array
     {
-        return $this->data;
+        return [...$this->data->getArrayCopy(), ...$this->overlay];
     }
 
-    /**
-     * Merge executed `set` results into the workflow data (OWS `set` task).
-     *
-     * @param array<string, mixed> $data
-     */
     public function merge(array $data): void
     {
         foreach ($data as $key => $value) {
@@ -62,18 +68,46 @@ final class OwsWorkflowContext implements FlowContext
         }
     }
 
+    public function withOverlay(array $overlay): static
+    {
+        $view = clone $this;
+        $view->overlay = [...$this->overlay, ...$overlay];
+        return $view;
+    }
+
     /**
-     * Record a completed task's output under its id, implementing the OWS
-     * rule that a task's output is available to subsequent tasks.
+     * The workflow input: the first task's raw input (identity transform;
+     * workflow-level `input.from` is not yet supported).
+     *
+     * @return array<string, mixed>
+     */
+    public function workflowInput(): array
+    {
+        return $this->data->getArrayCopy();
+    }
+
+    /**
+     * Record a completed task's output so the next task in the chain can
+     * consume it as its raw input.
      */
     public function recordStepOutput(string $taskId, mixed $output): void
     {
-        $this->stepOutputs[$taskId] = $output;
+        $this->outputs[$taskId] = $output;
     }
 
-    /** @return array<string, mixed> */
-    public function stepOutputs(): array
+    public function stepOutput(string $taskId): mixed
     {
-        return $this->stepOutputs;
+        return $this->outputs[$taskId] ?? null;
+    }
+
+    /**
+     * The most recently recorded task output — the OWS workflow output for
+     * the sequential subset (last executed task's transformed output).
+     * ArrayObject preserves insertion order, shared across overlay views.
+     */
+    public function lastOutput(): mixed
+    {
+        $all = $this->outputs->getArrayCopy();
+        return $all === [] ? null : end($all);
     }
 }

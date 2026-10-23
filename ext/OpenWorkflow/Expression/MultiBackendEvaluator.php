@@ -19,10 +19,10 @@ final class MultiBackendEvaluator implements EvaluatorBackend
     ) {}
 
     /**
-     * @param array<string, mixed> $inputData
+     * @param mixed $inputData Any JSON-encodable value (object, array, scalar)
      * @return mixed
      */
-    public function evaluate(string $expression, array $inputData): mixed
+    public function evaluate(string $expression, mixed $inputData): mixed
     {
         // Try shell jq first (best compatibility)
         if ($this->shellJq->isAvailable()) {

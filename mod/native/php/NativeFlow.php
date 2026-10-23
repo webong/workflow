@@ -143,7 +143,6 @@ final class NativeFlow implements FlowStepExecutor
             || ! is_int($data['attempt'] ?? null) || $data['attempt'] < 1) {
             throw new InvalidArgumentException('Invalid completion status or attempt.');
         }
-        /** @var FlowStepStatus $status */
         if (isset($result['retriable']) && ! is_bool($result['retriable'])) {
             throw new InvalidArgumentException('Invalid retry flag.');
         }

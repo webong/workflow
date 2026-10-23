@@ -12,10 +12,10 @@ interface EvaluatorBackend
     /**
      * Evaluate a jq expression against input data.
      *
-     * @param array<string, mixed> $inputData
+     * @param mixed $inputData Any JSON-encodable value (object, array, scalar)
      * @return mixed
      */
-    public function evaluate(string $expression, array $inputData): mixed;
+    public function evaluate(string $expression, mixed $inputData): mixed;
 
     /**
      * Check if an expression uses only supported features.

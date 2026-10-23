@@ -8,8 +8,8 @@ use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Native\NativeFlow;
 
-require_once __DIR__.'/../../mod/typephp/php/NativeFlow.php';
-require_once __DIR__.'/../../mod/typephp/php/api.php';
+require_once __DIR__.'/../../mod/native/php/NativeFlow.php';
+require_once __DIR__.'/../../mod/native/php/api.php';
 
 final class NativeFlowTest extends TestCase
 {

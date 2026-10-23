@@ -102,7 +102,7 @@ final class OwsToFlowTranslator
         $steps = [];
         $previousTaskId = null;
 
-        foreach ($tasks as $index => $task) {
+        foreach ($this->orderTasks($tasks) as $index => $task) {
             // Composite tasks (nested `do` without a primary task type) flatten
             // into top-level steps so nested constructs go through the same
             // translation, flagging, and execution paths as top-level tasks.
@@ -124,6 +124,69 @@ final class OwsToFlowTranslator
         }
 
         return $steps;
+    }
+
+    /**
+     * Order tasks for the execution chain per OWS flow directives: follow
+     * each task's `then` target; `then: end`/`exit` terminates the chain;
+     * tasks without `then` fall through in declaration order. Tasks the
+     * chain never reaches (dead code after `then: end`, or switch routing
+     * targets) are appended in declaration order so they still translate.
+     *
+     * @param list<array<string, mixed>> $tasks
+     * @return list<array<string, mixed>>
+     */
+    private function orderTasks(array $tasks): array
+    {
+        // Tasks arrive already normalized (see OwsDocument::normalizeTaskItems
+        // via do() and composite flattening) — re-normalizing here would
+        // misinterpret each task's own keys as new tasks.
+        $normalized = $tasks;
+        if (count($normalized) <= 1) {
+            return $normalized;
+        }
+
+        $byName = [];
+        foreach ($normalized as $task) {
+            if (is_string($task['name'] ?? null) && $task['name'] !== '') {
+                $byName[$task['name']] = $task;
+            }
+        }
+
+        $ordered = [];
+        $visited = [];
+        $current = $normalized[0] ?? null;
+
+        while ($current !== null) {
+            $name = is_string($current['name'] ?? null) ? $current['name'] : '';
+            if ($name === '' || isset($visited[$name])) {
+                break; // unnamed or cyclic `then` — stop following the chain
+            }
+            $visited[$name] = true;
+            $ordered[] = $current;
+
+            $then = $current['then'] ?? null;
+            if ($then === 'end' || $then === 'exit') {
+                break;
+            }
+            if (is_string($then) && isset($byName[$then])) {
+                $current = $byName[$then];
+                continue;
+            }
+
+            $position = array_search($current, $normalized, true);
+            $current = $position !== false ? ($normalized[$position + 1] ?? null) : null;
+        }
+
+        foreach ($normalized as $task) {
+            $name = is_string($task['name'] ?? null) ? $task['name'] : '';
+            if ($name !== '' && ! isset($visited[$name])) {
+                $visited[$name] = true;
+                $ordered[] = $task;
+            }
+        }
+
+        return $ordered;
     }
 
     /**
@@ -242,6 +305,7 @@ final class OwsToFlowTranslator
             'ows_input_expression' => $inputExpr,
             'ows_output_expression' => $outputExpr,
             'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
         ];
 
         if (isset($task['then'])) {
@@ -323,6 +387,7 @@ final class OwsToFlowTranslator
             'ows_input_expression' => $inputExpr,
             'ows_output_expression' => $outputExpr,
             'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
         ];
 
         if (isset($task['then'])) {
@@ -351,6 +416,7 @@ final class OwsToFlowTranslator
             'ows_type' => 'generic',
             'ows_action' => $action,
             'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
         ];
 
         // Conditional routing is in the ADR 0006 subset: preserve the full
@@ -395,6 +461,7 @@ final class OwsToFlowTranslator
             'ows_set' => is_array($task['set']) ? $task['set'] : [],
             'ows_input_expression' => $inputExpression,
             'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
         ];
 
         if (isset($task['then'])) {

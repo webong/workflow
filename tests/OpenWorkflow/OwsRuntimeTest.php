@@ -9,6 +9,7 @@ use Symfony\Component\Yaml\Yaml;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkParser;
 use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSetStepExecutor;
+use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\ValueObjects\FlowState;
@@ -107,9 +108,15 @@ YAML)->flowDefinition;
 
         self::assertNotNull($definition);
         $context = new OwsWorkflowContext([]);
-        $this->expectException(\RuntimeException::class);
-        $this->expectExceptionMessage("OWS set task 'broken'");
-        $this->runner->run($definition, new FlowState(), $context, [new OwsSetStepExecutor()]);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, [new OwsSetStepExecutor()]);
+
+        // The core execution wrapper converts executor exceptions into failed
+        // steps (reported through the FlowFailureReporter), so the failure is
+        // observable as step status, not as a thrown exception.
+        $step = $state->steps['broken'] ?? null;
+        self::assertNotNull($step, "Step 'broken' must be present in state");
+        self::assertSame('failed', $step->status->value);
+        self::assertSame('step_execution_failed', $step->metadata['error_code'] ?? null);
     }
 
     /**
@@ -129,7 +136,7 @@ YAML)->flowDefinition;
         $context = new OwsWorkflowContext($scenario->input ?? []);
         $state = $this->runner->run(
             $report->flowDefinition,
-            new FlowState(),
+            new FlowState(FlowStatus::PENDING),
             $context,
             [new OwsSetStepExecutor()],
         );
@@ -139,10 +146,12 @@ YAML)->flowDefinition;
         self::assertSame('completed', $state->status->value, "Run '{$key}' must complete");
 
         self::assertNotNull($scenario->expectedOutput, "Scenario '{$key}' must declare expected output");
+        // OWS data flow: the workflow output is the last task's transformed
+        // output (the context itself is untouched without export.as).
         self::assertSame(
             $scenario->expectedOutput,
-            $context->all(),
-            "Workflow data after executing '{$key}' must match the CTK expected output",
+            $context->lastOutput(),
+            "Workflow output after executing '{$key}' must match the CTK expected output",
         );
     }
 }

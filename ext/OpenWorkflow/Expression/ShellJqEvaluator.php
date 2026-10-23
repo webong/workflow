@@ -29,11 +29,11 @@ final class ShellJqEvaluator implements EvaluatorBackend
     }
 
     /**
-     * @param array<string, mixed> $inputData
+     * @param mixed $inputData Any JSON-encodable value (object, array, scalar)
      * @return mixed
      * @throws ExpressionEvaluationException
      */
-    public function evaluate(string $expression, array $inputData): mixed
+    public function evaluate(string $expression, mixed $inputData): mixed
     {
         if (! $this->isAvailable()) {
             throw new \RuntimeException('jq binary not available');
