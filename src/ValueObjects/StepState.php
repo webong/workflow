@@ -23,11 +23,18 @@ final readonly class StepState
     ) {
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('StepState data must be an array.');
+        }
         $status = $data['status'] ?? null;
         $attempts = $data['attempts'] ?? null;
+        $metadata = [];
+        if (is_array($data['metadata'] ?? null)) {
+            $metadata = $data['metadata'];
+        }
 
         return new self(
             status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,
@@ -37,7 +44,7 @@ final readonly class StepState
             retriable: is_bool($data['retriable'] ?? null) ? $data['retriable'] : null,
             attempts: is_int($attempts) ? max(0, $attempts) : 0,
             nextRetryAt: is_int($data['next_retry_at'] ?? null) ? $data['next_retry_at'] : null,
-            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            metadata: $metadata,
         );
     }
 

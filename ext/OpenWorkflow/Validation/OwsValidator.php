@@ -98,11 +98,16 @@ final class OwsValidator
         }
 
         // Check for unsupported task types
-        $unsupportedTypes = ['for', 'fork', 'wait', 'listen', 'try', 'raise', 'emit', 'set'];
+        $unsupportedTypes = ['for', 'fork', 'wait', 'listen', 'try', 'raise', 'emit'];
         foreach ($unsupportedTypes as $type) {
             if (isset($task[$type])) {
                 $warnings[] = "{$path}/{$type}: '{$type}' is not supported in initial subset";
             }
+        }
+
+        // `set` is supported: its value must be an object of key => jq expression
+        if (isset($task['set']) && ! is_array($task['set'])) {
+            $errors[] = "{$path}/set: Must be an object of key => expression pairs";
         }
 
         // Recurse into nested composite tasks so nested constructs are not

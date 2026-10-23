@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\ValueObjects;
 
+use InvalidArgumentException;
 use Webong\WorkFlow\Enums\FlowStatus;
 
 final readonly class FlowState
@@ -27,9 +28,12 @@ final readonly class FlowState
     ) {
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('FlowState data must be an array.');
+        }
         if (isset($data['run']) && ! is_array($data['run'])) {
             throw new \InvalidArgumentException('Invalid flow run snapshot.');
         }
@@ -45,6 +49,10 @@ final readonly class FlowState
         $failedSteps = $data['failed_steps'] ?? [];
         $message = $data['status_message'] ?? $data['message'] ?? null;
         $version = $data['version'] ?? null;
+        $metadata = [];
+        if (is_array($data['metadata'] ?? null)) {
+            $metadata = $data['metadata'];
+        }
 
         return new self(
             status: is_string($status) ? FlowStatus::tryFrom($status) ?? FlowStatus::PENDING : FlowStatus::PENDING,
@@ -53,7 +61,7 @@ final readonly class FlowState
             failedSteps: is_array($failedSteps) ? array_values(array_filter($failedSteps, 'is_string')) : [],
             canRetryStep: is_string($data['can_retry_step'] ?? null) ? $data['can_retry_step'] : null,
             message: is_string($message) ? $message : null,
-            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            metadata: $metadata,
             version: is_int($version) ? max(1, $version) : 1,
             run: is_array($data['run'] ?? null) ? FlowRun::fromArray($data['run']) : null,
         );

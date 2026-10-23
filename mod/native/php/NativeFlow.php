@@ -23,7 +23,6 @@ use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
-/** Stateless coordination only: the foreign host owns storage and side effects. */
 final class NativeFlow implements FlowStepExecutor
 {
     public function dispatch(string $json): string
@@ -46,26 +45,43 @@ final class NativeFlow implements FlowStepExecutor
     }
 
     /**
-     * @param array<array-key, mixed> $request
+     * @param mixed $request
+     /**
+     * @param mixed $request
      * @return array<string, mixed>
      */
-    private function apply(array $request): array
+    private function apply(mixed $request): array
     {
+        if (! is_array($request)) {
+            throw new InvalidArgumentException('Request must be an object.');
+        }
         $operation = self::string($request, 'operation');
         if ($operation === 'start') {
-            $run = new FlowRun(self::string($request, 'run_id'), FlowDefinition::fromArray(self::object($request, 'definition')));
+            $definitionData = $request['definition'] ?? null;
+            if (! is_array($definitionData) || ($definitionData !== [] && array_is_list($definitionData))) {
+                throw new InvalidArgumentException('Missing object parameter.');
+            }
+            $run = new FlowRun(self::string($request, 'run_id'), FlowDefinition::fromArray($definitionData));
             $state = (new FlowEvaluator())->evaluate($run->definition, $run->initialState());
 
             return ['ok' => true, 'state' => $state->toArray(), 'work' => []];
         }
 
-        $previous = FlowState::fromArray(self::object($request, 'state'));
+        $stateData = $request['state'] ?? null;
+        if (! is_array($stateData) || ($stateData !== [] && array_is_list($stateData))) {
+            throw new InvalidArgumentException('Missing object parameter.');
+        }
+        $previous = FlowState::fromArray($stateData);
         $run = $previous->run;
         if ($run === null) {
             throw new InvalidArgumentException('A pinned run is required.');
         }
         if (array_key_exists('definition', $request)) {
-            $run->assertDefinition(FlowDefinition::fromArray(self::object($request, 'definition')));
+            $definitionData = $request['definition'] ?? null;
+            if (! is_array($definitionData) || ($definitionData !== [] && array_is_list($definitionData))) {
+                throw new InvalidArgumentException('Missing object parameter.');
+            }
+            $run->assertDefinition(FlowDefinition::fromArray($definitionData));
         }
 
         $state = match ($operation) {
@@ -105,18 +121,36 @@ final class NativeFlow implements FlowStepExecutor
         return StepResult::deferred();
     }
 
-    /** @param array<array-key, mixed> $request */
-    private function completion(array $request): FlowDeferredCompletion
+    /**
+     * @param mixed $request
+     * @return FlowDeferredCompletion
+     */
+    private function completion(mixed $request): FlowDeferredCompletion
     {
-        $data = self::object($request, 'completion');
-        $result = self::object($data, 'result');
+        if (! is_array($request)) {
+            throw new InvalidArgumentException('Request must be an object.');
+        }
+        $data = $request['completion'] ?? null;
+        if (! is_array($data) || ($data !== [] && array_is_list($data))) {
+            throw new InvalidArgumentException('Missing object parameter.');
+        }
+        $result = $data['result'] ?? null;
+        if (! is_array($result) || ($result !== [] && array_is_list($result))) {
+            throw new InvalidArgumentException('Missing object parameter.');
+        }
         $status = FlowStepStatus::tryFrom(self::string($result, 'status'));
-        if (! in_array($status, [FlowStepStatus::COMPLETED, FlowStepStatus::FAILED, FlowStepStatus::SKIPPED], true)
+        if ($status === null || ! in_array($status, [FlowStepStatus::COMPLETED, FlowStepStatus::FAILED, FlowStepStatus::SKIPPED], true)
             || ! is_int($data['attempt'] ?? null) || $data['attempt'] < 1) {
             throw new InvalidArgumentException('Invalid completion status or attempt.');
         }
+        /** @var FlowStepStatus $status */
         if (isset($result['retriable']) && ! is_bool($result['retriable'])) {
             throw new InvalidArgumentException('Invalid retry flag.');
+        }
+
+        $metadata = $result['metadata'] ?? null;
+        if ($metadata !== null && (! is_array($metadata) || ($metadata !== [] && array_is_list($metadata)))) {
+            throw new InvalidArgumentException('Invalid metadata parameter.');
         }
 
         return new FlowDeferredCompletion(
@@ -130,14 +164,20 @@ final class NativeFlow implements FlowStepExecutor
                 message: self::optionalString($result, 'message'),
                 error: self::optionalString($result, 'error'),
                 retriable: $result['retriable'] ?? null,
-                metadata: isset($result['metadata']) ? self::object($result, 'metadata') : [],
+                metadata: $metadata ?? [],
             ),
         );
     }
 
-    /** @param array<array-key, mixed> $data */
-    private static function string(array $data, string $key): string
+    /**
+     * @param mixed $data
+     * @return string
+     */
+    private static function string(mixed $data, string $key): string
     {
+        if (! is_array($data)) {
+            throw new InvalidArgumentException('Data must be an object.');
+        }
         $value = $data[$key] ?? null;
         if (! is_string($value) || $value === '') {
             throw new InvalidArgumentException('Missing string parameter.');
@@ -146,26 +186,18 @@ final class NativeFlow implements FlowStepExecutor
         return $value;
     }
 
-    /** @param array<array-key, mixed> $data */
-    private static function optionalString(array $data, string $key): ?string
+    /**
+     * @param mixed $data
+     * @return string|null
+     */
+    private static function optionalString(mixed $data, string $key): ?string
     {
+        if (! is_array($data)) {
+            throw new InvalidArgumentException('Data must be an object.');
+        }
         $value = $data[$key] ?? null;
         if ($value !== null && ! is_string($value)) {
             throw new InvalidArgumentException('Invalid string parameter.');
-        }
-
-        return $value;
-    }
-
-    /**
-     * @param array<array-key, mixed> $data
-     * @return array<array-key, mixed>
-     */
-    private static function object(array $data, string $key): array
-    {
-        $value = $data[$key] ?? null;
-        if (! is_array($value) || ($value !== [] && array_is_list($value))) {
-            throw new InvalidArgumentException('Missing object parameter.');
         }
 
         return $value;

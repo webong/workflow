@@ -16,7 +16,7 @@ final readonly class FlowExecutionReceipt
         public ?FlowState $state = null,
     ) {
         if ($this->driver === '') {
-            throw new InvalidArgumentException('A flow execution receipt requires a driver.');
+            throw new \InvalidArgumentException('A flow execution receipt requires a driver.');
         }
     }
 

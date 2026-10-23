@@ -18,14 +18,14 @@ final readonly class FlowRun
         FlowDefinition $definition,
     ) {
         if ($id === '') {
-            throw new InvalidArgumentException('A flow run requires an id.');
+            throw new \InvalidArgumentException('A flow run requires an id.');
         }
         $snapshot = json_decode(json_encode(
             CanonicalFlowPayload::normalize($definition->toArray()),
             JSON_THROW_ON_ERROR,
         ), true, flags: JSON_THROW_ON_ERROR);
         if (! is_array($snapshot)) {
-            throw new InvalidArgumentException('Invalid flow definition snapshot.');
+            throw new \InvalidArgumentException('Invalid flow definition snapshot.');
         }
         $this->definition = FlowDefinition::fromArray($snapshot);
     }
@@ -38,7 +38,7 @@ final readonly class FlowRun
     public function assertDefinition(FlowDefinition $definition): void
     {
         if (CanonicalFlowPayload::fingerprint($definition->toArray()) !== CanonicalFlowPayload::fingerprint($this->definition->toArray())) {
-            throw new InvalidArgumentException('A flow run must use its pinned definition snapshot.');
+            throw new \InvalidArgumentException('A flow run must use its pinned definition snapshot.');
         }
     }
 
@@ -48,11 +48,11 @@ final readonly class FlowRun
         return ['id' => $this->id, 'definition' => $this->definition->toArray()];
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
-        if (! is_string($data['id'] ?? null) || ! is_array($data['definition'] ?? null)) {
-            throw new InvalidArgumentException('Invalid flow run snapshot.');
+        if (! is_array($data) || ! is_string($data['id'] ?? null) || ! is_array($data['definition'] ?? null)) {
+            throw new \InvalidArgumentException('Invalid flow run snapshot.');
         }
 
         return new self($data['id'], FlowDefinition::fromArray($data['definition']));

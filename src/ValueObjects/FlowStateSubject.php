@@ -13,7 +13,7 @@ final readonly class FlowStateSubject
         public string $id,
     ) {
         if ($this->type === '' || $this->id === '') {
-            throw new InvalidArgumentException('Flow state subjects require a type and id.');
+            throw new \InvalidArgumentException('Flow state subjects require a type and id.');
         }
     }
 }

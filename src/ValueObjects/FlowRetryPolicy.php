@@ -15,7 +15,7 @@ final readonly class FlowRetryPolicy
         public bool $idempotent = true,
     ) {
         if ($this->maxAttempts < 1 || $this->backoffSeconds < 0) {
-            throw new InvalidArgumentException('Retry attempts must be positive and backoff cannot be negative.');
+            throw new \InvalidArgumentException('Retry attempts must be positive and backoff cannot be negative.');
         }
     }
 

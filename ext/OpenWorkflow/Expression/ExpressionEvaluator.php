@@ -64,10 +64,6 @@ final class ExpressionEvaluator
             return null;
         }
 
-        // Pre-process OWS variable references
-        // $workflow -> .workflow, $task -> .task, $context -> .context
-        $expression = $this->preprocessVariables($expression);
-
         // Build input data
         // Merge workflow data at root for bare property access (.status)
         // Add workflow, task, context as explicit fields
@@ -80,7 +76,26 @@ final class ExpressionEvaluator
             ]
         );
 
-        $result = $this->backend->evaluate($expression, $inputData);
+        return $this->evaluateAgainstInput($expression, $inputData);
+    }
+
+    /**
+     * Evaluate an expression directly against an arbitrary JSON input value,
+     * without the OWS variable merging — the input IS the jq `.`.
+     * Used for OWS input-filtered data scopes.
+     *
+     * @param mixed $input Any JSON-encodable value (object, array, scalar)
+     * @return mixed
+     */
+    public function evaluateAgainstInput(string $expression, mixed $input): mixed
+    {
+        $expression = trim($expression);
+        if ($expression === '') {
+            return null;
+        }
+        $expression = $this->preprocessVariables($expression);
+
+        $result = $this->backend->evaluate($expression, $input);
         return $this->normalizeResult($result);
     }
 

@@ -22,18 +22,25 @@ final readonly class FlowStepDefinition
         public ?FlowRetryPolicy $retryPolicy = null,
     ) {
         if ($this->id === '') {
-            throw new InvalidArgumentException('A flow step must have an id.');
+            throw new \InvalidArgumentException('A flow step must have an id.');
         }
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('FlowStepDefinition data must be an array.');
+        }
         $id = $data['id'] ?? null;
         $label = $data['label'] ?? $id;
         $retryPolicy = $data['retry_policy'] ?? null;
         $maxAttempts = is_array($retryPolicy) ? ($retryPolicy['max_attempts'] ?? null) : null;
         $backoffSeconds = is_array($retryPolicy) ? ($retryPolicy['backoff_seconds'] ?? null) : null;
+        $metadata = [];
+        if (is_array($data['metadata'] ?? null)) {
+            $metadata = $data['metadata'];
+        }
 
         return new self(
             id: is_string($id) ? $id : '',
@@ -43,7 +50,7 @@ final readonly class FlowStepDefinition
             dependsOn: is_array($data['depends_on'] ?? null)
                 ? array_values(array_filter($data['depends_on'], 'is_string'))
                 : [],
-            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            metadata: $metadata,
             retryPolicy: is_array($retryPolicy)
                 ? new FlowRetryPolicy(
                     enabled: is_bool($retryPolicy['enabled'] ?? null) ? $retryPolicy['enabled'] : true,

@@ -19,23 +19,23 @@ final readonly class FlowDefinition
         public int $version = 1,
     ) {
         if ($this->key === '') {
-            throw new InvalidArgumentException('A flow must have a key.');
+            throw new \InvalidArgumentException('A flow must have a key.');
         }
 
         if ($this->version < 1) {
-            throw new InvalidArgumentException('A flow version must be positive.');
+            throw new \InvalidArgumentException('A flow version must be positive.');
         }
 
         $ids = array_map(static fn (FlowStepDefinition $step): string => $step->id, $this->steps);
 
         if (count($ids) !== count(array_unique($ids))) {
-            throw new InvalidArgumentException('Flow step ids must be unique.');
+            throw new \InvalidArgumentException('Flow step ids must be unique.');
         }
 
         foreach ($this->steps as $step) {
             foreach ($step->dependsOn as $dependency) {
                 if (! in_array($dependency, $ids, true)) {
-                    throw new InvalidArgumentException("Flow step '{$step->id}' depends on unknown step '{$dependency}'.");
+                    throw new \InvalidArgumentException("Flow step '{$step->id}' depends on unknown step '{$dependency}'.");
                 }
             }
         }
@@ -43,9 +43,12 @@ final readonly class FlowDefinition
         $this->assertAcyclic($this->steps);
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('FlowDefinition data must be an array.');
+        }
         $steps = is_array($data['steps'] ?? null) ? $data['steps'] : [];
         $key = $data['key'] ?? null;
         $version = $data['version'] ?? null;
@@ -121,7 +124,7 @@ final readonly class FlowDefinition
 
         $visit = function (string $id) use (&$visit, &$visiting, &$visited, $steps): void {
             if (isset($visiting[$id])) {
-                throw new InvalidArgumentException("Flow step dependency cycle detected at '{$id}'.");
+                throw new \InvalidArgumentException("Flow step dependency cycle detected at '{$id}'.");
             }
 
             if (isset($visited[$id])) {

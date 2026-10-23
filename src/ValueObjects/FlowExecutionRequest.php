@@ -21,11 +21,11 @@ final readonly class FlowExecutionRequest
     ) {
         $state->run?->assertDefinition($definition);
         if ($this->driver === '') {
-            throw new InvalidArgumentException('A flow execution request requires a driver.');
+            throw new \InvalidArgumentException('A flow execution request requires a driver.');
         }
 
         if ($this->executionId === '') {
-            throw new InvalidArgumentException('A flow execution id cannot be empty.');
+            throw new \InvalidArgumentException('A flow execution id cannot be empty.');
         }
     }
 
@@ -38,7 +38,7 @@ final readonly class FlowExecutionRequest
         $recordedDriver = $this->state->metadata['execution_driver'] ?? null;
 
         if (is_string($recordedDriver) && $recordedDriver !== $this->driver) {
-            throw new InvalidArgumentException(
+            throw new \InvalidArgumentException(
                 "Flow execution is already assigned to the '{$recordedDriver}' driver.",
             );
         }
@@ -72,9 +72,12 @@ final readonly class FlowExecutionRequest
         ];
     }
 
-    /** @param array<array-key, mixed> $data */
-    public static function fromArray(array $data): self
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
     {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('FlowExecutionRequest data must be an array.');
+        }
         $definition = $data['definition'] ?? [];
         $state = $data['state'] ?? [];
         $subject = $data['subject'] ?? null;
@@ -94,11 +97,14 @@ final readonly class FlowExecutionRequest
     }
 
     /**
-     * @param array<array-key, mixed> $values
+     * @param mixed $values
      * @return array<string, mixed>
      */
-    private static function stringKeyed(array $values): array
+    private static function stringKeyed(mixed $values): array
     {
+        if (! is_array($values)) {
+            return [];
+        }
         $result = [];
 
         foreach ($values as $key => $value) {
