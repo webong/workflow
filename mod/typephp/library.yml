@@ -6,6 +6,6 @@ output: /build/libworkflow_native.so
 cxx-std: c++17
 sources:
   - ../../src
-  - php/NativeFlow.php
-  - php/api.php
+  - ../native/php/NativeFlow.php
+  - ../native/php/api.php
   - cpp

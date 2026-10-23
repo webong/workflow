@@ -24,11 +24,13 @@ CMD ["sh", "mod/typephp/test.sh"]
 FROM php:8.3-cli AS reference
 WORKDIR /workspace
 COPY src ./src
+COPY mod/native ./mod/native
 COPY mod/typephp ./mod/typephp
-RUN mkdir /build && php mod/typephp/tests/export-cases.php
+RUN mkdir /build && php mod/native/tests/export-cases.php
 
 FROM toolchain AS build
 COPY src ./src
+COPY mod/native ./mod/native
 COPY mod/typephp ./mod/typephp
 COPY LICENSE ./LICENSE
 COPY --from=reference /build/php83-cases.json /build/php83-cases.json

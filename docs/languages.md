@@ -11,7 +11,7 @@ they do not have the same hosting or persistence contract.
 | --- | --- | --- |
 | PHP library | PHP objects installed with Composer | Your PHP application, using a store interface |
 | JSON-RPC application | HTTP from any trusted backend | The server; its example uses PostgreSQL |
-| Experimental native module | Local executable or shared C library | Your application, after every transition |
+| Experimental native module (TypePHP or elephc) | Local executable or shared C library | Your application, after every transition |
 
 Use the **PHP library** in PHP applications. Use **JSON-RPC** when several
 backends need one server-owned state store. Try **native** when a Node or
@@ -62,6 +62,18 @@ matching PHP/PHPX and system shared libraries. Version-tag builds publish
 SDK archives and companion runtime images; see [releases](releases.md).
 There are no npm or pip packages, portable standalone binaries, or validated
 static libraries. These remain experimental examples, not production SDKs.
+
+Two compilers can produce the same artifacts. The TypePHP build above embeds a
+PHP runtime. The [elephc build](../mod/elephc/README.md) compiles the same core
+to native code instead, so the result carries no PHP runtime and needs no Docker:
+
+```sh
+elvm install latest && elvm use latest --global   # install once
+make elephc-build
+```
+
+The elephc module is scaffolding that has not been built in CI yet; treat its
+commands as reviewed design rather than a tested release.
 
 ### Node: call the executable
 
@@ -178,7 +190,10 @@ Python performs deferred work for an RPC-backed flow, the server's PHP
 executor must arrange that handoff; RPC does not expose a generic work-polling
 queue. The receiving backend reports the outcome through `flow.complete`.
 
-For a future in-process Go, Rust, or Node binding, use the
-[C header and ownership contract](../mod/typephp/README.md#c-interface-and-runtime-ownership).
-Those wrappers still need to be implemented and tested; the C interface alone
-does not make them supported SDKs.
+For a future in-process Go, Rust, or Node binding, use the C header and
+ownership contract of the chosen module:
+[TypePHP](../mod/typephp/README.md#c-interface-and-runtime-ownership) or
+[elephc](../mod/elephc/README.md#c-interface-and-runtime-ownership). They expose
+the same operations with different lifecycle APIs. Those wrappers still need to
+be implemented and tested; the C interface alone does not make them supported
+SDKs.

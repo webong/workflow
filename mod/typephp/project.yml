@@ -6,6 +6,6 @@ output: /build/workflow-native
 cxx-std: c++17
 sources:
   - ../../src
-  - php/NativeFlow.php
-  - php/api.php
-  - php/main.php
+  - ../native/php/NativeFlow.php
+  - ../native/php/api.php
+  - ../native/php/main.php

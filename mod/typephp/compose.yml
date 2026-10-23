@@ -7,7 +7,7 @@ services:
       - ../..:/workspace:ro
       - native_build:/build
     working_dir: /workspace
-    command: ["php", "mod/typephp/tests/export-cases.php"]
+    command: ["php", "mod/native/tests/export-cases.php"]
 
   native:
     build:

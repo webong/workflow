@@ -154,8 +154,10 @@ break PHP 8.3 installs. The pinned build image uses PHP 8.5; the Composer packag
 and its regular suite still use PHP 8.3. Do not install the compiler as a runtime
 dependency of applications using WorkFlow.
 
-The compiler translates all core files. The C/JSON interface lives here; it
-does not reimplement the flow rules in C++ or Python. One core expression is
+The compiler translates all core files. The C/JSON interface lives in
+[`mod/native/php`](../native/php) and is shared with the
+[elephc module](../elephc/README.md); it does not reimplement the flow rules in
+C++ or Python. One core expression is
 written using a local `$attempts` variable because TypePHP 0.9.3 miscompiled a
 coalesced argument inside a null-safe retry-policy call. The retry parity cases
 guard this behavior. No compiler fork or generated-source patch is required.

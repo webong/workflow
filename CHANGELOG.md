@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Added an experimental elephc build target under `mod/elephc/` that compiles
+  the same core to native code with no embedded PHP runtime, with a generated C
+  header, a C consumer, and `make elephc-build` / `make elephc-test` host
+  commands. Not yet built in CI.
+- Extracted the compiler-agnostic native protocol and PHP 8.3 parity fixtures
+  into `mod/native/`, which both the TypePHP and elephc targets now compile, so
+  the wire contract has a single source.
 - Moved the JSON-RPC application from `mod/` to `app/` (`Webong\WorkFlow\App`)
   so `mod/` holds only TypePHP native builds.
 - Added Linux AMD64/ARM64 native and RPC CI builds, clean-runtime and HTTP

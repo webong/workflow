@@ -2,7 +2,11 @@ PHP ?= php
 COMPOSER ?= composer
 PHPUNIT ?= vendor/bin/phpunit
 
-.PHONY: install test test-filter types analyse lint docker-test docker-down native-test
+ELEPHC_BUILD := mod/elephc/build
+ELEPHC_LIB_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
+ELEPHC_ORACLE := $(ELEPHC_BUILD)/php83-cases.json
+
+.PHONY: install test test-filter types analyse lint docker-test docker-down native-test elephc-build elephc-test
 
 install:
 	$(COMPOSER) install --no-interaction
@@ -33,3 +37,17 @@ native-test:
 	docker compose -f mod/typephp/compose.yml build native
 	docker compose -f mod/typephp/compose.yml run --rm baseline
 	docker compose -f mod/typephp/compose.yml run --rm native
+
+# Build the elephc artifacts on the host; needs elephc on PATH. See mod/elephc/README.md.
+elephc-build:
+	sh mod/elephc/build.sh
+
+# Parity and ABI checks for the elephc artifacts. Needs a PHP 8.3 interpreter for the oracle.
+elephc-test: elephc-build
+	$(PHP) mod/native/tests/export-cases.php $(ELEPHC_ORACLE)
+	WORKFLOW_NATIVE_BIN=$(ELEPHC_BUILD)/workflow-native \
+	WORKFLOW_NATIVE_LIB=$(ELEPHC_BUILD)/libworkflow_native.$(ELEPHC_LIB_EXT) \
+	WORKFLOW_ORACLE=$(ELEPHC_ORACLE) \
+		python3 mod/elephc/tests/conformance.py
+	WORKFLOW_NATIVE_BIN=$(ELEPHC_BUILD)/workflow-native \
+		node --test mod/elephc/tests/node_client.test.mjs
