@@ -1,0 +1,19 @@
+name: workflow-native-elephc
+
+services:
+  elephc:
+    build:
+      context: ../..
+      dockerfile: mod/elephc/Dockerfile
+      target: build
+    volumes:
+      - elephc_build:/build
+      - elephc_dist:/dist
+    working_dir: /workspace
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+      ELEPHC_VERSION: "0.27.5"
+
+volumes:
+  elephc_build:
+  elephc_dist:

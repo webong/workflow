@@ -32,7 +32,7 @@ final readonly class FlowStepExecution
         try {
             $result = $executor->execute($step, $context, $previous);
         } catch (Throwable $exception) {
-            $correlationId = bin2hex(random_bytes(16));
+            $correlationId = bin2hex(\random_bytes(16));
             $this->failures->report($exception, $correlationId, $flowKey, $step->id, $runId);
             $result = new StepResult(
                 FlowStepStatus::FAILED,

@@ -26,7 +26,7 @@ final readonly class FlowEvent
             'flow_key' => $this->flowKey,
             'step_id' => $this->stepId,
             'payload' => $this->payload,
-            'occurred_at' => $this->occurredAt ?? date(DATE_ATOM),
+            'occurred_at' => $this->occurredAt ?? date(\DATE_ATOM),
         ];
     }
 }

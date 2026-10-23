@@ -11,14 +11,11 @@ declare(strict_types=1);
  * the #[Export] functions below. Top-level statements do not run when the
  * library is loaded; the host drives it through the exported function.
  *
- * The JSON protocol is shared with the TypePHP module and lives in
- * mod/native/php. It is required explicitly because NativeFlow.php sits outside
- * the src/ PSR-4 prefix; the Webong\WorkFlow core classes themselves come from
- * the repository Composer autoload metadata.
+ * The bootstrap file explicitly requires all core classes so elephc's
+ * compile-time autoloading can resolve type-hint-only classes.
  */
 
-require_once __DIR__.'/../../native/php/NativeFlow.php';
-require_once __DIR__.'/../../native/php/api.php';
+require_once __DIR__.'/bootstrap.php';
 
 /**
  * C ABI: one UTF-8 JSON request in, one UTF-8 JSON response out.

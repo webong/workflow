@@ -33,7 +33,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
     {
         return $state->withStep($stepId, new StepState(
             status: FlowStepStatus::RUNNING,
-            updatedAt: date(DATE_ATOM),
+            updatedAt: date(\DATE_ATOM),
         ));
     }
 
@@ -43,7 +43,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         return $state->withStep($stepId, new StepState(
             status: FlowStepStatus::COMPLETED,
             message: $message,
-            updatedAt: date(DATE_ATOM),
+            updatedAt: date(\DATE_ATOM),
             metadata: $metadata,
         ));
     }
@@ -54,7 +54,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         return $state->withStep($stepId, new StepState(
             status: FlowStepStatus::FAILED,
             error: $error,
-            updatedAt: date(DATE_ATOM),
+            updatedAt: date(\DATE_ATOM),
             retriable: $retriable,
             attempts: ($state->steps[$stepId]->attempts ?? 0) + 1,
             metadata: $metadata,
@@ -210,7 +210,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             status: $result->status,
             message: $result->message,
             error: $result->error,
-            updatedAt: $this->timestamp !== null ? ($this->timestamp)() : date(DATE_ATOM),
+            updatedAt: $this->timestamp !== null ? ($this->timestamp)() : date(\DATE_ATOM),
             retriable: $retriable,
             attempts: $attempts,
             nextRetryAt: $nextRetryAt,

@@ -59,7 +59,7 @@ final readonly class StepResult
             status: $this->status,
             message: $this->message,
             error: $this->error,
-            updatedAt: date(DATE_ATOM),
+            updatedAt: date(\DATE_ATOM),
             retriable: $this->retriable,
             attempts: $this->attempts,
             nextRetryAt: $this->nextRetryAt,

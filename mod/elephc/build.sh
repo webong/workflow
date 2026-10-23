@@ -1,17 +1,25 @@
 #!/bin/sh
 # Build the experimental elephc artifacts. Run from the repository root.
 #
-#   sh mod/elephc/build.sh            # host target
+#   sh mod/elephc/build.sh            # host target (outputs to mod/elephc/build)
 #   sh mod/elephc/build.sh linux-x86_64
 #
+# In Docker (compose), the working directory is /workspace and /build is a volume.
 # Set ELEPHC to use a compiler other than the one on PATH.
 set -eu
 
 ELEPHC="${ELEPHC:-elephc}"
 TARGET="${1:-}"
 SRC="mod/elephc/php"
-BUILD="mod/elephc/build"
-INCLUDE="mod/elephc/include"
+
+# In Docker, /build is a writable volume; on host, use mod/elephc/build
+if [ -w /build ] && [ "$(pwd)" = "/workspace" ]; then
+    BUILD="/build"
+    INCLUDE="/build/include"
+else
+    BUILD="mod/elephc/build"
+    INCLUDE="mod/elephc/include"
+fi
 
 command -v "$ELEPHC" >/dev/null 2>&1 || {
     echo "elephc not found. Install it first: https://elephc.dev" >&2
@@ -29,7 +37,12 @@ if [ -n "$TARGET" ]; then
     target_args="--target $TARGET"
 fi
 
-rm -rf "$BUILD"
+# Clean the build directory without removing the mount point itself
+if [ "$BUILD" = "/build" ]; then
+    rm -rf "$BUILD"/* "$BUILD"/.??*
+else
+    rm -rf "$BUILD"
+fi
 mkdir -p "$BUILD" "$INCLUDE"
 
 # Fast static check. Exported code also receives the cdylib call-graph safety

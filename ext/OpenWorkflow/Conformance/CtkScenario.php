@@ -12,6 +12,7 @@ final readonly class CtkScenario
     /**
      * @param list<string> $assertSteps Raw assert-step lines (Then/And after When)
      * @param array<string, mixed>|null $input
+     * @param array<string, mixed>|null $expectedOutput
      */
     public function __construct(
         public string $feature,
@@ -19,6 +20,7 @@ final readonly class CtkScenario
         public string $definition,
         public ?array $input,
         public array $assertSteps,
+        public ?array $expectedOutput = null,
     ) {}
 
     /**
