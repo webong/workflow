@@ -100,6 +100,19 @@ final class OwsToFlowTranslator
         $previousTaskId = null;
 
         foreach ($tasks as $index => $task) {
+            // Composite tasks (nested `do` without a primary task type) flatten
+            // into top-level steps so nested constructs go through the same
+            // translation, flagging, and execution paths as top-level tasks.
+            if ($this->isComposite($task)) {
+                $nested = OwsDocument::normalizeTaskItems($task['do']);
+                $flattened = $this->translateTasks($nested, $document);
+                foreach ($flattened as $nestedStep) {
+                    $steps[] = $nestedStep;
+                    $previousTaskId = $nestedStep->id;
+                }
+                continue;
+            }
+
             $step = $this->translateTask($task, $index, $previousTaskId, $document);
             if ($step !== null) {
                 $steps[] = $step;
@@ -108,6 +121,25 @@ final class OwsToFlowTranslator
         }
 
         return $steps;
+    }
+
+    /**
+     * A composite task carries a nested `do` list and no primary task type.
+     *
+     * @param array<string, mixed> $task
+     */
+    private function isComposite(array $task): bool
+    {
+        if (! isset($task['do']) || ! is_array($task['do'])) {
+            return false;
+        }
+        $primaryTypes = ['call', 'run', 'switch', 'set', 'for', 'fork', 'wait', 'listen', 'try', 'emit', 'raise'];
+        foreach ($primaryTypes as $type) {
+            if (isset($task[$type])) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private function translateTask(array $task, int $index, ?string $previousTaskId, OwsDocument $document): ?FlowStepDefinition
@@ -126,6 +158,10 @@ final class OwsToFlowTranslator
             // cases are preserved as step metadata; evaluating `when` at
             // runtime and honoring `then` routing is a runtime concern.
             return $this->translateGenericTask($task, $index, $previousTaskId);
+        }
+
+        if (isset($task['set'])) {
+            return $this->translateSetTask($task, $index, $previousTaskId);
         }
 
         if (isset($task['for'])) {
@@ -160,15 +196,6 @@ final class OwsToFlowTranslator
                 feature: 'try',
                 path: "/do/{$index}",
                 reason: 'Structured error handling (try/catch) not supported in initial subset'
-            );
-            return null;
-        }
-
-        if (isset($task['set'])) {
-            $this->addUnsupported(
-                feature: 'set',
-                path: "/do/{$index}",
-                reason: 'Variable assignment (set) not supported in initial subset'
             );
             return null;
         }
@@ -331,13 +358,6 @@ final class OwsToFlowTranslator
             $metadata['ows_switch'] = $task['switch'];
         }
 
-        // Composite tasks carry a nested task list. The composite itself
-        // translates as one step, but nested constructs must not be silently
-        // accepted: flag anything the adapter cannot execute.
-        if (isset($task['do']) && is_array($task['do'])) {
-            $this->flagUnsupportedInNestedTasks($task['do'], "/do/{$index}/{$taskId}/do");
-        }
-
         if (isset($task['then'])) {
             $metadata['ows_then'] = $task['then'];
         }
@@ -345,6 +365,42 @@ final class OwsToFlowTranslator
         return new FlowStepDefinition(
             id: $taskId,
             label: $task['name'] ?? $action,
+            critical: (bool) ($task['critical'] ?? true),
+            retriable: (bool) ($task['retriable'] ?? false),
+            dependsOn: $dependsOn,
+            metadata: $metadata,
+            retryPolicy: $this->translateRetryPolicy($task['retry'] ?? null),
+        );
+    }
+
+    /**
+     * Set tasks evaluate each key's jq expression against the workflow data
+     * and merge the results into it — data transformation, not a side effect.
+     * `input.from` optionally filters the task's data scope first.
+     */
+    private function translateSetTask(array $task, int $index, ?string $previousTaskId): FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "set_{$index}");
+        $dependsOn = $this->computeDependsOn($task, $previousTaskId);
+
+        $inputExpression = isset($task['input']['from']) && is_string($task['input']['from'])
+            ? $task['input']['from']
+            : null;
+
+        $metadata = [
+            'ows_type' => 'set',
+            'ows_set' => is_array($task['set']) ? $task['set'] : [],
+            'ows_input_expression' => $inputExpression,
+            'ows_original_index' => $index,
+        ];
+
+        if (isset($task['then'])) {
+            $metadata['ows_then'] = $task['then'];
+        }
+
+        return new FlowStepDefinition(
+            id: $taskId,
+            label: $task['name'] ?? $taskId,
             critical: (bool) ($task['critical'] ?? true),
             retriable: (bool) ($task['retriable'] ?? false),
             dependsOn: $dependsOn,
@@ -413,47 +469,5 @@ final class OwsToFlowTranslator
             path: $path,
             reason: $reason,
         );
-    }
-
-    /**
-     * Flag unsupported constructs inside nested task lists (composite `do`
-     * bodies) so they are reported with their nested document path instead of
-     * being silently accepted.
-     *
-     * @param list<mixed> $tasks
-     */
-    private function flagUnsupportedInNestedTasks(array $tasks, string $basePath): void
-    {
-        foreach (OwsDocument::normalizeTaskItems($tasks) as $i => $task) {
-            $path = "{$basePath}/{$i}";
-            $name = is_string($task['name'] ?? null) ? $task['name'] : (string) $i;
-
-            if (isset($task['for'])) {
-                $this->addUnsupported('for', $path, 'Iteration (for) not supported in initial subset');
-            }
-            if (isset($task['fork'])) {
-                $this->addUnsupported('fork', $path, 'Concurrency (fork) not supported in initial subset');
-            }
-            if (isset($task['wait']) || isset($task['listen'])) {
-                $this->addUnsupported('wait|listen', $path, 'Duration waits and event listening not supported in initial subset');
-            }
-            if (isset($task['try'])) {
-                $this->addUnsupported('try', $path, 'Structured error handling (try/catch) not supported in initial subset');
-            }
-            if (isset($task['set'])) {
-                $this->addUnsupported('set', $path, 'Variable assignment (set) not supported in initial subset');
-            }
-            if (isset($task['emit'])) {
-                $this->addUnsupported('emit', $path, 'Event emission (emit) not supported in initial subset');
-            }
-            if (isset($task['raise'])) {
-                $this->addUnsupported('raise', $path, 'Error raising (raise) not supported in initial subset');
-            }
-
-            // Recurse into deeper composite bodies
-            if (isset($task['do']) && is_array($task['do'])) {
-                $this->flagUnsupportedInNestedTasks($task['do'], "{$path}/{$name}/do");
-            }
-        }
     }
 }

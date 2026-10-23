@@ -30,7 +30,8 @@ final class CtkParser
 
         $inDefinition = false;
         $inInput = false;
-        $captureNextAs = null; // 'definition' | 'input'
+        $inOutput = false;
+        $captureNextAs = null; // 'definition' | 'input' | 'output'
         $buffer = [];
         $currentIndex = null; // index of the in-flight scenario in $scenarios
 
@@ -49,6 +50,7 @@ final class CtkParser
                     // Opening fence — start collecting
                     $inDefinition = $captureNextAs === 'definition';
                     $inInput = $captureNextAs === 'input';
+                    $inOutput = $captureNextAs === 'output';
                     $captureNextAs = null;
                     $buffer = [];
                     continue;
@@ -68,10 +70,17 @@ final class CtkParser
                     $sync();
                     continue;
                 }
+                if ($inOutput) {
+                    $current = $this->withExpectedOutput($current, $this->dedent($buffer));
+                    $inOutput = false;
+                    $buffer = [];
+                    $sync();
+                    continue;
+                }
                 continue;
             }
 
-            if ($inDefinition || $inInput) {
+            if ($inDefinition || $inInput || $inOutput) {
                 $buffer[] = $line;
                 continue;
             }
@@ -85,7 +94,7 @@ final class CtkParser
             }
 
             if (preg_match('/^Scenario:\s*(.+)$/', $trimmed, $m) === 1) {
-                $current = ['name' => trim($m[1]), 'definition' => null, 'input' => null, 'asserts' => []];
+                $current = ['name' => trim($m[1]), 'definition' => null, 'input' => null, 'asserts' => [], 'output' => null];
                 $scenarios[] = $current;
                 $currentIndex = count($scenarios) - 1;
                 continue;
@@ -102,6 +111,15 @@ final class CtkParser
 
             if (preg_match('/^(And\s+)?given the workflow input is\s*:\s*$/i', $trimmed) === 1) {
                 $captureNextAs = 'input';
+                continue;
+            }
+
+            if (preg_match('/^(Then|And)\s+.*should complete with output\s*:\s*$/i', $trimmed) === 1) {
+                // Keep the step as an assert (preserves requiresRuntime detection)
+                // and capture the following docstring as the expected output.
+                $current['asserts'][] = $trimmed;
+                $sync();
+                $captureNextAs = 'output';
                 continue;
             }
 
@@ -130,6 +148,7 @@ final class CtkParser
                 definition: $s['definition'],
                 input: $s['input'],
                 assertSteps: $s['asserts'],
+                expectedOutput: $s['output'] ?? null,
             );
         }
 
@@ -176,26 +195,40 @@ final class CtkParser
     }
 
     /**
-     * @param array{name: string, definition: ?string, input: ?array, asserts: list<string>}|null $current
-     * @return array{name: string, definition: ?string, input: ?array, asserts: list<string>}
+     * @param array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}|null $current
+     * @return array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}
      */
     private function withDefinition(?array $current, string $yaml, string $featureName): array
     {
         if ($current === null) {
-            $current = ['name' => "(unnamed in {$featureName})", 'definition' => null, 'input' => null, 'asserts' => []];
+            $current = ['name' => "(unnamed in {$featureName})", 'definition' => null, 'input' => null, 'asserts' => [], 'output' => null];
         }
         $current['definition'] = $yaml;
         return $current;
     }
 
     /**
-     * @param array{name: string, definition: ?string, input: ?array, asserts: list<string>}|null $current
-     * @return array{name: string, definition: ?string, input: ?array, asserts: list<string>}
+     * @param array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}|null $current
+     * @return array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}
+     */
+    private function withExpectedOutput(?array $current, string $yaml): array
+    {
+        if ($current === null) {
+            $current = ['name' => "(unnamed in {$featureName})", 'definition' => null, 'input' => null, 'asserts' => [], 'output' => null];
+        }
+        $parsed = \Symfony\Component\Yaml\Yaml::parse($yaml);
+        $current['output'] = is_array($parsed) ? $parsed : null;
+        return $current;
+    }
+
+    /**
+     * @param array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}|null $current
+     * @return array{name: string, definition: ?string, input: ?array, asserts: list<string>, output: ?array}
      */
     private function withInput(?array $current, string $yaml): array
     {
         if ($current === null) {
-            return $current ?? ['name' => '(unnamed)', 'definition' => null, 'input' => null, 'asserts' => []];
+            return $current ?? ['name' => '(unnamed)', 'definition' => null, 'input' => null, 'asserts' => [], 'output' => null];
         }
         $parsed = \Symfony\Component\Yaml\Yaml::parse($yaml);
         $current['input'] = is_array($parsed) ? $parsed : null;
