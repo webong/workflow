@@ -26,13 +26,23 @@ final readonly class FlowDefinition
             throw new \InvalidArgumentException('A flow version must be positive.');
         }
 
-        $ids = array_map(static fn (FlowStepDefinition $step): string => $step->id, $this->steps);
-
-        if (count($ids) !== count(array_unique($ids))) {
-            throw new \InvalidArgumentException('Flow step ids must be unique.');
+        $ids = [];
+        $seen = [];
+        foreach ($this->steps as $step) {
+            if (! $step instanceof FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
+            if (isset($seen['step:'.$step->id])) {
+                throw new \InvalidArgumentException('Flow step ids must be unique.');
+            }
+            $seen['step:'.$step->id] = true;
+            $ids[] = $step->id;
         }
 
         foreach ($this->steps as $step) {
+            if (! $step instanceof FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
             foreach ($step->dependsOn as $dependency) {
                 if (! in_array($dependency, $ids, true)) {
                     throw new \InvalidArgumentException("Flow step '{$step->id}' depends on unknown step '{$dependency}'.");
@@ -52,6 +62,9 @@ final readonly class FlowDefinition
         $steps = is_array($data['steps'] ?? null) ? $data['steps'] : [];
         $key = $data['key'] ?? null;
         $version = $data['version'] ?? null;
+        // Checked locals preserve the PHP contract while exposing array types to AOT compilers.
+        $metadataValue = $data['metadata'] ?? null;
+        $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
 
         return new self(
             key: is_string($key) ? $key : '',
@@ -62,13 +75,16 @@ final readonly class FlowDefinition
                 array_values(array_filter($steps, static fn (mixed $step): bool => is_array($step) || $step instanceof FlowStepDefinition)),
             ),
             version: is_int($version) ? $version : 1,
-            metadata: is_array($data['metadata'] ?? null) ? $data['metadata'] : [],
+            metadata: $metadata,
         );
     }
 
     public function step(string $id): ?FlowStepDefinition
     {
         foreach ($this->steps as $step) {
+            if (! $step instanceof FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
             if ($step->id === $id) {
                 return $step;
             }
@@ -99,6 +115,9 @@ final readonly class FlowDefinition
         };
 
         foreach ($this->steps as $step) {
+            if (! $step instanceof FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
             $visit($step);
         }
 
@@ -122,7 +141,7 @@ final readonly class FlowDefinition
         $visiting = [];
         $visited = [];
 
-        $visit = function (string $id) use (&$visit, &$visiting, &$visited, $steps): void {
+        $checkCycle = function (string $id) use (&$checkCycle, &$visiting, &$visited, $steps): void {
             if (isset($visiting[$id])) {
                 throw new \InvalidArgumentException("Flow step dependency cycle detected at '{$id}'.");
             }
@@ -142,7 +161,7 @@ final readonly class FlowDefinition
 
             if ($step instanceof FlowStepDefinition) {
                 foreach ($step->dependsOn as $dependency) {
-                    $visit($dependency);
+                    $checkCycle($dependency);
                 }
             }
 
@@ -151,7 +170,10 @@ final readonly class FlowDefinition
         };
 
         foreach ($steps as $step) {
-            $visit($step->id);
+            if ($step instanceof FlowStepDefinition) {
+                $id = (string) $step->id;
+                $checkCycle($id);
+            }
         }
     }
 }

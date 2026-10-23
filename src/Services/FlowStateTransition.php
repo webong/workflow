@@ -70,7 +70,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             return new FlowState(\Webong\WorkFlow\Enums\FlowStatus::PENDING, version: $state->version, metadata: $state->metadata);
         }
 
-        return $state->withStep($stepId, new StepState(updatedAt: date(DATE_ATOM)));
+        return $state->withStep($stepId, new StepState(updatedAt: date(\DATE_ATOM)));
     }
 
     public function cancel(FlowState $state): FlowState

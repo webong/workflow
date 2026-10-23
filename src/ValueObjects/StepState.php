@@ -31,10 +31,8 @@ final readonly class StepState
         }
         $status = $data['status'] ?? null;
         $attempts = $data['attempts'] ?? null;
-        $metadata = [];
-        if (is_array($data['metadata'] ?? null)) {
-            $metadata = $data['metadata'];
-        }
+        $metadataValue = $data['metadata'] ?? null;
+        $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
 
         return new self(
             status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,

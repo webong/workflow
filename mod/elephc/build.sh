@@ -37,13 +37,11 @@ if [ -n "$TARGET" ]; then
     target_args="--target $TARGET"
 fi
 
-# Clean the build directory without removing the mount point itself
-if [ "$BUILD" = "/build" ]; then
-    rm -rf "$BUILD"/* "$BUILD"/.??*
-else
-    rm -rf "$BUILD"
-fi
+# Preserve the PHP oracle and other volume contents. Remove only our outputs.
 mkdir -p "$BUILD" "$INCLUDE"
+rm -f "$BUILD/workflow-native" "$BUILD/libworkflow_native.so" \
+    "$BUILD/libworkflow_native.dylib" "$BUILD/libworkflow_native.a" \
+    "$INCLUDE/libworkflow_native.h"
 
 # Fast static check. Exported code also receives the cdylib call-graph safety
 # validation here, so an unsupported construct fails before any artifact exists.

@@ -85,6 +85,21 @@ $record('invalid-retry-type', ['operation' => 'complete', 'state' => $waiting['s
 ]]);
 $record('nul-byte', "{\0}");
 
+// Guard scalar normalization and nullable enum handling in both compilers.
+$record('invalid-completion-status', ['operation' => 'complete', 'state' => $waiting['state'], 'completion' => [
+    ...$completion, 'result' => ['status' => 'not-a-status'],
+]]);
+$record('scalar-definition-metadata', ['operation' => 'start', 'run_id' => 'metadata', 'definition' => [
+    'key' => 'metadata', 'metadata' => 'ignored', 'steps' => [['id' => 'a', 'metadata' => false]],
+]]);
+$metadataState = $waiting['state'];
+$metadataState['metadata'] = 'ignored';
+$metadataState['steps']['approve']['metadata'] = 42;
+$record('scalar-state-metadata', ['operation' => 'evaluate', 'state' => $metadataState]);
+$record('duplicate-step-ids', ['operation' => 'start', 'run_id' => 'duplicate', 'definition' => [
+    'key' => 'duplicate', 'steps' => [['id' => 'a'], ['id' => 'a']],
+]]);
+
 $output = $argv[1] ?? '/build/php83-cases.json';
 file_put_contents($output, json_encode(['php' => PHP_VERSION, 'cases' => $cases], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 echo count($cases).' parity cases exported from PHP '.PHP_VERSION.PHP_EOL;

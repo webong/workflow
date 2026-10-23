@@ -34,11 +34,9 @@ final readonly class FlowStepExecution
         // contexts get a write-through overlay view so opt-in data flow
         // (e.g. OWS `set` tasks) propagates between steps while still seeing
         // the per-step `_workflow` metadata.
-        $context = $context instanceof FlowMutableContext
-            ? $context->withOverlay(['_workflow' => $workflowMeta])
-            : new ArrayFlowContext([...$context->all(), '_workflow' => $workflowMeta]);
+        $executionContext = $this->executionContext($context, $workflowMeta);
         try {
-            $result = $executor->execute($step, $context, $previous);
+            $result = $executor->execute($step, $executionContext, $previous);
         } catch (Throwable $exception) {
             $correlationId = bin2hex(\random_bytes(16));
             $this->failures->report($exception, $correlationId, $flowKey, $step->id, $runId);
@@ -62,15 +60,34 @@ final readonly class FlowStepExecution
                 : null;
         }
 
+        $metadata = (array) ($result->deferred ? [...$result->metadata, 'deferred' => true] : $result->metadata);
+
         return new StepState(
             status: $result->status,
             message: $result->message,
             error: $result->error,
-            updatedAt: date(DATE_ATOM),
+            updatedAt: date(\DATE_ATOM),
             retriable: $retriable,
             attempts: $attempts,
             nextRetryAt: $nextRetryAt,
-            metadata: $result->deferred ? [...$result->metadata, 'deferred' => true] : $result->metadata,
+            metadata: $metadata,
         );
+    }
+
+    /** @param array<string, mixed> $workflowMeta */
+    private function executionContext(FlowContext $context, array $workflowMeta): FlowContext
+    {
+        if ($context instanceof FlowMutableContext) {
+            return $this->mutableExecutionContext($context, $workflowMeta);
+        }
+
+        return new ArrayFlowContext([...$context->all(), '_workflow' => $workflowMeta]);
+    }
+
+    // A typed parameter keeps interface dispatch explicit for AOT compilers.
+    /** @param array<string, mixed> $workflowMeta */
+    private function mutableExecutionContext(FlowMutableContext $context, array $workflowMeta): FlowContext
+    {
+        return $context->withOverlay(['_workflow' => $workflowMeta]);
     }
 }

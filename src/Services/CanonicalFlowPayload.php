@@ -12,11 +12,12 @@ final class CanonicalFlowPayload
     public static function normalize(mixed $value): mixed
     {
         if (is_array($value)) {
-            if (! array_is_list($value)) {
-                ksort($value);
+            $items = (array) $value;
+            if (! array_is_list($items)) {
+                ksort($items);
             }
 
-            return array_map(self::normalize(...), $value);
+            return array_map(self::normalize(...), $items);
         }
 
         if (is_object($value) || is_resource($value) || (is_float($value) && ! is_finite($value))) {

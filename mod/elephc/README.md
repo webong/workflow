@@ -22,12 +22,11 @@ need **no PHP, PHPX, GMP/MPFR, or `LD_LIBRARY_PATH`**: JSON, hashing, dates, and
 arrays are compiled in. They are still platform-specific, and the Elephc runtime
 library is part of the artifact.
 
-> **Status.** This module is scaffolding that has not yet been built or run: the
-> compiler is not installed in CI, and nothing here has been verified against a
-> real `elephc` release. Treat the file layout and the host contract as reviewed
-> design, not as a tested artifact. See the ADR
-> [0007](../../docs/adr/0007-elephc-native-module.md) for the plan and the known
-> risks.
+> **Status (2026-10-23).** Blocked on elephc 0.27.5. Shared PHP compatibility
+> fixes pass the interpreter and TypePHP tests, but elephc has not produced a
+> verified executable or shared library. Do not distribute these artifacts.
+> See [compiler diagnostics](tests/compiler/README.md) for the exact commands,
+> the remaining core diagnostic, and a standalone shared-library blocker.
 
 ## Build and test
 
@@ -198,13 +197,13 @@ which is exactly the parameter set elephc marshals. The open questions are:
   (`json_*`, `hash`, `date`, `array_*`, `bin2hex`, `iterator_to_array`). Expect
   the compiler to require explicit narrowing where a `mixed` value flows into a
   typed object parameter.
-- **`random_bytes()`.** The core uses it once for a correlation ID, and it does
-  not appear in elephc's builtin inventory; it may need a substitute.
+- **`random_bytes()`.** The elephc bootstrap supplies a compiler-only fallback
+  for error correlation IDs. Its runtime behavior remains unverified.
 - **Compile-time autoloading.** elephc resolves the `Webong\WorkFlow\` classes
   from Composer metadata rather than a runtime `spl_autoload_register` closure,
   so the build must run from the repository root.
-- **No shared oracle run yet.** `mod/native/tests/export-cases.php` requires
-  PHP 8.3, and CI does not install elephc, so parity is unproven.
+- **No elephc parity run yet.** The shared PHP 8.3 oracle passes against TypePHP;
+  elephc compilation still fails before its conformance tests can run.
 
 Upstream references: [elephc](https://elephc.dev),
 [shared libraries](https://elephc.dev/docs/beyond-php/cdylib/).

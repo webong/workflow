@@ -45,7 +45,13 @@ final class FlowRunner
         $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STARTED, $definition->key));
 
         foreach ($definition->executionSteps() as $step) {
+            if (! $step instanceof \Webong\WorkFlow\ValueObjects\FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
             $previous = $state->steps[$step->id] ?? new StepState();
+            if (! $previous instanceof StepState) {
+                throw new \InvalidArgumentException('Stored steps must be step states.');
+            }
 
             if (in_array($previous->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED, FlowStepStatus::RUNNING], true)
                 || ($previous->status === FlowStepStatus::PENDING && ($previous->metadata['deferred'] ?? false) === true)) {

@@ -15,8 +15,10 @@ final class FlowEvaluator
     public function evaluate(FlowDefinition $definition, ?FlowState $stored = null): FlowState
     {
         $stored?->run?->assertDefinition($definition);
-        if ($stored?->status === FlowStatus::CANCELLED) {
-            return $stored;
+        if ($stored instanceof FlowState) {
+            if ($stored->status === FlowStatus::CANCELLED) {
+                return $stored;
+            }
         }
         $storedSteps = $stored instanceof FlowState ? $stored->steps : [];
         $steps = [];
@@ -26,6 +28,9 @@ final class FlowEvaluator
         $canRetryStep = null;
 
         foreach ($definition->steps as $definitionStep) {
+            if (! $definitionStep instanceof \Webong\WorkFlow\ValueObjects\FlowStepDefinition) {
+                throw new \InvalidArgumentException('Flow steps must be step definitions.');
+            }
             $step = $storedSteps[$definitionStep->id] ?? new StepState();
             $steps[$definitionStep->id] = $step;
 
@@ -79,6 +84,8 @@ final class FlowEvaluator
             $message = null;
         }
 
+        $metadata = (array) ($stored->metadata ?? []);
+
         return new FlowState(
             status: $status,
             steps: $steps,
@@ -86,7 +93,7 @@ final class FlowEvaluator
             failedSteps: $failedSteps,
             canRetryStep: $canRetryStep,
             message: $message,
-            metadata: $stored instanceof FlowState ? $stored->metadata : [],
+            metadata: $metadata,
             version: $stored instanceof FlowState ? $stored->version : FlowState::SCHEMA_VERSION,
             run: $stored?->run,
         );

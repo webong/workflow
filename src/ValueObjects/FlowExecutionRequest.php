@@ -81,11 +81,12 @@ final readonly class FlowExecutionRequest
         $definition = $data['definition'] ?? [];
         $state = $data['state'] ?? [];
         $subject = $data['subject'] ?? null;
+        $context = self::stringKeyed($data['context'] ?? []);
 
         return new self(
             definition: FlowDefinition::fromArray(is_array($definition) ? $definition : []),
             state: FlowState::fromArray(is_array($state) ? $state : []),
-            context: is_array($data['context'] ?? null) ? self::stringKeyed($data['context']) : [],
+            context: $context,
             driver: is_string($data['driver'] ?? null) ? $data['driver'] : 'inline',
             executionId: is_string($data['execution_id'] ?? null) ? $data['execution_id'] : null,
             subject: is_array($subject)

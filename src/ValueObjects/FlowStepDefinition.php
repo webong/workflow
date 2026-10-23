@@ -37,10 +37,8 @@ final readonly class FlowStepDefinition
         $retryPolicy = $data['retry_policy'] ?? null;
         $maxAttempts = is_array($retryPolicy) ? ($retryPolicy['max_attempts'] ?? null) : null;
         $backoffSeconds = is_array($retryPolicy) ? ($retryPolicy['backoff_seconds'] ?? null) : null;
-        $metadata = [];
-        if (is_array($data['metadata'] ?? null)) {
-            $metadata = $data['metadata'];
-        }
+        $metadataValue = $data['metadata'] ?? null;
+        $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
 
         return new self(
             id: is_string($id) ? $id : '',

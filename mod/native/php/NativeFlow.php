@@ -46,8 +46,6 @@ final class NativeFlow implements FlowStepExecutor
 
     /**
      * @param mixed $request
-     /**
-     * @param mixed $request
      * @return array<string, mixed>
      */
     private function apply(mixed $request): array
@@ -61,8 +59,8 @@ final class NativeFlow implements FlowStepExecutor
             if (! is_array($definitionData) || ($definitionData !== [] && array_is_list($definitionData))) {
                 throw new InvalidArgumentException('Missing object parameter.');
             }
-            $run = new FlowRun(self::string($request, 'run_id'), FlowDefinition::fromArray($definitionData));
-            $state = (new FlowEvaluator())->evaluate($run->definition, $run->initialState());
+            $newRun = new FlowRun(self::string($request, 'run_id'), FlowDefinition::fromArray($definitionData));
+            $state = (new FlowEvaluator())->evaluate($newRun->definition, $newRun->initialState());
 
             return ['ok' => true, 'state' => $state->toArray(), 'work' => []];
         }
@@ -139,7 +137,10 @@ final class NativeFlow implements FlowStepExecutor
             throw new InvalidArgumentException('Missing object parameter.');
         }
         $status = FlowStepStatus::tryFrom(self::string($result, 'status'));
-        if ($status === null || ! in_array($status, [FlowStepStatus::COMPLETED, FlowStepStatus::FAILED, FlowStepStatus::SKIPPED], true)
+        if ($status === null) {
+            throw new InvalidArgumentException('Invalid completion status.');
+        }
+        if (! in_array($status, [FlowStepStatus::COMPLETED, FlowStepStatus::FAILED, FlowStepStatus::SKIPPED], true)
             || ! is_int($data['attempt'] ?? null) || $data['attempt'] < 1) {
             throw new InvalidArgumentException('Invalid completion status or attempt.');
         }
@@ -152,6 +153,8 @@ final class NativeFlow implements FlowStepExecutor
             throw new InvalidArgumentException('Invalid metadata parameter.');
         }
 
+        $resultMetadata = (array) ($metadata ?? []);
+
         return new FlowDeferredCompletion(
             flowKey: self::string($data, 'flow_key'),
             stepId: self::string($data, 'step_id'),
@@ -163,7 +166,7 @@ final class NativeFlow implements FlowStepExecutor
                 message: self::optionalString($result, 'message'),
                 error: self::optionalString($result, 'error'),
                 retriable: $result['retriable'] ?? null,
-                metadata: $metadata ?? [],
+                metadata: $resultMetadata,
             ),
         );
     }

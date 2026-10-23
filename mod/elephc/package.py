@@ -21,17 +21,15 @@ for directory in (bundle / "bin", bundle / "lib", bundle / "include", bundle / "
 files = {
     "/build/workflow-native": "bin/workflow-native",
     "/build/libworkflow_native.so": "lib/libworkflow_native.so",
-    "/workspace/mod/elephc/include/libworkflow_native.h": "include/libworkflow_native.h",
+    "/build/include/libworkflow_native.h": "include/libworkflow_native.h",
     "/workspace/mod/elephc/examples/node_client.mjs": "examples/node_client.mjs",
     "/workspace/mod/elephc/examples/python_client.py": "examples/python_client.py",
     "/workspace/mod/elephc/examples/c_host.c": "examples/c_host.c",
     "/workspace/mod/elephc/DISTRIBUTION.md": "README.md",
     "/workspace/LICENSE": "licenses/WorkFlow-MIT.txt",
-    "/workspace/mod/elephc/elephc.lock": "toolchain-elephc.lock",
 }
 for source, destination in files.items():
-    if Path(source).exists():
-        shutil.copy2(source, bundle / destination)
+    shutil.copy2(source, bundle / destination)
 
 # elephc is MIT licensed, no PHP/GPL notices needed
 # (elephc binary and bridge staticlibs are MIT)

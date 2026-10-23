@@ -49,10 +49,8 @@ final readonly class FlowState
         $failedSteps = $data['failed_steps'] ?? [];
         $message = $data['status_message'] ?? $data['message'] ?? null;
         $version = $data['version'] ?? null;
-        $metadata = [];
-        if (is_array($data['metadata'] ?? null)) {
-            $metadata = $data['metadata'];
-        }
+        $metadataValue = $data['metadata'] ?? null;
+        $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
 
         return new self(
             status: is_string($status) ? FlowStatus::tryFrom($status) ?? FlowStatus::PENDING : FlowStatus::PENDING,
