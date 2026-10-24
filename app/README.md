@@ -117,8 +117,9 @@ volume.
 For a real deployment, provide a trusted PHP bootstrap that returns a
 `FlowRpcApplication`. It must register your `FlowDefinitionProvider`,
 `FlowStepExecutor` implementations, `FlowExecutionDispatcher`, and
-`FlowStateStoreFactory`. The example uses the included PDO PostgreSQL store;
-you can supply another implementation of the same store interface. Build a
+`FlowStateStoreFactory`. The example ships three interchangeable PDO stores —
+PostgreSQL, MySQL, and SQLite — selected with `WORKFLOW_DB_DRIVER`; you can
+supply another implementation of the same store interface. Build a
 derived image or mount trusted application code and set `WORKFLOW_BOOTSTRAP`
 to its absolute path. Never accept PHP code or flow definitions from RPC
 callers. `WORKFLOW_PHP_PUBLIC` selects the bundled PHP bridge document root.
@@ -148,13 +149,24 @@ is no automatic lease expiry or blind replay. See [run lifecycle](../docs/run-li
 - Set `WORKFLOW_RPC_LISTEN` to change the address; it defaults to
   `127.0.0.1:8080` outside Compose. `/healthz` has no authentication and
   exposes no flow data.
-  It checks process liveness, not PHP execution or PostgreSQL readiness.
+  It checks process liveness, not PHP execution or database readiness.
 - The Docker health check probes `/healthz` on port 8080. Set
   `WORKFLOW_HEALTH_URL` as well if you change the internal listen address.
-- PostgreSQL connection settings in the example are `WORKFLOW_POSTGRES_DSN`,
-  `WORKFLOW_POSTGRES_USER`, and `WORKFLOW_POSTGRES_PASSWORD`. Apply the schema
-  before starting against an existing database. Back up the state table as
-  part of your normal database backup.
+- Database connection settings in the example are selected with
+  `WORKFLOW_DB_DRIVER`: `postgres` (default), `mysql`, or `sqlite`.
+
+  - `postgres`: `WORKFLOW_POSTGRES_DSN`, `WORKFLOW_POSTGRES_USER`, and
+    `WORKFLOW_POSTGRES_PASSWORD`; apply [`schema/postgres.sql`](schema/postgres.sql).
+  - `mysql`: `WORKFLOW_MYSQL_DSN`, `WORKFLOW_MYSQL_USER`, and
+    `WORKFLOW_MYSQL_PASSWORD`; apply [`schema/mysql.sql`](schema/mysql.sql)
+    against MySQL 8 (InnoDB).
+  - `sqlite`: `WORKFLOW_SQLITE_PATH` pointing at the database file; apply
+    [`schema/sqlite.sql`](schema/sqlite.sql). The bootstrap enables WAL mode
+    and a 5 s busy timeout; SQLite serializes writers at the file level, so
+    it suits single-host, low-contention deployments.
+
+  Apply the schema before starting against an existing database. Back up the
+  state table as part of your normal database backup.
 - Requests are limited to 1 MiB. Keep the RPC endpoint on a private network
   and apply ingress rate limits appropriate to the host.
 

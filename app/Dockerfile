@@ -13,7 +13,7 @@ RUN CGO_ENABLED=1 \
 
 FROM dunglas/frankenphp:1.12.7-php8.3-bookworm
 
-RUN install-php-extensions pdo_pgsql
+RUN install-php-extensions pdo_pgsql pdo_mysql pdo_sqlite
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app

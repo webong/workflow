@@ -6,7 +6,9 @@ use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\App\FlowRpcApplication;
+use Webong\WorkFlow\App\PdoMySqlFlowStateStoreFactory;
 use Webong\WorkFlow\App\PdoPostgresFlowStateStoreFactory;
+use Webong\WorkFlow\App\PdoSqliteFlowStateStoreFactory;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
@@ -18,17 +20,46 @@ use Webong\WorkFlow\ValueObjects\StepState;
 
 require_once dirname(__DIR__).'/vendor/autoload.php';
 
-$dsn = getenv('WORKFLOW_POSTGRES_DSN');
-if (! is_string($dsn) || $dsn === '') {
-    throw new RuntimeException('WORKFLOW_POSTGRES_DSN is required');
-}
+$driver = getenv('WORKFLOW_DB_DRIVER') ?: 'postgres';
+$options = [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION];
 
-$connection = new PDO(
-    $dsn,
-    getenv('WORKFLOW_POSTGRES_USER') ?: null,
-    getenv('WORKFLOW_POSTGRES_PASSWORD') ?: null,
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION],
-);
+if ($driver === 'postgres') {
+    $dsn = getenv('WORKFLOW_POSTGRES_DSN');
+    if (! is_string($dsn) || $dsn === '') {
+        throw new RuntimeException('WORKFLOW_POSTGRES_DSN is required');
+    }
+
+    $connection = new PDO(
+        $dsn,
+        getenv('WORKFLOW_POSTGRES_USER') ?: null,
+        getenv('WORKFLOW_POSTGRES_PASSWORD') ?: null,
+        $options,
+    );
+} elseif ($driver === 'mysql') {
+    $dsn = getenv('WORKFLOW_MYSQL_DSN');
+    if (! is_string($dsn) || $dsn === '') {
+        throw new RuntimeException('WORKFLOW_MYSQL_DSN is required');
+    }
+
+    $connection = new PDO(
+        $dsn,
+        getenv('WORKFLOW_MYSQL_USER') ?: null,
+        getenv('WORKFLOW_MYSQL_PASSWORD') ?: null,
+        $options,
+    );
+} elseif ($driver === 'sqlite') {
+    $path = getenv('WORKFLOW_SQLITE_PATH');
+    if (! is_string($path) || $path === '') {
+        throw new RuntimeException('WORKFLOW_SQLITE_PATH is required');
+    }
+
+    $connection = new PDO('sqlite:'.$path, null, null, $options);
+    // Wait instead of failing when another request holds the write lock.
+    $connection->exec('PRAGMA busy_timeout = 5000');
+    $connection->exec('PRAGMA journal_mode = WAL');
+} else {
+    throw new RuntimeException(sprintf('Unsupported WORKFLOW_DB_DRIVER "%s"', $driver));
+}
 
 $definitions = new class implements FlowDefinitionProvider {
     public function definition(string $flowKey): FlowDefinition
@@ -53,9 +84,17 @@ $executor = new class implements FlowStepExecutor {
     }
 };
 
+$serializer = new DefaultFlowStateSerializer();
+
+$factory = match ($driver) {
+    'postgres' => new PdoPostgresFlowStateStoreFactory($connection, $serializer),
+    'mysql' => new PdoMySqlFlowStateStoreFactory($connection, $serializer),
+    'sqlite' => new PdoSqliteFlowStateStoreFactory($connection, $serializer),
+};
+
 return new FlowRpcApplication(
     definitions: $definitions,
-    stores: new PdoPostgresFlowStateStoreFactory($connection, new DefaultFlowStateSerializer()),
+    stores: $factory,
     execution: new FlowExecutionDispatcher([
         new InlineFlowExecutionDriver(new FlowRunner(), [$executor]),
     ]),
