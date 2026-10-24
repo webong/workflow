@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Conformance;
 
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsRouting;
 use Webong\WorkFlow\OpenWorkflow\ValueObjects\OwsDocument;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
 
 /**
  * Runs vendored CTK scenarios through the adapter's validator + translator.
@@ -16,7 +19,7 @@ use Webong\WorkFlow\OpenWorkflow\ValueObjects\OwsDocument;
  * - parse-failure:         document could not be parsed
  * - validation-failure:    structural validation rejected the document
  * - unsupported:           translated, but blocked by unsupported constructs
- *                          (for / fork / wait / try / set / emit / raise ...)
+ *                          (for / fork / wait / try / emit / raise ...)
  * - static-pass:           translated cleanly AND every statically-checkable
  *                          assertion (task ordering) holds against the
  *                          translated FlowDefinition's execution order
@@ -106,17 +109,17 @@ final class CtkRunner
 
     /**
      * Evaluate the CTK task-ordering assertions against the translated
-     * FlowDefinition's execution order.
+     * FlowDefinition's execution order. When the chain starts with a switch
+     * step, routing is simulated statically against the scenario input so
+     * routing-dependent ordering assertions can be verified (or honestly
+     * fail).
      *
      * @return array<string, bool> assertion => passed
      */
     private function checkStaticAssertions(CtkScenario $scenario, \Webong\WorkFlow\ValueObjects\FlowDefinition $definition): array
     {
         $checks = [];
-        $order = array_map(
-            static fn ($step): string => $step->id,
-            $definition->executionSteps(),
-        );
+        $order = $this->effectiveOrder($definition, $scenario);
         $indexOf = static function (string $id) use ($order): ?int {
             $found = array_search($id, $order, true);
             return $found === false ? null : (int) $found;
@@ -158,5 +161,60 @@ final class CtkRunner
         }
 
         return $checks;
+    }
+
+    /**
+     * The execution order after statically simulating switch routing against
+     * the scenario's input. Simulation applies only when the chain starts
+     * with a switch (its task input is then the workflow input); otherwise
+     * the translated declaration order is returned unchanged.
+     *
+     * @return list<string>
+     */
+    private function effectiveOrder(FlowDefinition $definition, CtkScenario $scenario): array
+    {
+        $steps = $definition->executionSteps();
+        $order = array_map(static fn ($step): string => $step->id, $steps);
+        $positions = array_flip($order);
+
+        foreach ($steps as $index => $step) {
+            if (($step->metadata['ows_type'] ?? null) !== 'switch') {
+                continue;
+            }
+            if ($index !== 0) {
+                break; // task input would depend on runtime data — not statically resolvable
+            }
+
+            $cases = is_array($step->metadata['ows_switch_cases'] ?? null) ? $step->metadata['ows_switch_cases'] : [];
+            $positionsMap = is_array($step->metadata['ows_chain_positions'] ?? null) ? $step->metadata['ows_chain_positions'] : [];
+            if ($cases === [] || $positionsMap === []) {
+                break;
+            }
+
+            $decision = OwsRouting::decide(
+                cases: $cases,
+                switchThen: is_string($step->metadata['ows_then'] ?? null) ? $step->metadata['ows_then'] : null,
+                taskInput: $scenario->input ?? [],
+                positions: $positionsMap,
+                switchPosition: 0,
+                evaluator: new ExpressionEvaluator(),
+            );
+
+            $excluded = $decision['skip'];
+            if ($decision['terminated']) {
+                foreach ($positionsMap as $id => $position) {
+                    if (is_int($position) && $position > 0) {
+                        $excluded[] = $id;
+                    }
+                }
+            }
+
+            return array_values(array_filter(
+                $order,
+                static fn (string $id): bool => ! in_array($id, $excluded, true),
+            ));
+        }
+
+        return $order;
     }
 }

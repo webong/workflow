@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Tests\OpenWorkflow;
 
 use PHPUnit\Framework\TestCase;
-use Symfony\Component\Yaml\Yaml;
+use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkParser;
 use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSetStepExecutor;
-use Webong\WorkFlow\Enums\FlowStatus;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSwitchStepExecutor;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
 use Webong\WorkFlow\Services\FlowRunner;
+use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowState;
 
 /**
@@ -68,6 +69,65 @@ class OwsRuntimeTest extends TestCase
     {
         // input.from filters the data scope before the set expressions run
         $this->executeAndAssertOutput('data-flow: Input Filtering');
+    }
+
+    public function testCtkSwitchWithMatchingCaseScenario(): void
+    {
+        // Only the matching case's branch runs; output is that branch's data
+        $this->executeAndAssertOutput('switch: Switch task with matching case');
+    }
+
+    public function testCtkSwitchWithImplicitDefaultScenario(): void
+    {
+        // No case matches, the switch itself routes to end: the workflow
+        // output is the unmodified input.
+        $this->executeAndAssertOutput('switch: Switch task with implicit default case');
+    }
+
+    public function testCtkSwitchWithExplicitDefaultScenario(): void
+    {
+        // The case without `when` catches everything the earlier cases missed
+        $this->executeAndAssertOutput('switch: Switch task with explicit default case');
+    }
+
+    public function testSwitchRoutingSkipsUnselectedBranches(): void
+    {
+        $scenario = $this->scenarios['switch: Switch task with matching case'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run(
+            $definition,
+            new FlowState(FlowStatus::PENDING),
+            $context,
+            [new OwsSetStepExecutor(), new OwsSwitchStepExecutor()],
+        );
+
+        self::assertSame('completed', $state->status->value);
+        self::assertSame('completed', $state->steps['switchColor']->status->value);
+        self::assertSame('completed', $state->steps['setRed']->status->value);
+        self::assertSame('skipped', $state->steps['setGreen']->status->value);
+        self::assertSame('skipped', $state->steps['setBlue']->status->value);
+    }
+
+    public function testSwitchExecutorRequiresOwsContext(): void
+    {
+        $scenario = $this->scenarios['switch: Switch task with matching case'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new ArrayFlowContext([]);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, [new OwsSwitchStepExecutor()]);
+
+        // The core execution wrapper converts executor exceptions into failed
+        // steps (reported through the FlowFailureReporter).
+        $step = $state->steps['switchColor'] ?? null;
+        self::assertNotNull($step, "Step 'switchColor' must be present in state");
+        self::assertSame('failed', $step->status->value);
+        self::assertSame('step_execution_failed', $step->metadata['error_code'] ?? null);
     }
 
     public function testSetExecutorIgnoresNonOwsSteps(): void
@@ -138,7 +198,7 @@ YAML)->flowDefinition;
             $report->flowDefinition,
             new FlowState(FlowStatus::PENDING),
             $context,
-            [new OwsSetStepExecutor()],
+            [new OwsSetStepExecutor(), new OwsSwitchStepExecutor()],
         );
 
         $failed = array_filter($state->steps, static fn ($s) => $s->status->value === 'failed');

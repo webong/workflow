@@ -6,6 +6,7 @@ namespace Webong\WorkFlow\App;
 
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
@@ -28,6 +29,7 @@ final readonly class FlowRpcApplication
         private FlowStateStoreFactory $stores,
         private FlowExecutionDispatcher $execution,
         private FlowStateTransition $transitions = new FlowStateTransition(),
+        private ?OpenWorkflow $ows = null,
     ) {
     }
 
@@ -44,6 +46,8 @@ final readonly class FlowRpcApplication
             'flow.complete' => $this->complete($params),
             'flow.resume' => $this->resume($params),
             'flow.cancel' => $this->cancel($params),
+            'ows.validate' => $this->owsValidate($params),
+            'ows.register' => $this->owsRegister($params),
             default => throw new RpcFailure(-32601, 'Method not found'),
         };
     }
@@ -208,6 +212,55 @@ final readonly class FlowRpcApplication
         );
 
         return ['state' => $this->publicState($state)];
+    }
+
+    /**
+     * Validate an OWS document without translating. Only available when the
+     * host explicitly enables OWS support (ADR 0006: registration stays
+     * host-controlled; the RPC surface is not an upload endpoint by default).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function owsValidate(array $params): array
+    {
+        $report = $this->ows()->validateOnly($this->document($params));
+
+        return ['report' => $report->toArray()];
+    }
+
+    /**
+     * Validate and translate an OWS document. The report carries the
+     * CapabilityReport and the translated FlowDefinition; persisting it
+     * remains the host's decision.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function owsRegister(array $params): array
+    {
+        $report = $this->ows()->registerOwsDefinition($this->document($params));
+
+        return ['report' => $report->toArray()];
+    }
+
+    private function ows(): OpenWorkflow
+    {
+        return $this->ows ?? throw new RpcFailure(
+            -32601,
+            'OWS document registration is not enabled on this host',
+        );
+    }
+
+    /** @param array<string, mixed> $params */
+    private function document(array $params): string
+    {
+        $document = $params['document'] ?? null;
+        if (! is_string($document) || trim($document) === '') {
+            throw new RpcFailure(-32602, 'Invalid document');
+        }
+
+        return $document;
     }
 
     private function available(?FlowState $state): FlowState

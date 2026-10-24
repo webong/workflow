@@ -68,6 +68,7 @@ final class OwsToFlowTranslator
         }
 
         $steps = $this->translateTasks($document->do(), $document);
+        $steps = $this->annotateChain($steps);
         $version = $this->parseVersion($document->semver());
 
         $flowDefinition = new FlowDefinition(
@@ -124,6 +125,108 @@ final class OwsToFlowTranslator
         }
 
         return $steps;
+    }
+
+    /**
+     * Annotate the flat chain with execution positions and give switch steps
+     * the full chain map plus normalized cases, so runtime routing can decide
+     * which steps skip without access to the whole definition.
+     *
+     * @param list<FlowStepDefinition> $steps
+     * @return list<FlowStepDefinition>
+     */
+    private function annotateChain(array $steps): array
+    {
+        $positions = [];
+        $previousById = [];
+        foreach ($steps as $index => $step) {
+            $positions[$step->id] = $index;
+            $previousById[$step->id] = $step->dependsOn === [] ? null : $step->dependsOn[count($step->dependsOn) - 1];
+        }
+
+        $annotated = [];
+        foreach ($steps as $index => $step) {
+            $metadata = [
+                ...$step->metadata,
+                'ows_chain_position' => $index,
+                'ows_previous_by_id' => $previousById,
+            ];
+
+            if (($metadata['ows_type'] ?? null) === 'switch') {
+                $metadata['ows_chain_positions'] = $positions;
+                $metadata['ows_switch_cases'] = $this->normalizeSwitchCases(
+                    is_array($metadata['ows_switch'] ?? null) ? $metadata['ows_switch'] : [],
+                    $steps,
+                );
+            }
+
+            $annotated[] = $this->withMetadata($step, $metadata);
+        }
+
+        return $annotated;
+    }
+
+    /**
+     * Normalize an OWS `switch` value into ordered cases with a per-case
+     * `end_after` flag (the target's own `then` terminates the chain).
+     *
+     * OWS accepts two shapes: a map of case name => case definition, or a
+     * sequence of single-entry maps (`- caseName: {...}`) as used in the CTK.
+     *
+     * @param array<string|int, mixed> $switch
+     * @param list<FlowStepDefinition> $steps
+     * @return list<array{name: string, when: ?string, then: ?string, end_after: bool}>
+     */
+    private function normalizeSwitchCases(array $switch, array $steps): array
+    {
+        $thenById = [];
+        foreach ($steps as $step) {
+            $thenById[$step->id] = $step->metadata['ows_then'] ?? null;
+        }
+
+        $cases = [];
+        foreach ($switch as $key => $value) {
+            // Sequence form: each item is a single-entry map keyed by case name.
+            if (is_int($key) && is_array($value) && count($value) === 1) {
+                $caseName = (string) array_key_first($value);
+                $case = $value[$caseName];
+            } else {
+                $caseName = (string) $key;
+                $case = $value;
+            }
+
+            if (! is_array($case)) {
+                continue;
+            }
+            $when = is_string($case['when'] ?? null) ? $case['when'] : null;
+            $then = is_string($case['then'] ?? null) ? $case['then'] : null;
+            $cases[] = [
+                'name' => $caseName,
+                'when' => $when,
+                'then' => $then,
+                // A case without `when` is the explicit default: it matches
+                // anything the earlier cases did not.
+                'end_after' => $then !== null && in_array($thenById[$then] ?? null, ['end', 'exit'], true),
+            ];
+        }
+
+        return $cases;
+    }
+
+    /**
+     * @param array<string, mixed> $metadata
+     */
+    private function withMetadata(FlowStepDefinition $step, array $metadata): FlowStepDefinition
+    {
+        return new FlowStepDefinition(
+            id: $step->id,
+            label: $step->label,
+            critical: $step->critical,
+            retriable: $step->retriable,
+            dependsOn: $step->dependsOn,
+            metadata: $metadata,
+            retryPolicy: $step->retryPolicy,
+        );
     }
 
     /**

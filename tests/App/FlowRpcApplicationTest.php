@@ -13,6 +13,7 @@ use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
 use Webong\WorkFlow\App\FlowRpcApplication;
 use Webong\WorkFlow\App\RpcFailure;
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;
@@ -239,7 +240,7 @@ final class FlowRpcApplicationTest extends TestCase
         self::assertSame(1, $executor->calls);
     }
 
-    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null): FlowRpcApplication
+    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null, bool $ows = false): FlowRpcApplication
     {
         $definitions ??= new class implements FlowDefinitionProvider {
             public function definition(string $flowKey): FlowDefinition
@@ -268,6 +269,87 @@ final class FlowRpcApplicationTest extends TestCase
             $definitions,
             $stores,
             new FlowExecutionDispatcher([new InlineFlowExecutionDriver(new FlowRunner(), [$executor])]),
+            ows: $ows ? new OpenWorkflow() : null,
         );
+    }
+
+    public function testOwsMethodsAreUnavailableUnlessTheHostEnablesThem(): void
+    {
+        $application = $this->application($this->noopExecutor(), ows: false);
+
+        $this->expectException(RpcFailure::class);
+        $this->expectExceptionMessage('OWS document registration is not enabled');
+        $application->invoke('ows.validate', ['document' => 'version: "1.0.3"']);
+    }
+
+    public function testOwsValidateReturnsACapabilityReport(): void
+    {
+        $application = $this->application($this->noopExecutor(), ows: true);
+        $yaml = <<<'YAML'
+version: "1.0.3"
+document:
+  dsl: "1.0.3"
+  namespace: com.example
+  name: rpc-flow
+  version: "1.0.0"
+do:
+  - first:
+      call: firstTask
+YAML;
+
+        $result = $application->invoke('ows.validate', ['document' => $yaml]);
+
+        self::assertTrue($result['report']['valid']);
+        self::assertSame('1.0.3', $result['report']['version']);
+        self::assertNull($result['report']['flow_definition']); // validateOnly does not translate
+    }
+
+    public function testOwsRegisterReturnsTheTranslatedDefinition(): void
+    {
+        $application = $this->application($this->noopExecutor(), ows: true);
+        $yaml = <<<'YAML'
+version: "1.0.3"
+document:
+  dsl: "1.0.3"
+  namespace: com.example
+  name: rpc-flow
+  version: "1.0.0"
+do:
+  - first:
+      call: firstTask
+  - second:
+      call: secondTask
+YAML;
+
+        $result = $application->invoke('ows.register', ['document' => $yaml]);
+
+        self::assertTrue($result['report']['valid']);
+        self::assertNotNull($result['report']['flow_definition']);
+        self::assertSame('com.example/rpc-flow@1.0.0', $result['report']['flow_definition']['key']);
+        self::assertCount(2, $result['report']['flow_definition']['steps']);
+    }
+
+    public function testOwsRegisterRejectsAnInvalidDocument(): void
+    {
+        $application = $this->application($this->noopExecutor(), ows: true);
+
+        $this->expectException(RpcFailure::class);
+        $this->expectExceptionMessage('Invalid document');
+        $application->invoke('ows.register', ['document' => '   ']);
+    }
+
+    private function noopExecutor(): FlowStepExecutor
+    {
+        return new class implements FlowStepExecutor {
+            public function supports(FlowStepDefinition $step): bool
+            {
+                return false;
+            }
+
+            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            {
+                return StepResult::completed();
+            }
+        };
     }
 }

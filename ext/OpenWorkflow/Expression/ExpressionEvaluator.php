@@ -130,6 +130,12 @@ final class ExpressionEvaluator
         $expression = preg_replace('/\\$task\b/', '.task', $expression);
         $expression = preg_replace('/\\$context\b/', '.context', $expression);
 
+        // $input is the OWS task input — the jq `.` in evaluateAgainstInput.
+        // $input.field -> .field, $input[0] -> .[0], bare $input -> .
+        $expression = preg_replace('/\\$input(?=\.)/', '', $expression);
+        $expression = preg_replace('/\\$input(?=\[)/', '.', $expression);
+        $expression = preg_replace('/\\$input\b/', '.', $expression);
+
         return $expression;
     }
 

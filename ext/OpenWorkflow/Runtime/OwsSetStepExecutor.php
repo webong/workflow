@@ -7,6 +7,8 @@ namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsRouting;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
@@ -42,19 +44,21 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         FlowContext $context,
         StepState $previous,
     ): StepResult {
+        if ($context instanceof OwsWorkflowContext && OwsRouting::shouldSkip($step, $context)) {
+            return StepResult::skipped('not selected by switch routing');
+        }
+
         $set = $step->metadata['ows_set'] ?? [];
         if (! is_array($set) || $set === []) {
             $this->recordOutput($context, $step->id, null);
             return StepResult::completed('set task with no assignments', ['ows_output' => null]);
         }
 
-        // Raw input: the chain predecessor's output, or the workflow input
-        // for the first task in the chain.
-        $predecessor = $step->metadata['ows_previous'] ?? null;
+        // Raw input: the most recent executed predecessor's output, or the
+        // workflow input for the first task in the chain. Routing-skipped
+        // steps are transparent.
         $rawInput = $context instanceof OwsWorkflowContext
-            ? (is_string($predecessor) && $predecessor !== ''
-                ? $context->stepOutput($predecessor)
-                : $context->workflowInput())
+            ? OwsRouting::resolveChainInput($step, $context)
             : $context->all();
 
         // Task input: `input.from` filters the raw input (jq `.`).

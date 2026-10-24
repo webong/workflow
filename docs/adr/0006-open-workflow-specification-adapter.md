@@ -131,12 +131,19 @@ requires the remaining runtime capabilities.
 - Does not affect existing Laravel, Temporal, or standalone RPC deployments.
 - Does not change `FlowDefinition`, `FlowRun`, or `FlowStateStore` contracts.
 
-## Open questions
+## Resolved decisions (from the open questions)
 
-1. **Which `jq` evaluator?** Options: `jmespath/jmespath.php` (JMESPath, not jq), a WebAssembly jq, or a minimal custom evaluator for the subset we need. Decision affects dependency weight and correctness.
-2. **YAML parsing dependency?** If we accept YAML, add `symfony/yaml` or similar. JSON-only is simpler.
-3. **Registration API shape:** Should `registerOwsDefinition` return a `FlowDefinition` directly, or only the `CapabilityReport` with the host calling a separate import step?
-4. **Namespace collision:** If a host registers `acme/order@1.0.0` via OWS and also defines `acme/order@1` via native PHP, how do we distinguish? Composite key `namespace/name@version` helps but host policy is needed.
+- **Expression evaluator**: `wikimedia/zest-jq` as the pure-PHP backend, with an automatic fallback chain that prefers a system `jq` binary when present (`EvaluatorBackend` / `MultiBackendEvaluator`). Full jq 1.8+ semantics (regex, `reduce`, modules) come free where the binary exists; zest-jq covers the import subset everywhere else. Known zest-jq gaps (no `not()`, no `test()` regex) are reported as unsupported expressions.
+- **YAML**: accepted, via `symfony/yaml`; JSON and YAML share one parse path.
+- **Registration API**: `registerOwsDefinition` returns the `CapabilityReport` including the translated `FlowDefinition`; persistence stays with the host. The RPC surface (`ows.validate` / `ows.register` on `FlowRpcApplication`) exposes this only when the host binds an `OpenWorkflow` instance — opt-in.
+- **Namespace collision**: OWS identities register under the composite key `namespace/name@semver` (e.g. `com.acme/order@1.0.0`); native flows keep the host's `key@integer` format. The key spaces are disjoint by construction; hosts wanting both for the same logical flow manage the mapping themselves.
+- **Version pinning**: pinned to the tagged `specification@v1.0.3`. `main` already carries 1.0.4 examples but no stable release exists; re-pinning is a deliberate decision with migration tests.
+
+## Delivered runtime capabilities (beyond import)
+
+- **Data flow (1.0.3 model)**: `set` tasks with `input.from` filtering, output-chain semantics, `then`-ordered chains, composite flattening — `ext/OpenWorkflow/Runtime`, executed through the core FlowRunner via the opt-in `FlowMutableContext` contract.
+- **Switch routing**: case evaluation (first matching `when`; a case without `when` is the explicit default), routing decisions recorded per switch, unselected branches skip, `then: end`/`exit` termination, and the CTK-pinned behavior that an unmatched switch yields the unmodified input as workflow output.
+- Deliberately still unsupported (host-owned or requiring larger runtime work per ADR 0001): `for` (dynamic step generation), `fork` (parallel branches), `wait`/`listen` (durable timers and event correlation), `try`/`catch` (scoped recovery), `emit` (host event infrastructure), `raise` (fault injection), sub-workflows.
 
 ## References
 

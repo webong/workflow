@@ -8,8 +8,8 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 
 | Status | Scenarios |
 | --- | --- |
-| static pass | 13 / 21 |
-| static assertion failure | 2 / 21 |
+| static pass | 15 / 21 |
+| static assertion failure | 0 / 21 |
 | unsupported feature | 6 / 21 |
 | validation failure | 0 / 21 |
 | parse failure | 0 / 21 |
@@ -36,8 +36,8 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 | raise | Raise task with inline error | unsupported feature | required | `raise (/do/0)` |
 | set | Set Task | static pass | required | — |
 | switch | Switch task with explicit default case | static pass | required | — |
-| switch | Switch task with implicit default case | static assertion failure | required | failed: switchColor should run last |
-| switch | Switch task with matching case | static assertion failure | required | failed: setRed should run last |
+| switch | Switch task with implicit default case | static pass | required | — |
+| switch | Switch task with matching case | static pass | required | — |
 | try | Try Handle Caught Error | unsupported feature | required | `try (/do/0)` |
 | try | Try Raise Uncaught Error | unsupported feature | required | `try (/do/0)` |
 

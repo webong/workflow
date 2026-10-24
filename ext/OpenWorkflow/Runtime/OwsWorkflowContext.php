@@ -30,6 +30,9 @@ final class OwsWorkflowContext implements FlowMutableContext
     /** @var ArrayObject<string, mixed> */
     private ArrayObject $outputs;
 
+    /** @var ArrayObject<string, array{terminated: bool, chosen: ?string, skip: list<string>, switch_position: int}> */
+    private ArrayObject $routing;
+
     /** @var array<string, mixed> */
     private array $overlay = [];
 
@@ -40,6 +43,7 @@ final class OwsWorkflowContext implements FlowMutableContext
     {
         $this->data = new ArrayObject($input);
         $this->outputs = new ArrayObject([]);
+        $this->routing = new ArrayObject([]);
     }
 
     public function has(string $key): bool
@@ -101,6 +105,15 @@ final class OwsWorkflowContext implements FlowMutableContext
     }
 
     /**
+     * Whether a step's output was recorded (distinct from an output that is
+     * legitimately null).
+     */
+    public function hasOutput(string $taskId): bool
+    {
+        return isset($this->outputs[$taskId]) || array_key_exists($taskId, $this->outputs->getArrayCopy());
+    }
+
+    /**
      * The most recently recorded task output — the OWS workflow output for
      * the sequential subset (last executed task's transformed output).
      * ArrayObject preserves insertion order, shared across overlay views.
@@ -109,5 +122,22 @@ final class OwsWorkflowContext implements FlowMutableContext
     {
         $all = $this->outputs->getArrayCopy();
         return $all === [] ? null : end($all);
+    }
+
+    /**
+     * Record a switch task's routing decision so subsequent chain steps know
+     * whether to skip (see OwsRouting).
+     *
+     * @param array{terminated: bool, chosen: ?string, skip: list<string>, switch_position: int} $decision
+     */
+    public function recordRouting(string $switchId, array $decision): void
+    {
+        $this->routing[$switchId] = $decision;
+    }
+
+    /** @return array<string, array{terminated: bool, chosen: ?string, skip: list<string>, switch_position: int}> */
+    public function routingDecisions(): array
+    {
+        return $this->routing->getArrayCopy();
     }
 }
