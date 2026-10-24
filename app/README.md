@@ -2,9 +2,9 @@
 
 Use this module when a **trusted backend** needs to start and inspect flows
 over HTTP instead of embedding the PHP library. A Go server embeds FrankenPHP
-and exposes JSON-RPC 2.0; PHP owns definitions, execution, and transitions;
-PostgreSQL stores the state. This is a separate deployment under `app/`, not
-an `ext/` adapter.
+and exposes JSON-RPC 2.0; PHP owns definitions, execution, and transitions.
+The included bootstrap can store state in PostgreSQL, MySQL, or SQLite. This
+is a separate deployment under `app/`, not an `ext/` adapter.
 
 The single `workflowd` process serves `/rpc` and `/healthz`. Its Docker image
 includes the PHP 8.3 runtime and package code; the binary is not a standalone
@@ -15,7 +15,7 @@ publish it to GHCR. See [distributions and releases](../docs/releases.md).
 ## Run the example locally
 
 You need Docker with Compose. From the repository root, start the example
-service and PostgreSQL:
+service and its default PostgreSQL database:
 
 ```sh
 docker compose -f app/compose.yml up -d --build
@@ -126,8 +126,9 @@ callers. `WORKFLOW_PHP_PUBLIC` selects the bundled PHP bridge document root.
 
 `flow.start` currently supports the `inline` execution driver only. The
 Laravel queue and Temporal execution adapters remain separate; this module
-does not silently switch runtimes. It persists an execution claim, runs the
-executor outside the PostgreSQL lock, and saves the result under that claim.
+does not silently switch runtimes. It persists an execution claim, commits
+the database transaction, runs the executor outside the store lock, and saves
+the result under that claim.
 Keep inline work short; return `deferred()` for an external wait and complete
 it through `flow.complete`. External operations still need their own stable
 idempotency keys.
@@ -176,7 +177,9 @@ native PHP headers. Run the PHP suite in the repository's PHP 8.3 test
 container with `make docker-test`.
 The Docker build copies `composer.json` and resolves its dependencies inside
 the image; it does not require the ignored root `composer.lock` to exist in
-a fresh checkout. PHP's root runtime requirement is currently only PHP itself.
+a fresh checkout. The image installs ZIP support so Composer can install
+dist archives, plus the PostgreSQL, MySQL, and SQLite PDO drivers used by the
+included stores.
 
 If a call returns `401`, check the bearer token. A JSON-RPC `-32601` means
 the method is unknown; `-32602` means parameters are invalid. An "Internal

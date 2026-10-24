@@ -68,10 +68,10 @@ final class CtkMatrixGenerator
         $lines[] = '';
         $lines[] = '## Reading this matrix';
         $lines[] = '';
-        $lines[] = '- **static pass** — the document validates, translates to a `FlowDefinition` with no unsupported constructs, and every statically-checkable assertion (task ordering: *runs first / last / before / after*) holds against the translated execution order. It does **not** prove the workflow produces the CTK\'s expected output; that requires a runtime. The adapter ships that runtime for every scenario in this matrix: data/flow tasks run in-process (`ext/OpenWorkflow/Runtime`), and `call: http`/`call: openapi` run over any PSR-18 client (`OwsHttpExecutor`) — verified end-to-end against a mock transport in `tests/OpenWorkflow/OwsRuntimeTest.php`.';
-        $lines[] = '- **unsupported feature** — the document translates, but uses constructs the adapter explicitly rejects (documented in ADR 0006): `for`, `fork`, `wait`/`listen`, `try`/`catch`, `set`, `emit`, `raise`, sub-workflows.';
+        $lines[] = '- **static pass** — the document validates, translates to a `FlowDefinition` with no unsupported constructs, and every statically-checkable assertion (task ordering: *runs first / last / before / after*) holds against the translated execution order. This status alone does **not** prove the workflow produces the CTK\'s expected output; the separate runtime suite exercises the delivered execution behavior.';
+        $lines[] = '- **unsupported feature** — the document uses a construct the adapter explicitly rejects. Current deliberate gaps are durable `wait`/`listen`, sub-workflows (`run: workflow`), and expression forms unsupported by the selected jq backend; the detail column names the blocker.';
         $lines[] = '- **validation failure** — our structural validator rejects the document. These are candidates for either a validator fix (if the construct is legal OWS) or a deliberate rejection (if it is in the unsupported set).';
-        $lines[] = '- **runtime required** — the scenario asserts completion, output, faults, or cancellation. Static translation cannot verify these; they become the test surface for a future executing runtime (Temporal-first, per ADR 0006).';
+        $lines[] = '- **runtime required** — the scenario asserts completion, output, faults, or cancellation, which static translation cannot verify. `tests/OpenWorkflow/OwsRuntimeTest.php` separately exercises the shipped in-process executors, including HTTP/OpenAPI through a mock PSR-18 transport.';
         $lines[] = '';
         $lines[] = '## Path to conformance';
         $lines[] = '';

@@ -146,6 +146,12 @@ final readonly class OwsDocument
 
     public static function fromYaml(string $yaml): self
     {
+        if (! class_exists(Yaml::class)) {
+            throw new InvalidArgumentException(
+                'YAML OWS documents require symfony/yaml; install it or supply JSON.',
+            );
+        }
+
         $data = Yaml::parse($yaml, Yaml::PARSE_DATETIME);
 
         if (! is_array($data)) {

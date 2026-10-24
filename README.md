@@ -22,7 +22,7 @@ provider responses and an in-memory store.
 From this repository, use the PHP 8.3 container:
 
 ```sh
-docker compose -f docker-compose.test.yml up -d php postgres redis
+docker compose -f docker-compose.test.yml up -d php postgres mysql redis
 docker compose -f docker-compose.test.yml exec -T php composer install
 docker compose -f docker-compose.test.yml exec -T php php examples/channel-setup.php
 ```
@@ -65,6 +65,7 @@ repeated. Starting the process again uses a new run ID.
 | Experimental local executable or in-process shared library | [TypePHP native builds](mod/typephp/README.md) |
 | The same native artifacts without an embedded PHP runtime | [elephc native builds](mod/elephc/README.md) |
 | Temporal execution and durable timers | [Optional Temporal adapter](docs/temporal.md) |
+| Importing Open Workflow Specification 1.0.3 definitions | [OWS validation, execution, and RPC opt-in](docs/open-workflow-specification.md) |
 | Retry, cancellation, concurrency, and upgrade rules | [Run lifecycle](docs/run-lifecycle.md) |
 | Package development and testing | [Development guide](docs/development.md) |
 | CI platforms, downloadable artifacts, and Docker releases | [Distributions and releases](docs/releases.md) |
@@ -117,6 +118,7 @@ make docker-test
 make docker-down
 ```
 
-The test stack uses PHP 8.3, PostgreSQL, and Redis. See
+The test stack uses PHP 8.3, PostgreSQL, MySQL, SQLite, Redis, and the system
+`jq` backend. See
 [upgrade notes](docs/run-lifecycle.md#upgrading-existing-integrations) for the
 run-aware RPC and authorization changes.

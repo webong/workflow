@@ -8,10 +8,13 @@ make docker-test
 make docker-down
 ```
 
-`make docker-test` builds/starts PHP 8.3, PostgreSQL, and Redis services and
-runs PHPUnit, PHPStan, and TypeScript contract generation. `make docker-down`
-stops containers without deleting the named volumes. The stack does not use
-CRM containers or volumes.
+`make docker-test` builds/starts PHP 8.3, PostgreSQL, MySQL, and Redis services
+and runs PHPUnit, PHPStan, and TypeScript contract generation. SQLite runs in
+the PHP container against a temporary database. The image also contains the
+system `jq` binary, so CI exercises the preferred OWS expression backend
+instead of only the pure-PHP fallback. `make docker-down` stops containers
+without deleting the named volumes. The stack does not use CRM containers or
+volumes.
 
 To run just the executable PHP example in the test container after the stack
 has been started:
@@ -20,11 +23,15 @@ has been started:
 docker compose -f docker-compose.test.yml run --rm php php examples/order-approval.php
 ```
 
-The production-like store tests use the Compose PostgreSQL and Redis
-services. Outside Compose, set `WORK_FLOW_POSTGRES_DSN`,
+The production-like store tests use the Compose PostgreSQL, MySQL, and Redis
+services; the SQLite store test creates its own temporary file. Outside
+Compose, set `WORK_FLOW_POSTGRES_DSN`,
 `WORK_FLOW_POSTGRES_USER`, `WORK_FLOW_POSTGRES_PASSWORD`,
+`WORK_FLOW_MYSQL_DSN`, `WORK_FLOW_MYSQL_USER`,
+`WORK_FLOW_MYSQL_PASSWORD`,
 `WORK_FLOW_REDIS_HOST`, and `WORK_FLOW_REDIS_PORT` before running
-`tests/Laravel/ProductionFlowStateStoreTest.php`.
+the matching integration tests. The default Docker test command configures
+all of them for you.
 
 For standalone JSON-RPC development, [`app/README.md`](../app/README.md)
 shows how to build the separate Go/FrankenPHP image and exercise its API.
@@ -33,5 +40,7 @@ The image build runs the Go RPC unit tests and vet checks in its builder.
 GitHub Actions also builds the native and RPC images on separate Linux AMD64
 and ARM64 runners. The native image runs parity, C ABI, and Node tests in both
 the compiler image and a clean runtime. The RPC job runs the actual HTTP
-lifecycle against PostgreSQL. [The release guide](releases.md) explains
+lifecycle against PostgreSQL; the package test job also runs the shared PDO
+store contract against PostgreSQL, MySQL, and SQLite. [The release
+guide](releases.md) explains
 artifact downloads, version tags, and publishing permissions.

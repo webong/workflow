@@ -1,55 +1,195 @@
-# Open Workflow Specification: compatibility research
+# Use Open Workflow Specification definitions
 
-Research date: 2026-10-21. This is an assessment, not an implemented feature or conformance claim.
+WorkFlow can validate, translate, and execute a practical subset of Open
+Workflow Specification (OWS) DSL 1.0.3. Use this adapter when workflow authors
+already have OWS JSON or YAML, while keeping WorkFlow's state stores and
+execution drivers unchanged.
 
-## What it offers
+OWS is a definition format. It is not a queue, state store, or hosted workflow
+server. The adapter lives under `ext/OpenWorkflow`, but ships in the same
+`webong/workflow` Composer package.
 
-Open Workflow Specification (OWS) defines a vendor-neutral workflow language, with JSON/YAML definitions, schemas, SDKs, diagram tooling, and multiple runtime implementations. It could give WorkFlow a shared authoring format rather than require every caller to learn our PHP objects or proprietary serialized definition. It is not itself a queue, state store, or hosted execution service. [Project overview](https://open-workflow-specification.org/), [ecosystem roles](https://github.com/open-workflow-specification/specification/blob/main/README.md#ecosystem).
+## Install
 
-## Version and SDK caveats
+The core package is enough for JSON definitions:
 
-- The homepage advertises DSL **1.0.3** and publishes a [JSON Schema](https://open-workflow-specification.org/schemas/1.0.3/workflow.json) using JSON Schema Draft 2020-12. `document` and `do` are required; document identity includes namespace, name, and semantic version.
-- The [v1.0.3 GitHub release](https://github.com/open-workflow-specification/specification/releases/tag/v1.0.3) is marked pre-release, while current `main` examples already use `1.0.4`. Pin an explicit version and source revision; do not treat `main` as the release contract.
-- This is the renamed Serverless Workflow project. The tagged 1.0.3 documents still use that name; current documentation explains the rebrand and lifecycle-event namespace transition. [Tagged DSL](https://github.com/open-workflow-specification/specification/blob/v1.0.3/dsl.md), [current lifecycle-event guidance](https://github.com/open-workflow-specification/specification/blob/main/dsl.md#lifecycle-events).
-- The linked [PHP SDK](https://github.com/open-workflow-specification/sdk-php) explicitly targets **specification 0.8**, not 1.0.3. Its documented role is building, parsing, and validating definitions, not executing them. Installing it would not supply a current OWS runtime. Its README is evidence of the compatibility gap, not proof of project abandonment.
+```sh
+composer require webong/workflow
+```
 
-## Execution semantics that cannot be reduced to renaming fields
+For YAML definitions, also install the optional parser:
 
-The following observations use the tagged 1.0.3 specification:
+```sh
+composer require symfony/yaml
+```
 
-- Tasks execute in declaration order unless control flow redirects them. `then` targets are limited to the current scope.
-- A task's transformed output becomes the next task's raw input. Workflow context is separate and is replaced through `export.as`; input/output validation and transformations occur at specified stages.
-- `jq` is the required default expression language. Implementations need expression arguments and defined error behavior, not just string substitution.
+The expression engine prefers a system `jq` binary when one is available and
+falls back to the included pure-PHP `wikimedia/zest-jq` backend. Production
+hosts should install `jq` when they need its broader expression support.
 
-Source: [DSL concepts, task/data flow, and expressions](https://github.com/open-workflow-specification/specification/blob/v1.0.3/dsl.md).
+For `call: http` or `call: openapi`, provide a PSR-18 client and PSR-17
+request/stream factory. For example:
 
-| Construct | Required meaning relevant to an adapter |
-| --- | --- |
-| `do`, `switch`, `then` | Ordered tasks, conditional routing, and scoped continuation/exit/end. |
-| `for` | Collection iteration with per-item execution, not a fixed one-time node. |
-| `fork` | Concurrent branches; either ordered branch outputs or one winning output when racing. |
-| `wait`, `listen` | Duration waits and external-event consumption/correlation, including one/any/all strategies. |
-| `try`, `catch`, retry policies | Structured error filtering, recovery, attempt/duration limits, backoff, and jitter. |
-| `call`, `run` | Protocol calls and execution of scripts, containers, shell commands, or other workflows. |
+```sh
+composer require guzzlehttp/guzzle guzzlehttp/psr7
+```
 
-Source: [tagged DSL reference](https://github.com/open-workflow-specification/specification/blob/v1.0.3/dsl-reference.md). Supporting a parsed document does not establish these runtime behaviors.
+## Validate and translate a definition
 
-## Conformance and safety
+`registerOwsDefinition()` does not save anything. It returns a capability
+report and translated `FlowDefinition`; the host decides whether to accept and
+persist that definition.
 
-The project provides a [Conformance Test Kit](https://github.com/open-workflow-specification/specification/blob/main/ctk/README.md): Gherkin scenarios with Given/When/Then steps that implementations bind to their own test runner. Its guidance expects all scenarios to pass for conformance. A schema-valid document or a handful of passing scenarios is not sufficient evidence for full compatibility. No OWS tests were executed during this research.
+```php
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 
-Current [expression guidance](https://github.com/open-workflow-specification/specification/blob/main/dsl.md#runtime-expressions) explicitly separates executable expressions in definitions from untrusted input data. An adapter should preserve that separation. Network calls, remote document resolution, secrets, shell commands, and containers also need explicit host authorization and resource limits; adding a parser must not silently grant those capabilities.
+$ows = new OpenWorkflow();
+$report = $ows->registerOwsDefinition($jsonOrYaml);
 
-## Proposed direction for WorkFlow, not an accepted design
+if (! $report->valid) {
+    throw new RuntimeException('The OWS document is invalid');
+}
 
-The current [FlowDefinition](../src/ValueObjects/FlowDefinition.php) uses a fixed acyclic step graph and a positive integer version. That is not the same model as OWS nested task scopes and semantic versions. The current runner also does not provide the OWS previous-task-output pipeline automatically; that behavior must be implemented and tested, not inferred from dependency ordering.
+if ($report->unsupported !== []) {
+    foreach ($report->unsupported as $problem) {
+        printf("%s at %s: %s\n", $problem->feature, $problem->path, $problem->reason);
+    }
 
-1. Keep the existing coordination model and optional runtime adapters. Add OWS support through an optional module such as `ext/OpenWorkflow`, not a new state-store driver.
-2. Start with a validator and capability report against a pinned specification version. Reject unsupported features with document paths; never silently discard them.
-3. Prove a small execution-aware subset before offering imports. Sequential calls still require correct data propagation and output semantics. Preserve OWS namespace/name/semantic-version identity without coercing it into a lossy integer.
-4. Keep definition registration host-controlled. The current RPC contract need not become an unrestricted workflow-upload or code-execution endpoint.
-5. Build fixtures from the pinned CTK and publish a precise supported-feature matrix. Describe the initial product as a limited OWS importer, not a conforming OWS runtime.
-6. Treat loops, nested scopes, event correlation, races, cancellation, and recovery as later runtime work. A full interpreter is a larger product decision, not a small serialization adapter.
-7. Validate each delivery target separately. The [TypePHP native target](../mod/typephp/README.md) compiles the core, excludes optional adapters, and has no arbitrary PHP executor callbacks. A PHP extension module would not automatically become available through the native binary or shared library.
+    throw new RuntimeException('The document needs unsupported capabilities');
+}
 
-Repository context: [core coordination ADR](adr/0001-core-is-a-coordination-library.md), [run identity ADR](adr/0002-runs-have-identity-and-pinned-definitions.md), [private RPC ADR](adr/0003-rpc-is-private-server-to-server.md), [authoritative state ADR](adr/0004-execution-runtime-owns-authoritative-state.md).
+$definition = $report->flowDefinition;
+```
+
+The translated key preserves the OWS identity as
+`namespace/name@semantic-version`, for example
+`com.example/order-approval@1.0.0`.
+
+## Run a data workflow in PHP
+
+OWS execution uses the normal `FlowRunner`, but it needs an
+`OwsWorkflowContext` and the executors for the task types the definition uses.
+This complete example runs a `set` task:
+
+```php
+use Webong\WorkFlow\Enums\FlowStatus;
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSetStepExecutor;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
+use Webong\WorkFlow\Services\FlowRunner;
+use Webong\WorkFlow\ValueObjects\FlowState;
+
+$document = <<<'YAML'
+document:
+  dsl: '1.0.3'
+  namespace: com.example
+  name: size-label
+  version: '1.0.0'
+do:
+  - makeLabel:
+      set:
+        label: ${ .width * .height }
+YAML;
+
+$report = (new OpenWorkflow())->registerOwsDefinition($document);
+if (! $report->valid || $report->unsupported !== [] || $report->flowDefinition === null) {
+    throw new RuntimeException('OWS definition cannot run');
+}
+
+$context = new OwsWorkflowContext(['width' => 6, 'height' => 7]);
+$state = (new FlowRunner())->run(
+    $report->flowDefinition,
+    new FlowState(FlowStatus::PENDING),
+    $context,
+    [new OwsSetStepExecutor()],
+);
+
+assert($state->status === FlowStatus::COMPLETED);
+assert($context->lastOutput() === ['label' => 42]);
+```
+
+Register only the executors you intend the host to permit:
+
+- `OwsSetStepExecutor` and `OwsSwitchStepExecutor` for data flow and routing.
+- `OwsForExecutor` and `OwsForkExecutor` for data-only iteration and branches.
+- `OwsRaiseExecutor` plus `OwsFaultRecordingExecutor` for faults and catches.
+- `OwsEmitExecutor` to build a CloudEvent envelope. It does not deliver the
+  event; delivery is the host's responsibility.
+- `OwsHttpExecutor` for HTTP/OpenAPI calls. Its PSR-18 client owns timeouts,
+  TLS, redirects, and transport policy. Wrap it in `OwsFaultRecordingExecutor`
+  when OWS catches must handle HTTP failures.
+
+Do not accept arbitrary documents merely because they validate. The executor
+list is the host's capability and security boundary.
+
+## Enable OWS methods over JSON-RPC
+
+The RPC service exposes `ows.validate` and `ows.register` only when the trusted
+bootstrap opts in:
+
+```php
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
+
+return new FlowRpcApplication(
+    definitions: $definitions,
+    stores: $stores,
+    execution: $execution,
+    ows: new OpenWorkflow(),
+);
+```
+
+Then send a string `document` parameter:
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "ows.validate",
+  "params": {"document": "{...OWS JSON...}"}
+}
+```
+
+`ows.validate` returns the report without translating. `ows.register` returns
+the report with `flow_definition`, but despite the method name it still does
+not persist or activate the definition. Your trusted host must review the
+capability report and register the translated definition itself. The bundled
+demo bootstrap leaves both methods disabled.
+
+## Supported and unsupported behavior
+
+The shipped runtime covers the 21 vendored scenarios in the pinned 1.0.3
+fixture set:
+
+- sequential `do` / `then` flow and `switch` routing;
+- `set`, task input filtering, task output filtering, and output chaining;
+- data-only `for` and deterministic `fork` behavior;
+- `try` / `catch`, `raise`, and fault propagation;
+- CloudEvent envelope creation for `emit`;
+- `call: http` and `call: openapi` through a host PSR-18 transport.
+
+The adapter deliberately does not provide durable `wait` / `listen`,
+sub-workflows (`run: workflow`), lifecycle events, or true parallel fork
+execution. Temporal or another host scheduler can supply durable timers and
+event correlation, but that does not make Temporal a state-store driver.
+
+See the generated [capability matrix](open-workflow-ctk-matrix.md) for the
+scenario-by-scenario result. Passing this pinned fixture set is not a claim of
+full OWS conformance; that would require the complete upstream CTK and every
+required runtime behavior.
+
+## Version and security boundaries
+
+- The adapter is pinned to OWS DSL 1.0.3. Upgrading the specification is an
+  explicit compatibility decision, not an automatic dependency update.
+- Definition registration is host-controlled. Never expose document upload or
+  activation directly to untrusted clients.
+- Expressions are executable definition content. Keep user input in workflow
+  data rather than concatenating it into jq expressions.
+- Network access exists only when the host registers `OwsHttpExecutor`; apply
+  normal SSRF controls and restrict the destinations the PSR-18 client can
+  reach.
+- TypePHP and elephc native targets compile the core only. They do not include
+  this optional adapter unless their build is intentionally extended.
+
+The architectural boundary and delivery history are recorded in
+[ADR 0006](adr/0006-open-workflow-specification-adapter.md).

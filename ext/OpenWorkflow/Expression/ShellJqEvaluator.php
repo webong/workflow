@@ -40,39 +40,59 @@ final class ShellJqEvaluator implements EvaluatorBackend
         }
 
         $json = json_encode($inputData, JSON_THROW_ON_ERROR);
-        
-        // Use -n to not read input from stdin, --argjson for input
-        // Actually, we'll pass JSON via stdin
-        $cmd = sprintf(
-            '%s -n --argjson input %s \'%s\'',
-            escapeshellcmd($this->jqBinary),
-            escapeshellarg($json),
-            $expression
+
+        $process = proc_open(
+            [$this->jqBinary, '--compact-output', $expression],
+            [
+                0 => ['pipe', 'r'],
+                1 => ['pipe', 'w'],
+                2 => ['pipe', 'w'],
+            ],
+            $pipes,
         );
 
-        $output = [];
-        $returnVar = 0;
-        exec($cmd, $output, $returnVar);
+        if (! is_resource($process)) {
+            throw ExpressionEvaluationException::evaluationError($expression, 'Unable to start jq');
+        }
+
+        fwrite($pipes[0], $json);
+        fclose($pipes[0]);
+        $output = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+        $returnVar = proc_close($process);
 
         if ($returnVar !== 0) {
             throw ExpressionEvaluationException::evaluationError(
                 $expression,
-                'jq exited with code ' . $returnVar . ': ' . implode("\n", $output)
+                'jq exited with code '.$returnVar.': '.trim($error),
             );
         }
 
-        $result = implode("\n", $output);
-        if ($result === '') {
+        $lines = preg_split('/\R/', trim($output));
+        if (! is_array($lines)) {
+            throw ExpressionEvaluationException::evaluationError($expression, 'Unable to parse jq output');
+        }
+
+        $lines = array_values(array_filter($lines, static fn (string $line): bool => $line !== ''));
+        if ($lines === []) {
             return null;
         }
 
-        // Try to decode as JSON
         try {
-            return json_decode($result, true, 512, JSON_THROW_ON_ERROR);
-        } catch (\JsonException) {
-            // Return raw string if not valid JSON
-            return $result;
+            $results = array_map(
+                static fn (string $line): mixed => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
+                $lines,
+            );
+        } catch (\JsonException $exception) {
+            throw ExpressionEvaluationException::evaluationError(
+                $expression,
+                'jq returned invalid JSON: '.$exception->getMessage(),
+            );
         }
+
+        return count($results) === 1 ? $results[0] : $results;
     }
 
     public function analyze(string $expression): array

@@ -30,7 +30,8 @@
         "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps.",
         "temporal/sdk": "Required to use the optional Temporal WorkFlow adapter.",
         "guzzlehttp/guzzle": "PSR-18 client for the optional OWS HTTP/OpenAPI executor.",
-        "php-http/curl-client": "Alternative PSR-18 client for the optional OWS HTTP/OpenAPI executor."
+        "php-http/curl-client": "Alternative PSR-18 client for the optional OWS HTTP/OpenAPI executor.",
+        "symfony/yaml": "Required when Open Workflow Specification definitions are supplied as YAML instead of JSON."
     },
     "autoload": {
         "psr-4": {

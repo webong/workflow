@@ -44,6 +44,9 @@ jobs:
       WORK_FLOW_POSTGRES_DSN: pgsql:host=127.0.0.1;port=5432;dbname=workflow_test
       WORK_FLOW_POSTGRES_USER: workflow
       WORK_FLOW_POSTGRES_PASSWORD: workflow
+      WORK_FLOW_MYSQL_DSN: mysql:host=127.0.0.1;port=3306;dbname=workflow_test
+      WORK_FLOW_MYSQL_USER: workflow
+      WORK_FLOW_MYSQL_PASSWORD: workflow
       WORK_FLOW_REDIS_HOST: 127.0.0.1
       WORK_FLOW_REDIS_PORT: 6379
     services:
@@ -60,6 +63,20 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_DATABASE: workflow_test
+          MYSQL_USER: workflow
+          MYSQL_PASSWORD: workflow
+          MYSQL_ROOT_PASSWORD: workflow
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uworkflow -pworkflow"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
       redis:
         image: redis:7
         ports:
@@ -74,7 +91,7 @@ jobs:
       - uses: shivammathur/setup-php@v2
         with:
           php-version: '8.3'
-          extensions: pdo_pgsql, redis
+          extensions: pdo_mysql, pdo_pgsql, pdo_sqlite, redis
           coverage: none
       - run: composer validate --strict
       - run: composer install --no-interaction --prefer-dist

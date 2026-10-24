@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # Open Workflow Specification adapter as an optional module
@@ -27,8 +27,8 @@ Key constraints from research:
 
 ### Version and schema
 
-- Pin **OWS DSL 1.0.3** at the tagged release `specification@v1.0.3` (commit `a1b2c3d...`). Update only by explicit decision with migration tests.
-- Bundle the JSON Schema (`workflow.json`) for validation. Use a PHP JSON Schema validator (e.g., `justinrainbow/json-schema` or equivalent) — no external service calls during validation.
+- Pin **OWS DSL 1.0.3** at the tagged release `specification@v1.0.3`. Update only by explicit decision with migration tests.
+- Bundle the JSON Schema (`workflow.json`) as the versioned reference and perform local structural validation. Validation makes no external service calls.
 
 ### Validation and capability reporting
 
@@ -40,18 +40,22 @@ Key constraints from research:
   - `warnings: string[]` — non-blocking issues (e.g., deprecated fields)
 - **Never silently discard** unsupported constructs. Rejection is explicit and documented.
 
-### Supported subset (initial milestone)
+### Shipped execution subset
 
-Only the following are executed. Everything else is reported as unsupported.
+The adapter currently translates and executes the following capabilities:
 
 | Feature | OWS construct | Execution behavior |
 |---------|---------------|-------------------|
 | Sequential tasks | `do: [task1, task2, ...]` | Tasks run in declaration order; each task's transformed output becomes the next task's raw input. |
 | Conditional routing | `switch` / `case` / `default` / `then` | Evaluate `switch` expression; run matching `case` body; `then` targets `exit`, `end`, or a task in the current scope. |
-| Task execution | `call`, `run` (HTTP/script/container) | Map to host-provided `FlowStepExecutor` implementations. Expression evaluation uses `jq` semantics via a safe evaluator (no arbitrary code). |
+| Data transforms | `set`, `input.from`, `output.as` | Apply jq-compatible transforms and pass the transformed output to the next task. |
+| Iteration and branching | data-only `for`, `fork` | Iterate in-process; forks are deterministic and do not promise parallel execution. |
+| Recovery and faults | `try`/`catch`, `raise` | Record OWS faults and route matching catches. |
+| Events | `emit` | Build a CloudEvent envelope; delivery remains host-owned. |
+| HTTP operations | `call: http`, `call: openapi` | Execute through a host-provided PSR-18 client. |
 | Identity | `document.namespace`, `document.name`, `document.version` (semver) | Preserved without coercion to integer. Registered under a composite key `namespace/name@version`. |
 
-**Explicitly excluded from initial scope:** `for` (iteration), `fork` (concurrency), `wait`/`listen` (durations/events), `try`/`catch` (structured error handling), `run` (sub-workflow), lifecycle events, expressions beyond what the safe evaluator supports.
+**Still excluded:** durable `wait`/`listen`, `run: workflow`, true parallel fork execution, lifecycle events, and expressions the selected jq backend cannot evaluate. Unsupported constructs are reported; they are never silently discarded.
 
 ### Data flow implementation
 
@@ -98,17 +102,16 @@ covering this subset execute end-to-end against their pinned expected output
 - Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why (delivered: `docs/open-workflow-ctk-matrix.md`, pinned by test so it cannot go stale).
 - Describe the initial product as a **limited OWS importer**, not a conforming OWS runtime.
 
-Current CTK posture (see the matrix for detail): 13 of 21 scenarios validate,
-translate, and hold their statically-checkable assertions; 2 more (switch
-routing) translate but their ordering assertions depend on runtime case
-evaluation; 6 remain blocked by constructs outside the subset (`for`, `fork`,
-`try`/`catch`, `emit`, `raise`). Scenarios covered by the data subset execute
-end-to-end against their pinned expected output; full conformance still
-requires the remaining runtime capabilities.
+Current CTK posture (see the matrix for detail): all 21 vendored, pinned
+scenarios validate and pass their statically-checkable assertions. The runtime
+suite separately exercises their delivered behavior and expected outputs.
+This is still not a full OWS conformance claim: the repository does not run
+the complete upstream CTK runner, and the durable features listed below remain
+unsupported.
 
 ### Future work (not in this ADR)
 
-- Loops (`for`), concurrency (`fork`), event correlation (`wait`/`listen`), structured recovery (`try`/`catch`), sub-workflows (`run`), and lifecycle events require additional runtime capabilities in the core or execution drivers.
+- Durable event correlation (`wait`/`listen`), sub-workflows (`run: workflow`), true parallel fork execution, and lifecycle events require additional runtime capabilities in the core or execution drivers.
 - Full CTK conformance is a separate product milestone.
 - The TypePHP native target (`mod/typephp`) compiles the core and excludes optional adapters. This module would not be available through the native binary/shared library unless explicitly included in the build.
 
@@ -122,7 +125,7 @@ requires the remaining runtime capabilities.
 
 ### Negative
 
-- Initial subset is small. Teams expecting full OWS support will be disappointed unless the supported-feature matrix is consulted.
+- The adapter is deliberately incomplete. Teams must consult the supported-feature matrix before accepting arbitrary OWS documents.
 - Maintaining the pinned version and CTK fixtures adds ongoing maintenance.
 - Expression evaluation (`jq`) requires a safe, well-tested implementation or a carefully sandboxed dependency.
 

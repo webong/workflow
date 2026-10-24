@@ -60,8 +60,20 @@ class MultiBackendEvaluatorTest extends TestCase
             workflowData: ['order' => ['id' => 42]],
         );
 
-        $this->assertSame('zest-jq', $evaluator->getActiveBackend());
+        $this->assertContains($evaluator->getActiveBackend(), ['shell-jq', 'zest-jq']);
         $this->assertSame(42, $evaluator->evaluate('.order.id'));
+    }
+
+    public function testShellJqEvaluatesTheProvidedJsonInputAndStreamsResults(): void
+    {
+        $shell = new ShellJqEvaluator();
+        if (! $shell->isAvailable()) {
+            self::markTestSkipped('The jq binary is not available.');
+        }
+
+        self::assertSame(123, $shell->evaluate('.order.id', ['order' => ['id' => 123]]));
+        self::assertSame([1, 2, 3], $shell->evaluate('.items[]', ['items' => [1, 2, 3]]));
+        self::assertSame("O'Reilly", $shell->evaluate('.author', ['author' => "O'Reilly"]));
     }
 
     public function testVariablePreprocessingThroughBackend(): void
