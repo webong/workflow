@@ -148,7 +148,7 @@ jobs:
         env:
           ARCH: ${{ matrix.arch }}
         run: docker save "workflow-native:ci-$ARCH" | gzip > "dist/native/workflow-native-image-linux-$ARCH.tar.gz"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: distribution-native-${{ matrix.arch }}
           path: dist/native/*.gz*
@@ -201,7 +201,7 @@ jobs:
         run: |
           mkdir -p dist/rpc
           docker save "$WORKFLOW_RPC_IMAGE" | gzip > "dist/rpc/workflow-rpc-image-linux-$ARCH.tar.gz"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         with:
           name: distribution-rpc-${{ matrix.arch }}
@@ -221,7 +221,7 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           pattern: distribution-*
           merge-multiple: true
