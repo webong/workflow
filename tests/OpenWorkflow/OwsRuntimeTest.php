@@ -130,6 +130,125 @@ class OwsRuntimeTest extends TestCase
         self::assertSame('step_execution_failed', $step->metadata['error_code'] ?? null);
     }
 
+    public function testCtkForTaskScenario(): void
+    {
+        // Iteration with named item and default index, accumulated per item
+        $this->executeAndAssertOutput('for: For Task');
+    }
+
+    public function testCtkForkCompetingBranchesScenario(): void
+    {
+        // compete: true - the first completing (declared) branch wins; the
+        // scenario pins the output shape ("colors containing 1 items") rather
+        // than a full output document.
+        $scenario = $this->scenarios['branch: Fork Task With Competing Concurrent Sub Tasks'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors());
+        self::assertSame('completed', $state->status->value);
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        self::assertArrayHasKey('colors', $output);
+        self::assertCount(1, $output['colors']);
+    }
+
+    public function testCtkEmitTaskScenario(): void
+    {
+        $scenario = $this->scenarios['emit: Emit Task'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors());
+        self::assertSame('completed', $state->status->value);
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        // Generated CloudEvent envelope properties
+        foreach (['id', 'specversion', 'time', 'source', 'type', 'data'] as $property) {
+            self::assertArrayHasKey($property, $output, "Emitted event must have '{$property}'");
+        }
+        self::assertSame('1.0', $output['specversion']);
+        self::assertSame('https://fake-source.com', $output['source']);
+        self::assertSame('com.fake-source.user.greeted.v1', $output['type']);
+        self::assertSame(['greetings' => 'Hello John Doe!'], $output['data']);
+    }
+
+    public function testCtkRaiseTaskScenario(): void
+    {
+        $scenario = $this->scenarios['raise: Raise task with inline error'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors());
+
+        $step = $state->steps['raiseError'] ?? null;
+        self::assertNotNull($step);
+        self::assertSame('failed', $step->status->value);
+        self::assertFalse($step->retriable ?? true);
+        self::assertSame(
+            [
+                'status' => 400,
+                'type' => 'https://serverlessworkflow.io/errors/types/compliance',
+                'title' => 'Compliance Error',
+                'instance' => '/do/0/raiseError',
+            ],
+            $step->metadata['ows_error'] ?? null,
+        );
+        // The workflow faults: a critical non-retriable failure is blocked
+        // (it cannot be retried and needs operator intervention).
+        self::assertSame('blocked', $state->status->value);
+    }
+
+    public function testCtkTryHandleCaughtErrorScenario(): void
+    {
+        $scenario = $this->scenarios['try: Try Handle Caught Error'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        // The http call faults with a 404 communication error, which the
+        // catch filters match; the handler runs with the error bound.
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors(404));
+
+        self::assertSame('completed', $state->status->value);
+        self::assertSame('failed', $state->steps['getPet']->status->value);
+        self::assertSame('completed', $state->steps['setError']->status->value);
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        self::assertSame('https://serverlessworkflow.io/dsl/errors/types/communication', $output['error']['type'] ?? null);
+        self::assertSame(404, $output['error']['status'] ?? null);
+        self::assertSame('/do/0/tryGetPet/try/0/getPet', $output['error']['instance'] ?? null);
+    }
+
+    public function testCtkTryRaiseUncaughtErrorScenario(): void
+    {
+        $scenario = $this->scenarios['try: Try Raise Uncaught Error'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        // The catch filters expect 503; the fault is 404 - uncaught: the
+        // workflow faults with the original error.
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors(404));
+
+        self::assertSame('blocked', $state->status->value);
+        $step = $state->steps['setError'] ?? null;
+        self::assertNotNull($step);
+        self::assertSame('failed', $step->status->value);
+        self::assertSame(404, $step->metadata['ows_error']['status'] ?? null);
+    }
+
     public function testSetExecutorIgnoresNonOwsSteps(): void
     {
         $executor = new OwsSetStepExecutor();
@@ -180,6 +299,47 @@ YAML)->flowDefinition;
     }
 
     /**
+     * The full OWS runtime executor set. The fault-recording decorator wraps
+     * a fake host executor standing in for `call: http`, so try/catch faults
+     * route to their catch handlers.
+     *
+     * @return list<\Webong\WorkFlow\Contracts\FlowStepExecutor>
+     */
+    private function executors(int $httpStatus = 404): array
+    {
+        $http = new class($httpStatus) implements \Webong\WorkFlow\Contracts\FlowStepExecutor {
+            public function __construct(private readonly int $status) {}
+
+            public function supports(\Webong\WorkFlow\ValueObjects\FlowStepDefinition $step): bool
+            {
+                return ($step->metadata['ows_type'] ?? null) === 'call';
+            }
+
+            public function execute(
+                \Webong\WorkFlow\ValueObjects\FlowStepDefinition $step,
+                \Webong\WorkFlow\Contracts\FlowContext $context,
+                \Webong\WorkFlow\ValueObjects\StepState $previous,
+            ): \Webong\WorkFlow\ValueObjects\StepResult {
+                throw new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsFaultException(
+                    errorType: 'https://serverlessworkflow.io/dsl/errors/types/communication',
+                    errorStatus: $this->status,
+                    errorTitle: 'Communication Error',
+                );
+            }
+        };
+
+        return [
+            new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsFaultRecordingExecutor($http),
+            new OwsSetStepExecutor(),
+            new OwsSwitchStepExecutor(),
+            new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsForExecutor(),
+            new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsForkExecutor(),
+            new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsEmitExecutor(),
+            new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsRaiseExecutor(),
+        ];
+    }
+
+    /**
      * Translate, execute, and assert the workflow data against the CTK's
      * expected output.
      */
@@ -198,7 +358,7 @@ YAML)->flowDefinition;
             $report->flowDefinition,
             new FlowState(FlowStatus::PENDING),
             $context,
-            [new OwsSetStepExecutor(), new OwsSwitchStepExecutor()],
+            $this->executors(),
         );
 
         $failed = array_filter($state->steps, static fn ($s) => $s->status->value === 'failed');

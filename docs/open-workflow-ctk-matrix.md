@@ -8,9 +8,9 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 
 | Status | Scenarios |
 | --- | --- |
-| static pass | 15 / 21 |
+| static pass | 21 / 21 |
 | static assertion failure | 0 / 21 |
-| unsupported feature | 6 / 21 |
+| unsupported feature | 0 / 21 |
 | validation failure | 0 / 21 |
 | parse failure | 0 / 21 |
 | **Total** | **21** |
@@ -19,7 +19,7 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 
 | Feature | Scenario | Status | Runtime | Blocking features / detail |
 | --- | --- | --- | --- | --- |
-| branch | Fork Task With Competing Concurrent Sub Tasks | unsupported feature | required | `fork (/do/0)` |
+| branch | Fork Task With Competing Concurrent Sub Tasks | static pass | required | — |
 | call | Call HTTP Using Basic Authentication | static pass | required | — |
 | call | Call HTTP With Content Output | static pass | required | — |
 | call | Call HTTP With Response Output | static pass | required | — |
@@ -29,17 +29,17 @@ WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).
 | data-flow | Output Filtering | static pass | required | — |
 | data-flow | Use Non-object Output | static pass | required | — |
 | do | Task With Sequential Sub Tasks | static pass | required | — |
-| emit | Emit Task | unsupported feature | required | `emit (/do/0)` |
+| emit | Emit Task | static pass | required | — |
 | flow | Explicit Sequence Flow | static pass | required | — |
 | flow | Implicit Sequence Flow | static pass | required | — |
-| for | For Task | unsupported feature | required | `for (/do/0)` |
-| raise | Raise task with inline error | unsupported feature | required | `raise (/do/0)` |
+| for | For Task | static pass | required | — |
+| raise | Raise task with inline error | static pass | required | — |
 | set | Set Task | static pass | required | — |
 | switch | Switch task with explicit default case | static pass | required | — |
 | switch | Switch task with implicit default case | static pass | required | — |
 | switch | Switch task with matching case | static pass | required | — |
-| try | Try Handle Caught Error | unsupported feature | required | `try (/do/0)` |
-| try | Try Raise Uncaught Error | unsupported feature | required | `try (/do/0)` |
+| try | Try Handle Caught Error | static pass | required | — |
+| try | Try Raise Uncaught Error | static pass | required | — |
 
 ## Reading this matrix
 

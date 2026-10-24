@@ -98,10 +98,10 @@ final class OwsValidator
         }
 
         // Check for unsupported task types
-        $unsupportedTypes = ['for', 'fork', 'wait', 'listen', 'try', 'raise', 'emit'];
+        $unsupportedTypes = ['wait', 'listen'];
         foreach ($unsupportedTypes as $type) {
             if (isset($task[$type])) {
-                $warnings[] = "{$path}/{$type}: '{$type}' is not supported in initial subset";
+                $warnings[] = "{$path}/{$type}: '{$type}' requires a durable runtime (Temporal or host scheduler)";
             }
         }
 

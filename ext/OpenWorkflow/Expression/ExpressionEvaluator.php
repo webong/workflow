@@ -136,6 +136,11 @@ final class ExpressionEvaluator
         $expression = preg_replace('/\\$input(?=\[)/', '.', $expression);
         $expression = preg_replace('/\\$input\b/', '.', $expression);
 
+        // Remaining runtime-expression arguments (iteration items like $color,
+        // $index, catch bindings like $err, ...) are provided by the executor
+        // as an `owsVARS` object merged into the evaluation input.
+        $expression = preg_replace('/\\$([a-zA-Z_][a-zA-Z0-9_]*)\b/', '.owsVARS.$1', $expression);
+
         return $expression;
     }
 

@@ -48,6 +48,10 @@ final class OwsSetStepExecutor implements FlowStepExecutor
             return StepResult::skipped('not selected by switch routing');
         }
 
+        if (is_array($step->metadata['ows_catch'] ?? null)) {
+            return $this->executeCatch($step, $context);
+        }
+
         $set = $step->metadata['ows_set'] ?? [];
         if (! is_array($set) || $set === []) {
             $this->recordOutput($context, $step->id, null);
@@ -81,6 +85,70 @@ final class OwsSetStepExecutor implements FlowStepExecutor
             "set " . count($output) . " data key(s)",
             ['ows_output' => $output],
         );
+    }
+
+    /**
+     * Catch handler: skips when the try body completed cleanly, runs with the
+     * error bound when the fault matches the filters, and faults the workflow
+     * when the error is uncaught.
+     */
+    private function executeCatch(FlowStepDefinition $step, FlowContext $context): StepResult
+    {
+        if (! $context instanceof OwsWorkflowContext) {
+            throw new \RuntimeException("OWS catch task '{$step->id}' requires an OwsWorkflowContext.");
+        }
+
+        $catch = $step->metadata['ows_catch'];
+        $tryId = is_string($catch['try_id'] ?? null) ? $catch['try_id'] : '';
+        $fault = $context->faultFor($tryId);
+
+        if ($fault === null) {
+            return StepResult::skipped('try completed without a catchable fault');
+        }
+
+        if (! $this->faultMatches($fault, is_array($catch['filters'] ?? null) ? $catch['filters'] : [])) {
+            // Uncaught: the workflow faults with the original error.
+            return StepResult::failed(
+                error: is_string($fault['title'] ?? null) ? $fault['title'] : 'Uncaught error',
+                retriable: false,
+                metadata: ['ows_error' => $fault],
+            );
+        }
+
+        // Handle: run the set assignments with the error bound to the
+        // catch's variable name (`as: err`).
+        $as = is_string($catch['as'] ?? null) && $catch['as'] !== '' ? $catch['as'] : 'error';
+        $rawInput = OwsRouting::resolveChainInput($step, $context);
+        $set = is_array($step->metadata['ows_set'] ?? null) ? $step->metadata['ows_set'] : [];
+
+        $output = [];
+        foreach ($set as $key => $value) {
+            $output[(string) $key] = is_string($value)
+                ? OwsDataTaskPipeline::evaluateOrLiteralValue($value, $rawInput, [$as => $fault], $this->expressionEvaluator, $step->id)
+                : $value;
+        }
+
+        $context->consumeFault($tryId);
+        $context->recordStepOutput($step->id, $output);
+
+        return StepResult::completed('caught error handled', ['ows_output' => $output]);
+    }
+
+    /**
+     * @param array<string, mixed> $fault
+     * @param array<string, mixed> $filters
+     */
+    private function faultMatches(array $fault, array $filters): bool
+    {
+        $type = $filters['type'] ?? null;
+        if (is_string($type) && ($fault['type'] ?? null) !== $type) {
+            return false;
+        }
+        $status = $filters['status'] ?? null;
+        if (is_int($status) && (int) ($fault['status'] ?? -1) !== $status) {
+            return false;
+        }
+        return true;
     }
 
     /**

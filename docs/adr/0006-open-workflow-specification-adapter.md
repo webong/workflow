@@ -143,7 +143,12 @@ requires the remaining runtime capabilities.
 
 - **Data flow (1.0.3 model)**: `set` tasks with `input.from` filtering, output-chain semantics, `then`-ordered chains, composite flattening — `ext/OpenWorkflow/Runtime`, executed through the core FlowRunner via the opt-in `FlowMutableContext` contract.
 - **Switch routing**: case evaluation (first matching `when`; a case without `when` is the explicit default), routing decisions recorded per switch, unselected branches skip, `then: end`/`exit` termination, and the CTK-pinned behavior that an unmatched switch yields the unmodified input as workflow output.
-- Deliberately still unsupported (host-owned or requiring larger runtime work per ADR 0001): `for` (dynamic step generation), `fork` (parallel branches), `wait`/`listen` (durable timers and event correlation), `try`/`catch` (scoped recovery), `emit` (host event infrastructure), `raise` (fault injection), sub-workflows.
+- **Iteration (`for`)**: data-only bodies execute in-process per item with the named item (`each`) and default `$index` bound as runtime-expression arguments; each iteration's input is the previous iteration's output, so bodies accumulate. Non-data bodies are rejected explicitly.
+- **Fork (`fork`)**: data-only branches execute with `compete: true` first-branch-wins semantics (deterministic for data tasks) or ordered execution otherwise. True parallelism belongs to the executing runtime.
+- **Structured recovery (`try`/`catch`)**: body tasks flatten scoped for fault recording (non-critical — the catch decides the run's fate); catch handlers are data-only chain roots gated by runtime faults, with the error bound to the catch's variable name and CTK-pinned `instance` document paths; unmatched errors fault the workflow.
+- **Emit (`emit`)**: builds the CloudEvent envelope (generated id/time, specversion 1.0, evaluated source/type/data) as task output; actual delivery stays host-owned.
+- **Raise (`raise`)**: faults the workflow with the error payload and its document-path `instance`; faults raised inside a try scope are catchable.
+- Deliberately still unsupported: `wait`/`listen` (durable timers and event correlation require a durable runtime — Temporal or a host scheduler) and sub-workflows (`run: workflow`).
 
 ## References
 

@@ -149,21 +149,25 @@ document:
   version: "1.0.0"
 do:
   - iterate:
-      for: ".items[]"
+      for:
+        each: item
+        in: ".items[]"
       do:
         - process-item:
-            call: processItem
+            set:
+              processed: '${ .processed + [ $item ] }'
 YAML;
 
         $report = $this->openWorkflow->registerOwsDefinition($yaml);
 
         $this->assertTrue($report->valid);
-        // for loop is unsupported
+        // for with a data-only body is supported
         $unsupportedFeatures = array_map(
             fn (UnsupportedFeature $u) => $u->feature,
             $report->unsupported
         );
-        $this->assertContains('for', $unsupportedFeatures);
+        $this->assertNotContains('for', $unsupportedFeatures);
+        $this->assertContains('for', $report->supported);
     }
 
     public function testRegisterWithFork(): void
@@ -187,11 +191,13 @@ YAML;
         $report = $this->openWorkflow->registerOwsDefinition($yaml);
 
         $this->assertTrue($report->valid);
+        // fork with data-only branches is supported
         $unsupportedFeatures = array_map(
             fn ($u) => $u->feature,
             $report->unsupported
         );
-        $this->assertContains('fork', $unsupportedFeatures);
+        $this->assertNotContains('fork', $unsupportedFeatures);
+        $this->assertContains('fork', $report->supported);
     }
 
     public function testRegisterWithWait(): void
@@ -220,6 +226,8 @@ YAML;
 
     public function testRegisterWithTryCatch(): void
     {
+        // Real 1.0.3 shape: `try` is a task list, `catch` a sibling with
+        // error filters and its own (data-only) handler tasks.
         $yaml = <<<'YAML'
 version: "1.0.3"
 document:
@@ -230,12 +238,18 @@ document:
 do:
   - risky:
       try:
+        - attempt:
+            call: riskyCall
+      catch:
+        errors:
+          with:
+            type: https://example.com/errors/communication
+            status: 404
+        as: err
         do:
-          - attempt:
-              call: riskyCall
-        catch:
           - handle:
-              call: handleError
+              set:
+                handled: '${ $err }'
 YAML;
 
         $report = $this->openWorkflow->registerOwsDefinition($yaml);
@@ -245,7 +259,8 @@ YAML;
             fn ($u) => $u->feature,
             $report->unsupported
         );
-        $this->assertContains('try', $unsupportedFeatures);
+        $this->assertNotContains('try', $unsupportedFeatures);
+        $this->assertContains('try', $report->supported);
     }
 
     public function testValidateOnly(): void

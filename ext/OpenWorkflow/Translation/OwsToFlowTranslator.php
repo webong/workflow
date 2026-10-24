@@ -33,6 +33,12 @@ final class OwsToFlowTranslator
         'set',
         'input-filtering',
         'data-merge',
+        'for',
+        'fork',
+        'try',
+        'raise',
+        'emit',
+        'error-instance-paths',
         'expression:property-access',
         'expression:array-projection',
         'expression:pipe',
@@ -104,6 +110,18 @@ final class OwsToFlowTranslator
         $previousTaskId = null;
 
         foreach ($this->orderTasks($tasks) as $index => $task) {
+            // Try tasks flatten into body steps (scoped for fault recording)
+            // followed by catch steps, which are chain roots gated by runtime
+            // faults rather than dependencies.
+            if (isset($task['try']) && is_array($task['try'])) {
+                $translated = $this->translateTry($task, $index, $previousTaskId);
+                foreach ($translated['steps'] as $tryStep) {
+                    $steps[] = $tryStep;
+                }
+                $previousTaskId = $translated['lastId'];
+                continue;
+            }
+
             // Composite tasks (nested `do` without a primary task type) flatten
             // into top-level steps so nested constructs go through the same
             // translation, flagging, and execution paths as top-level tasks.
@@ -117,7 +135,7 @@ final class OwsToFlowTranslator
                 continue;
             }
 
-            $step = $this->translateTask($task, $index, $previousTaskId, $document);
+            $step = $this->translateTask($task, $index, $previousTaskId);
             if ($step !== null) {
                 $steps[] = $step;
                 $previousTaskId = $step->id;
@@ -311,7 +329,7 @@ final class OwsToFlowTranslator
         return true;
     }
 
-    private function translateTask(array $task, int $index, ?string $previousTaskId, OwsDocument $document): ?FlowStepDefinition
+    private function translateTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition
     {
         // Handle different task types
         if (isset($task['call'])) {
@@ -334,55 +352,26 @@ final class OwsToFlowTranslator
         }
 
         if (isset($task['for'])) {
-            $this->addUnsupported(
-                feature: 'for',
-                path: "/do/{$index}",
-                reason: 'Iteration (for) not supported in initial subset'
-            );
-            return null;
+            return $this->translateForTask($task, $index, $previousTaskId);
         }
 
         if (isset($task['fork'])) {
-            $this->addUnsupported(
-                feature: 'fork',
-                path: "/do/{$index}",
-                reason: 'Concurrency (fork) not supported in initial subset'
-            );
-            return null;
+            return $this->translateForkTask($task, $index, $previousTaskId);
+        }
+
+        if (isset($task['emit'])) {
+            return $this->translateEmitTask($task, $index, $previousTaskId);
+        }
+
+        if (isset($task['raise'])) {
+            return $this->translateRaiseTask($task, $index, $previousTaskId);
         }
 
         if (isset($task['wait']) || isset($task['listen'])) {
             $this->addUnsupported(
                 feature: 'wait|listen',
                 path: "/do/{$index}",
-                reason: 'Duration waits and event listening not supported in initial subset'
-            );
-            return null;
-        }
-
-        if (isset($task['try'])) {
-            $this->addUnsupported(
-                feature: 'try',
-                path: "/do/{$index}",
-                reason: 'Structured error handling (try/catch) not supported in initial subset'
-            );
-            return null;
-        }
-
-        if (isset($task['emit'])) {
-            $this->addUnsupported(
-                feature: 'emit',
-                path: "/do/{$index}",
-                reason: 'Event emission (emit) not supported in initial subset'
-            );
-            return null;
-        }
-
-        if (isset($task['raise'])) {
-            $this->addUnsupported(
-                feature: 'raise',
-                path: "/do/{$index}",
-                reason: 'Error raising (raise) not supported in initial subset'
+                reason: 'Durable waits and event listening require a durable runtime (Temporal or host scheduler)'
             );
             return null;
         }
@@ -577,6 +566,284 @@ final class OwsToFlowTranslator
             critical: (bool) ($task['critical'] ?? true),
             retriable: (bool) ($task['retriable'] ?? false),
             dependsOn: $dependsOn,
+            metadata: $metadata,
+            retryPolicy: $this->translateRetryPolicy($task['retry'] ?? null),
+        );
+    }
+
+    /**
+     * A body/branch pipeline is executable in-process when every task in it is
+     * a pure data transformation (`set`). Anything else needs host executors
+     * inside the compound task, which requires the executing runtime.
+     *
+     * @param list<mixed> $tasks
+     */
+    private function isDataOnlyPipeline(array $tasks): bool
+    {
+        foreach (OwsDocument::normalizeTaskItems($tasks) as $task) {
+            $primary = ['call', 'run', 'switch', 'for', 'fork', 'wait', 'listen', 'try', 'emit', 'raise', 'do'];
+            foreach ($primary as $type) {
+                if (isset($task[$type])) {
+                    return false;
+                }
+            }
+            if (! isset($task['set'])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Iteration (`for`): executable in-process when the body is a data-only
+     * pipeline; the executor evaluates the collection and runs the body per
+     * item with the iteration item and index bound as runtime-expression
+     * arguments.
+     */
+    private function translateForTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "for_{$index}");
+        $for = is_array($task['for'] ?? null) ? $task['for'] : [];
+        $body = is_array($task['do'] ?? null) ? $task['do'] : [];
+
+        if (! $this->isDataOnlyPipeline($body)) {
+            $this->addUnsupported(
+                feature: 'for',
+                path: "/do/{$index}",
+                reason: 'Iteration with non-data body tasks (call/run/...) requires the executing runtime'
+            );
+            return null;
+        }
+
+        $metadata = [
+            'ows_type' => 'for',
+            'ows_for' => [
+                'each' => is_string($for['each'] ?? null) ? $for['each'] : 'item',
+                'in' => is_string($for['in'] ?? null) ? $for['in'] : null,
+            ],
+            // Raw body: the pipeline normalizes task items exactly once.
+            'ows_body' => array_values($body),
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        return $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
+    }
+
+    /**
+     * Fork (`fork`): executable in-process for data-only branches. With
+     * `compete: true` the first completing branch wins (deterministic for
+     * data tasks); otherwise branches run in order and the last output flows.
+     */
+    private function translateForkTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "fork_{$index}");
+        $fork = is_array($task['fork'] ?? null) ? $task['fork'] : [];
+        $branches = is_array($fork['branches'] ?? null) ? $fork['branches'] : [];
+
+        foreach ($branches as $branchIndex => $branch) {
+            // A branch is a single task item (`- branchName: {...}`), not a
+            // task list — wrap it for normalization.
+            if (! is_array($branch) || ! $this->isDataOnlyPipeline([$branch])) {
+                $this->addUnsupported(
+                    feature: 'fork',
+                    path: "/do/{$index}/fork/branches/{$branchIndex}",
+                    reason: 'Fork with non-data branch tasks (call/run/...) requires the executing runtime'
+                );
+                return null;
+            }
+        }
+
+        $metadata = [
+            'ows_type' => 'fork',
+            'ows_fork' => [
+                'compete' => (bool) ($fork['compete'] ?? false),
+                // Raw branches, each as a single-item list: the pipeline
+                // normalizes task items exactly once.
+                'branches' => array_values(array_map(
+                    static fn ($branch): array => [is_array($branch) ? $branch : []],
+                    $branches,
+                )),
+            ],
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        return $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
+    }
+
+    /**
+     * Emit (`emit`): builds the CloudEvent envelope as the task output.
+     * Actual event delivery stays host-owned; the executor only produces the
+     * envelope with generated id and time.
+     */
+    private function translateEmitTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "emit_{$index}");
+        $emit = is_array($task['emit'] ?? null) ? $task['emit'] : [];
+        $event = is_array($emit['event'] ?? null) ? $emit['event'] : [];
+        $with = is_array($event['with'] ?? null) ? $event['with'] : [];
+
+        $metadata = [
+            'ows_type' => 'emit',
+            'ows_emit' => [
+                'source' => $with['source'] ?? null,
+                'type' => $with['type'] ?? null,
+                'data' => is_array($with['data'] ?? null) ? $with['data'] : [],
+            ],
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        return $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
+    }
+
+    /**
+     * Raise (`raise`): faults the workflow with the error payload; the error's
+     * `instance` is the raise task's document path (pinned by the CTK).
+     */
+    private function translateRaiseTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "raise_{$index}");
+        $raise = is_array($task['raise'] ?? null) ? $task['raise'] : [];
+        $error = is_array($raise['error'] ?? null) ? $raise['error'] : [];
+
+        $metadata = [
+            'ows_type' => 'raise',
+            'ows_raise' => [
+                'status' => is_int($error['status'] ?? null) ? $error['status'] : null,
+                'type' => is_string($error['type'] ?? null) ? $error['type'] : null,
+                'title' => is_string($error['title'] ?? null) ? $error['title'] : null,
+                'instance' => "/do/{$index}/{$taskId}",
+            ],
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        $step = $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
+
+        return new FlowStepDefinition(
+            id: $step->id,
+            label: $step->label,
+            critical: true,
+            retriable: false,
+            dependsOn: $step->dependsOn,
+            metadata: $step->metadata,
+            retryPolicy: null,
+        );
+    }
+
+    /**
+     * Try (`try`): body tasks flatten into the chain, each tagged with the try
+     * scope (id + document path) so faults can be recorded and routed to the
+     * catch handler; catch tasks are chain roots (no scheduling dependencies)
+     * gated by runtime faults — they skip when the body completed cleanly,
+     * run with the error bound when it matches the filters, and fault the
+     * workflow when it does not.
+     *
+     * @return array{steps: list<FlowStepDefinition>, lastId: ?string}
+     */
+    private function translateTry(array $task, int $index, ?string $previousTaskId): array
+    {
+        $tryId = (string) ($task['name'] ?? "try_{$index}");
+        $try = is_array($task['try'] ?? null) ? $task['try'] : [];
+        $catch = is_array($task['catch'] ?? null) ? $task['catch'] : [];
+        $tryInstance = "/do/{$index}/{$tryId}";
+
+        $steps = [];
+        $bodyLastId = $previousTaskId;
+
+        // Try body: flattened, scoped.
+        foreach (OwsDocument::normalizeTaskItems($try) as $bodyIndex => $bodyTask) {
+            $step = $this->translateTask($bodyTask, $bodyIndex, $bodyLastId);
+            if ($step === null) {
+                continue;
+            }
+            $metadata = [
+                ...$step->metadata,
+                'ows_try_scope' => ['id' => $tryId, 'instance' => $tryInstance],
+                'ows_instance' => "{$tryInstance}/try/{$bodyIndex}/{$step->id}",
+            ];
+            // Faults inside a try are handled by its catch handler: a failed
+            // body step is non-critical, so the run's fate is decided by
+            // whether the catch handles the error (OWS semantics).
+            $steps[] = new FlowStepDefinition(
+                id: $step->id,
+                label: $step->label,
+                critical: false,
+                retriable: $step->retriable,
+                dependsOn: $step->dependsOn,
+                metadata: $metadata,
+                retryPolicy: $step->retryPolicy,
+            );
+            $bodyLastId = $step->id;
+        }
+
+        // Catch handler tasks: chain roots gated by faults.
+        $catchTasksRaw = is_array($catch['do'] ?? null) ? $catch['do'] : [];
+        $filters = is_array($catch['errors']['with'] ?? null) ? $catch['errors']['with'] : [];
+        $as = is_string($catch['as'] ?? null) ? $catch['as'] : 'error';
+
+        $lastId = $bodyLastId;
+        foreach ($catchTasksRaw as $catchIndex => $rawCatchTask) {
+            // The raw check must happen before normalization: a normalized
+            // item re-normalized would misread its `set` map as a task.
+            if (! $this->isDataOnlyPipeline([$rawCatchTask])) {
+                $this->addUnsupported(
+                    feature: 'try',
+                    path: "/do/{$index}/{$tryId}/catch/do/{$catchIndex}",
+                    reason: 'Catch handlers with non-data tasks (call/run/...) require the executing runtime'
+                );
+                continue;
+            }
+            $catchTask = OwsDocument::normalizeTaskItems([$rawCatchTask])[0] ?? [];
+            $catchId = (string) ($catchTask['name'] ?? "catch_{$catchIndex}");
+            $metadata = [
+                'ows_type' => 'set',
+                'ows_set' => is_array($catchTask['set'] ?? null) ? $catchTask['set'] : [],
+                'ows_catch' => [
+                    'try_id' => $tryId,
+                    'filters' => [
+                        'type' => is_string($filters['type'] ?? null) ? $filters['type'] : null,
+                        'status' => is_int($filters['status'] ?? null) ? $filters['status'] : null,
+                    ],
+                    'as' => $as,
+                ],
+                'ows_instance' => "{$tryInstance}/catch/{$catchIndex}/{$catchId}",
+                'ows_original_index' => $index,
+                'ows_previous' => $bodyLastId,
+            ];
+            $steps[] = new FlowStepDefinition(
+                id: $catchId,
+                label: $catchId,
+                critical: true,
+                retriable: false,
+                dependsOn: [], // chain root: eligibility is gated by the fault, not the body's completion
+                metadata: $metadata,
+                retryPolicy: null,
+            );
+            $lastId = $catchId;
+        }
+
+        return ['steps' => $steps, 'lastId' => $lastId];
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @param array<string, mixed> $metadata
+     */
+    private function chainStep(string $taskId, array $task, array $metadata, int $index, ?string $previousTaskId): FlowStepDefinition
+    {
+        return new FlowStepDefinition(
+            id: $taskId,
+            label: $taskId,
+            critical: (bool) ($task['critical'] ?? true),
+            retriable: (bool) ($task['retriable'] ?? false),
+            dependsOn: $this->computeDependsOn($task, $previousTaskId),
             metadata: $metadata,
             retryPolicy: $this->translateRetryPolicy($task['retry'] ?? null),
         );

@@ -33,6 +33,9 @@ final class OwsWorkflowContext implements FlowMutableContext
     /** @var ArrayObject<string, array{terminated: bool, chosen: ?string, skip: list<string>, switch_position: int}> */
     private ArrayObject $routing;
 
+    /** @var ArrayObject<string, array<string, mixed>> */
+    private ArrayObject $faults;
+
     /** @var array<string, mixed> */
     private array $overlay = [];
 
@@ -44,6 +47,7 @@ final class OwsWorkflowContext implements FlowMutableContext
         $this->data = new ArrayObject($input);
         $this->outputs = new ArrayObject([]);
         $this->routing = new ArrayObject([]);
+        $this->faults = new ArrayObject([]);
     }
 
     public function has(string $key): bool
@@ -139,5 +143,30 @@ final class OwsWorkflowContext implements FlowMutableContext
     public function routingDecisions(): array
     {
         return $this->routing->getArrayCopy();
+    }
+
+    /**
+     * Record a task fault scoped to its enclosing try task (empty scope for
+     * unscoped faults), consumed by catch handlers.
+     *
+     * @param array<string, mixed> $fault
+     */
+    public function recordFault(string $tryId, array $fault): void
+    {
+        $this->faults[$tryId] = $fault;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function faultFor(string $tryId): ?array
+    {
+        return $this->faults[$tryId] ?? null;
+    }
+
+    /**
+     * Mark a fault handled so later catch tasks in the same scope skip.
+     */
+    public function consumeFault(string $tryId): void
+    {
+        unset($this->faults[$tryId]);
     }
 }
