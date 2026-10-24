@@ -217,7 +217,7 @@ class OwsRuntimeTest extends TestCase
         // The http call faults with a 404 communication error, which the
         // catch filters match; the handler runs with the error bound.
         $context = new OwsWorkflowContext($scenario->input ?? []);
-        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors(404));
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors($this->petstoreRoutes(404)));
 
         self::assertSame('completed', $state->status->value);
         self::assertSame('failed', $state->steps['getPet']->status->value);
@@ -240,13 +240,120 @@ class OwsRuntimeTest extends TestCase
         // The catch filters expect 503; the fault is 404 - uncaught: the
         // workflow faults with the original error.
         $context = new OwsWorkflowContext($scenario->input ?? []);
-        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors(404));
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $this->executors($this->petstoreRoutes(404)));
 
         self::assertSame('blocked', $state->status->value);
         $step = $state->steps['setError'] ?? null;
         self::assertNotNull($step);
         self::assertSame('failed', $step->status->value);
         self::assertSame(404, $step->metadata['ows_error']['status'] ?? null);
+    }
+
+    private function runHttpScenario(string $key, ?array &$captured = null, ?FakeHttpClient &$clientRef = null): array
+    {
+        $scenario = $this->scenarios[$key] ?? null;
+        self::assertNotNull($scenario, "CTK scenario '{$key}' not found");
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $client = null;
+        $executors = $this->executors($this->petstoreRoutes(), $client);
+        $clientRef = $client;
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, $executors);
+        $captured = $client?->captured ?? []; // after the run: the client records during it
+
+        self::assertSame('completed', $state->status->value, "Run '{$key}' must complete");
+
+        return [$state, $context, $scenario];
+    }
+
+    public function testCtkCallHttpWithContentOutput(): void
+    {
+        // URI interpolation from top-level input; default output = content;
+        // output.as filters to the first item.
+        [$state, $context] = $this->runHttpScenario('call: Call HTTP With Content Output');
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        foreach (['id', 'name', 'status'] as $property) {
+            self::assertArrayHasKey($property, $output);
+        }
+        self::assertSame(1, $output['id']);
+    }
+
+    public function testCtkCallHttpWithResponseOutput(): void
+    {
+        // with.output: response -> request echo + headers + statusCode + content
+        [$state, $context] = $this->runHttpScenario('call: Call HTTP With Response Output');
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        foreach (['request', 'headers', 'statusCode', 'content'] as $property) {
+            self::assertArrayHasKey($property, $output);
+        }
+        self::assertSame('GET', $output['request']['method']);
+        self::assertSame('https://petstore.swagger.io/v2/pet/1', $output['request']['uri']);
+        self::assertSame(200, $output['statusCode']);
+        self::assertSame(1, $output['content']['id']);
+    }
+
+    public function testCtkCallHttpUsingBasicAuthentication(): void
+    {
+        // Basic auth with runtime-expression credentials; URI interpolated.
+        [$state, $context, $scenario] = $this->runHttpScenario('call: Call HTTP Using Basic Authentication');
+
+        $output = $context->lastOutput();
+        self::assertSame(['authenticated' => true], $output);
+    }
+
+    public function testCtkCallSendsBasicAuthHeader(): void
+    {
+        $captured = null;
+        $this->runHttpScenario('call: Call HTTP Using Basic Authentication', $captured);
+
+        self::assertNotEmpty($captured);
+        $authorization = $captured[0]['headers']['Authorization'] ?? '';
+        self::assertSame('Basic ' . base64_encode('serverless-workflow:conformance-test'), $authorization);
+        self::assertStringContainsString('/basic-auth/serverless-workflow/conformance-test', $captured[0]['uri']);
+    }
+
+    public function testCtkCallOpenApiWithContentOutput(): void
+    {
+        // OpenAPI document fetch + operation resolution + parameters; the
+        // output.as length expression yields a non-object output.
+        [$state, $context] = $this->runHttpScenario('call: Call OpenAPI With Content Output');
+
+        self::assertSame(2, $context->lastOutput());
+    }
+
+    public function testCtkCallOpenApiWithResponseOutput(): void
+    {
+        [$state, $context] = $this->runHttpScenario('call: Call OpenAPI With Response Output');
+
+        $output = $context->lastOutput();
+        self::assertIsArray($output);
+        self::assertSame('GET', $output['request']['method']);
+        self::assertSame(200, $output['statusCode']);
+        self::assertSame(1, $output['content']['id']);
+    }
+
+    public function testCtkDataFlowOutputFilteringScenario(): void
+    {
+        // output.as on the call task filters the response to the id
+        [$state, $context] = $this->runHttpScenario('data-flow: Output Filtering');
+
+        self::assertSame(1, $context->lastOutput());
+    }
+
+    public function testCtkDataFlowUseNonObjectOutputScenario(): void
+    {
+        // Two chained calls; the second binds \$input (the previous task's
+        // output) alongside `.` (its own raw output) in output.as.
+        [$state, $context] = $this->runHttpScenario('data-flow: Use Non-object Output');
+
+        self::assertSame(['ids' => [1, 2]], $context->lastOutput());
     }
 
     public function testSetExecutorIgnoresNonOwsSteps(): void
@@ -299,34 +406,21 @@ YAML)->flowDefinition;
     }
 
     /**
-     * The full OWS runtime executor set. The fault-recording decorator wraps
-     * a fake host executor standing in for `call: http`, so try/catch faults
-     * route to their catch handlers.
+     * The full OWS runtime executor set, with the real PSR-18 HTTP executor
+     * behind a mock transport (so `call: http`/`call: openapi` faults route
+     * to catch handlers through the actual fault path).
      *
+     * @param array<string, \Psr\Http\Message\ResponseInterface> $routes uri substring -> response
+     * @param list<array{method: string, uri: string, headers: array<string, string>}> $captured
      * @return list<\Webong\WorkFlow\Contracts\FlowStepExecutor>
      */
-    private function executors(int $httpStatus = 404): array
+    private function executors(array $routes = [], ?FakeHttpClient &$client = null): array
     {
-        $http = new class($httpStatus) implements \Webong\WorkFlow\Contracts\FlowStepExecutor {
-            public function __construct(private readonly int $status) {}
-
-            public function supports(\Webong\WorkFlow\ValueObjects\FlowStepDefinition $step): bool
-            {
-                return ($step->metadata['ows_type'] ?? null) === 'call';
-            }
-
-            public function execute(
-                \Webong\WorkFlow\ValueObjects\FlowStepDefinition $step,
-                \Webong\WorkFlow\Contracts\FlowContext $context,
-                \Webong\WorkFlow\ValueObjects\StepState $previous,
-            ): \Webong\WorkFlow\ValueObjects\StepResult {
-                throw new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsFaultException(
-                    errorType: 'https://serverlessworkflow.io/dsl/errors/types/communication',
-                    errorStatus: $this->status,
-                    errorTitle: 'Communication Error',
-                );
-            }
-        };
+        $client ??= new FakeHttpClient($routes);
+        $http = new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsHttpExecutor(
+            $client,
+            new \GuzzleHttp\Psr7\HttpFactory(),
+        );
 
         return [
             new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsFaultRecordingExecutor($http),
@@ -336,6 +430,38 @@ YAML)->flowDefinition;
             new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsForkExecutor(),
             new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsEmitExecutor(),
             new \Webong\WorkFlow\OpenWorkflow\Runtime\OwsRaiseExecutor(),
+        ];
+    }
+
+    /**
+     * The default petstore-like route table for the vendored call scenarios.
+     *
+     * @return array<string, \Psr\Http\Message\ResponseInterface>
+     */
+    private function petstoreRoutes(int $getPetByNameStatus = 404): array
+    {
+        $json = static fn (mixed $data, int $status = 200): \Psr\Http\Message\ResponseInterface =>
+            (new \GuzzleHttp\Psr7\HttpFactory())->createResponse($status)
+                ->withHeader('Content-Type', 'application/json')
+                ->withBody((new \GuzzleHttp\Psr7\HttpFactory())->createStream(json_encode($data)));
+
+        return [
+            'findByStatus' => $json([
+                ['id' => 1, 'name' => 'Max', 'status' => 'available'],
+                ['id' => 2, 'name' => 'Snowy', 'status' => 'available'],
+            ]),
+            '/pet/1' => $json(['id' => 1, 'name' => 'Max', 'status' => 'available']),
+            '/pet/2' => $json(['id' => 2, 'name' => 'Snowy', 'status' => 'available']),
+            'basic-auth' => $json(['authenticated' => true]),
+            'swagger.json' => $json([
+                'openapi' => '3.0.0',
+                'servers' => [['url' => 'https://petstore.swagger.io/v2']],
+                'paths' => [
+                    '/pet/findByStatus' => ['get' => ['operationId' => 'findPetsByStatus']],
+                    '/pet/{petId}' => ['get' => ['operationId' => 'getPetById']],
+                ],
+            ]),
+            'getPetByName' => $json(['code' => $getPetByNameStatus], $getPetByNameStatus),
         ];
     }
 

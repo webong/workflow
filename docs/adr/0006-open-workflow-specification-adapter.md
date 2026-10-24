@@ -148,6 +148,7 @@ requires the remaining runtime capabilities.
 - **Structured recovery (`try`/`catch`)**: body tasks flatten scoped for fault recording (non-critical — the catch decides the run's fate); catch handlers are data-only chain roots gated by runtime faults, with the error bound to the catch's variable name and CTK-pinned `instance` document paths; unmatched errors fault the workflow.
 - **Emit (`emit`)**: builds the CloudEvent envelope (generated id/time, specversion 1.0, evaluated source/type/data) as task output; actual delivery stays host-owned.
 - **Raise (`raise`)**: faults the workflow with the error payload and its document-path `instance`; faults raised inside a try scope are catchable.
+- **HTTP transport (`call: http`, `call: openapi`)**: `OwsHttpExecutor` runs protocol calls over any PSR-18 client (host-owned transport; adapter-owned semantics) — method, endpoint URI with simple `{placeholder}` interpolation, headers, query, JSON body, basic/bearer authentication with runtime expressions, `content`/`response` output modes, task-base `output.as` filtering with `$input` bound, and non-2xx responses faulting as OWS communication errors (catchable). `call: openapi` resolves the document, operationId, and parameters through the same client.
 - Deliberately still unsupported: `wait`/`listen` (durable timers and event correlation require a durable runtime — Temporal or a host scheduler) and sub-workflows (`run: workflow`).
 
 ## References

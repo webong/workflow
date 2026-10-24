@@ -130,15 +130,10 @@ final class ExpressionEvaluator
         $expression = preg_replace('/\\$task\b/', '.task', $expression);
         $expression = preg_replace('/\\$context\b/', '.context', $expression);
 
-        // $input is the OWS task input — the jq `.` in evaluateAgainstInput.
-        // $input.field -> .field, $input[0] -> .[0], bare $input -> .
-        $expression = preg_replace('/\\$input(?=\.)/', '', $expression);
-        $expression = preg_replace('/\\$input(?=\[)/', '.', $expression);
-        $expression = preg_replace('/\\$input\b/', '.', $expression);
-
-        // Remaining runtime-expression arguments (iteration items like $color,
-        // $index, catch bindings like $err, ...) are provided by the executor
-        // as an `owsVARS` object merged into the evaluation input.
+        // Remaining runtime-expression arguments — $input (the task input,
+        // bound by executors), iteration items like $color, catch bindings
+        // like $err, ... — are provided as an `owsVARS` object merged into
+        // the evaluation input.
         $expression = preg_replace('/\\$([a-zA-Z_][a-zA-Z0-9_]*)\b/', '.owsVARS.$1', $expression);
 
         return $expression;

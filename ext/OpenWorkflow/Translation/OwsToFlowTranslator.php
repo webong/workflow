@@ -387,15 +387,25 @@ final class OwsToFlowTranslator
 
         $dependsOn = $this->computeDependsOn($task, $previousTaskId);
 
-        // Extract input/output transformations
-        $inputExpr = $task['with'] ?? $task['input'] ?? null;
-        $outputExpr = $task['export'] ?? $task['output'] ?? null;
+        // Task-base transformations: `input.from` filters the raw input;
+        // `output.as` (from the top-level `output` map) filters the task's
+        // raw output. The full `with` map (method/endpoint/headers/...)
+        // travels as metadata for the protocol executor.
+        $inputExpr = isset($task['input']['from']) && is_string($task['input']['from'])
+            ? $task['input']['from']
+            : null;
+        $outputExpr = isset($task['output']['as']) && is_string($task['output']['as'])
+            ? $task['output']['as']
+            : null;
+        $with = is_array($task['with'] ?? null) ? $task['with'] : [];
 
         $metadata = [
             'ows_type' => 'call',
             'ows_call' => $call,
+            'ows_with' => $with,
             'ows_input_expression' => $inputExpr,
             'ows_output_expression' => $outputExpr,
+            'ows_instance' => "/do/{$index}/{$taskId}",
             'ows_original_index' => $index,
             'ows_previous' => $previousTaskId,
         ];

@@ -175,7 +175,7 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         }
 
         try {
-            return $this->expressionEvaluator->evaluateAgainstInput($expression, $input);
+            return OwsDataTaskPipeline::evaluate($expression, $input, [], $this->expressionEvaluator, $taskId);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 "OWS set task '{$taskId}' failed to evaluate expression '{$expression}': {$e->getMessage()}",

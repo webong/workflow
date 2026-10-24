@@ -87,13 +87,21 @@ final class OwsDataTaskPipeline
             return null;
         }
 
-        // Runtime-expression arguments ride alongside the data as `owsVARS`.
-        $evalInput = is_array($input)
-            ? [...$input, 'owsVARS' => $vars]
-            : ['owsVARS' => $vars];
+        // Runtime-expression arguments ($input = the task input, iteration
+        // items, catch bindings) are substituted as JSON literals before
+        // evaluation, keeping the jq `.` identical to the raw input — an
+        // owsVARS merge would corrupt list inputs into objects.
+        $vars = $vars + ['input' => $input]; // caller bindings win
+        foreach ($vars as $name => $value) {
+            $expression = preg_replace(
+                '/\$' . preg_quote((string) $name, '/') . '\b/',
+                json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
+                $expression,
+            ) ?? $expression;
+        }
 
         try {
-            return $evaluator->evaluateAgainstInput($expression, $evalInput);
+            return $evaluator->evaluateAgainstInput($expression, $input);
         } catch (\Throwable $e) {
             throw new \RuntimeException(
                 ($scope !== '' ? "OWS task '{$scope}': " : '') . "failed to evaluate expression '{$expression}': {$e->getMessage()}",

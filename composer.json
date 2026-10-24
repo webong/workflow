@@ -5,9 +5,13 @@
     "license": "MIT",
     "require": {
         "php": "^8.3 || ^8.4 || ^8.5",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-message": "^2.0",
         "wikimedia/zest-jq": "^1.1"
     },
     "require-dev": {
+        "guzzlehttp/psr7": "^3.2",
         "illuminate/cache": "^12.0",
         "illuminate/database": "^12.0",
         "illuminate/events": "^12.0",
@@ -24,7 +28,9 @@
         "illuminate/database": "Required to use the optional Laravel Eloquent WorkFlow store.",
         "illuminate/support": "Required to register the optional Laravel WorkFlow service provider.",
         "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps.",
-        "temporal/sdk": "Required to use the optional Temporal WorkFlow adapter."
+        "temporal/sdk": "Required to use the optional Temporal WorkFlow adapter.",
+        "guzzlehttp/guzzle": "PSR-18 client for the optional OWS HTTP/OpenAPI executor.",
+        "php-http/curl-client": "Alternative PSR-18 client for the optional OWS HTTP/OpenAPI executor."
     },
     "autoload": {
         "psr-4": {
