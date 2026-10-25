@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Services\FlowRunner;
@@ -15,6 +14,7 @@ use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -33,12 +33,12 @@ $executor = new class implements FlowStepExecutor {
         return in_array($step->id, ['authorize', 'webhook', 'verify'], true);
     }
 
-    public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+    public function execute(FlowStepInvocation $invocation): StepResult
     {
-        return match ($step->id) {
+        return match ($invocation->step->id) {
             'authorize' => StepResult::completed('Provider access granted'),
             'webhook' => StepResult::deferred('Waiting for provider confirmation'),
-            'verify' => $context->get('verification_ready') === true
+            'verify' => $invocation->context->get('verification_ready') === true
                 ? StepResult::completed('Channel connected')
                 : StepResult::failed('Check the provider settings before starting a new setup run.'),
             default => throw new InvalidArgumentException('Unknown step'),

@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `switch` tasks: evaluates each named case's `when` expression
@@ -33,11 +33,11 @@ final class OwsSwitchStepExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'switch';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if (! $context instanceof OwsWorkflowContext) {
             throw new \RuntimeException(
                 "OWS switch task '{$step->id}' requires an OwsWorkflowContext (routing decisions must be shared between steps).",
@@ -74,7 +74,7 @@ final class OwsSwitchStepExecutor implements FlowStepExecutor
         if ($decision['terminated']) {
             // The workflow output is the unmodified task input.
             $context->recordStepOutput($step->id, $taskInput);
-            return StepResult::completed('switch routed to end', ['ows_output' => $taskInput]);
+            return StepResult::completed('switch routed to end', ['ows_output' => $taskInput], output: StepOutput::from($taskInput));
         }
 
         return StepResult::completed(

@@ -6,7 +6,6 @@ namespace Webong\WorkFlow\Tests\App;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
@@ -36,7 +35,7 @@ final class FlowRpcApplicationTest extends TestCase
                 return $step->id === 'approve';
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 $this->calls++;
 
@@ -70,7 +69,7 @@ final class FlowRpcApplicationTest extends TestCase
                 return true;
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::completed();
             }
@@ -106,10 +105,10 @@ final class FlowRpcApplicationTest extends TestCase
         $executor = new class implements FlowStepExecutor {
             public array $calls = [];
             public function supports(FlowStepDefinition $step): bool { return true; }
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
-                $this->calls[] = [$step->id, $context->get('source')];
-                return $step->id === 'approve' ? StepResult::deferred() : StepResult::completed();
+                $this->calls[] = [$invocation->step->id, $invocation->context->get('source')];
+                return $invocation->step->id === 'approve' ? StepResult::deferred() : StepResult::completed();
             }
         };
         $app = $this->application($executor, $provider);
@@ -168,7 +167,7 @@ final class FlowRpcApplicationTest extends TestCase
             public bool $sawConflict = false;
             public function __construct(private ForgettableFlowStateStore $storage, private array $params) {}
             public function supports(FlowStepDefinition $step): bool { return true; }
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 TestCase::assertFalse($this->storage->locked);
                 try {
@@ -214,7 +213,7 @@ final class FlowRpcApplicationTest extends TestCase
         $executor = new class implements FlowStepExecutor {
             public int $calls = 0;
             public function supports(FlowStepDefinition $step): bool { return true; }
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 $this->calls++;
                 return StepResult::completed();
@@ -346,10 +345,50 @@ YAML;
                 return false;
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::completed();
             }
         };
+    }
+
+    public function test_completion_output_round_trips_through_the_rpc_state(): void
+    {
+        $executor = new class implements FlowStepExecutor {
+            public function supports(FlowStepDefinition $step): bool
+            {
+                return $step->id === 'approve';
+            }
+
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
+            {
+                return StepResult::deferred('Awaiting approval');
+            }
+        };
+        $application = $this->application($executor);
+        $params = ['flow_key' => 'demo', 'run_id' => 'run-1', 'subject' => ['type' => 'order', 'id' => '42']];
+        $application->invoke('flow.start', $params);
+
+        // A structured object output.
+        $object = $application->invoke('flow.complete', [...$params, 'step_id' => 'approve', 'attempt' => 1,
+            'idempotency_key' => 'event-1', 'result' => ['status' => 'completed', 'output' => ['total' => 100]]]);
+        self::assertSame(['total' => 100], $object['state']['steps']['approve']['output']);
+
+        // The stored state keeps the output for later reads.
+        self::assertSame(['total' => 100], $application->invoke('flow.get', $params)['state']['steps']['approve']['output']);
+
+        // A present JSON null output stays distinguishable from an absent one.
+        $params2 = [...$params, 'run_id' => 'run-2'];
+        $application->invoke('flow.start', $params2);
+        $null = $application->invoke('flow.complete', [...$params2, 'step_id' => 'approve', 'attempt' => 1,
+            'idempotency_key' => 'event-2', 'result' => ['status' => 'completed', 'output' => null]]);
+        self::assertArrayHasKey('output', $null['state']['steps']['approve']);
+        self::assertNull($null['state']['steps']['approve']['output']);
+
+        $params3 = [...$params, 'run_id' => 'run-3'];
+        $application->invoke('flow.start', $params3);
+        $absent = $application->invoke('flow.complete', [...$params3, 'step_id' => 'approve', 'attempt' => 1,
+            'idempotency_key' => 'event-3', 'result' => ['status' => 'completed']]);
+        self::assertArrayNotHasKey('output', $absent['state']['steps']['approve']);
     }
 }

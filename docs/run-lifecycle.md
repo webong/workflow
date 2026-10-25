@@ -125,6 +125,20 @@ resume but omits it from responses.
 
 ## Upgrading existing integrations
 
+- `FlowStepExecutor::execute()` now receives one typed `FlowStepInvocation`
+  (step definition, resolved `FlowStepInput`, context, previous state, flow
+  and run identity, attempt) instead of the previous
+  `(FlowStepDefinition, FlowContext, StepState)` arguments. Update each
+  implementation to destructure `$invocation`; `supports()` is unchanged.
+  Resolved input bindings arrive only through `$invocation->input` — never
+  through context metadata. The `_workflow` context key still carries the
+  same correlation fields during the transition.
+- Steps can now emit structured output: return
+  `StepResult::completed(..., output: StepOutput::from($value))` and read a
+  dependency's output through `FlowStepDefinition` `input` bindings. Output
+  presence serializes as an `output` key on step state; an absent output
+  omits the key, and a present JSON null keeps it with a null value. Old
+  state documents without the key keep loading unchanged.
 - Start tracked runs with `FlowRun` and `RunScopedFlowStateStore`; leave legacy
   rows alone until their original definition and callback mapping are known.
 - RPC `start/get/complete/resume/cancel` now require `run_id`. Completion also

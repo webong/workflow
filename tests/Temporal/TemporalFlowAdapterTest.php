@@ -7,7 +7,6 @@ namespace Webong\WorkFlow\Tests\Temporal;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
@@ -24,6 +23,7 @@ use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\FlowRetryPolicy;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepState;
 use Webong\WorkFlow\ValueObjects\StepResult;
 
@@ -70,6 +70,76 @@ final class TemporalFlowAdapterTest extends TestCase
         self::assertSame('provider-event-1', $roundTrip->completion->idempotencyKey);
         self::assertSame(FlowStepStatus::COMPLETED, $roundTrip->completion->result->status);
         self::assertSame('Authorized.', $roundTrip->completion->result->message);
+        // A completion without output stays output-less.
+        self::assertNull($roundTrip->completion->result->output);
+    }
+
+    public function test_structured_output_survives_the_signal_payload(): void
+    {
+        $withObject = new TemporalFlowCompletion(new FlowDeferredCompletion(
+            flowKey: 'setup',
+            stepId: 'authorize',
+            idempotencyKey: 'event-1',
+            result: StepResult::completed('Authorized.', output: StepOutput::from(['total' => 100, 'nested' => ['ok' => true]])),
+        ));
+        $roundTrip = TemporalFlowCompletion::fromArray($withObject->toArray());
+        self::assertSame(['total' => 100, 'nested' => ['ok' => true]], $roundTrip->completion->result->output?->value);
+
+        $withNull = new TemporalFlowCompletion(new FlowDeferredCompletion(
+            flowKey: 'setup',
+            stepId: 'authorize',
+            idempotencyKey: 'event-2',
+            result: StepResult::completed('Authorized.', output: StepOutput::null()),
+        ));
+        $roundTrip = TemporalFlowCompletion::fromArray($withNull->toArray());
+        self::assertNotNull($roundTrip->completion->result->output, 'A present JSON null must survive');
+        self::assertNull($roundTrip->completion->result->output->value);
+
+        $legacyPayload = [
+            'flow_key' => 'setup',
+            'step_id' => 'authorize',
+            'idempotency_key' => 'event-3',
+            'result' => ['status' => 'completed', 'message' => 'Old signal'],
+        ];
+        self::assertNull(TemporalFlowCompletion::fromArray($legacyPayload)->completion->result->output);
+    }
+
+    public function test_activity_payload_carries_resolved_input_and_output(): void
+    {
+        $executor = new class implements FlowStepExecutor {
+            public ?\Webong\WorkFlow\ValueObjects\FlowStepInvocation $seen = null;
+
+            public function supports(FlowStepDefinition $step): bool
+            {
+                return true;
+            }
+
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
+            {
+                $this->seen = $invocation;
+
+                return StepResult::completed('done', output: StepOutput::from(['result' => 42]));
+            }
+        };
+
+        $result = (new TemporalFlowActivityHandler([$executor]))->execute([
+            'definition' => (new FlowDefinition('setup', [new FlowStepDefinition('authorize', 'Authorize')]))->toArray(),
+            'step_id' => 'authorize',
+            'run_id' => 'run-1',
+            'context' => ['source' => 'provider'],
+            'previous' => (new StepState())->toArray(),
+            'input' => ['amount' => 100, 'optional' => null],
+        ]);
+
+        self::assertNotNull($executor->seen);
+        self::assertSame('run-1', $executor->seen->runId);
+        self::assertSame(1, $executor->seen->attempt);
+        self::assertTrue($executor->seen->input->has('amount'));
+        self::assertSame(100, $executor->seen->input->get('amount'));
+        self::assertTrue($executor->seen->input->has('optional'), 'A present null input survives the payload');
+        self::assertNull($executor->seen->input->get('optional'));
+
+        self::assertSame(['result' => 42], $result['output']);
     }
 
     public function test_invalid_completion_payload_is_rejected(): void
@@ -141,9 +211,9 @@ final class TemporalFlowAdapterTest extends TestCase
                 return $step->id === 'authorize';
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
-                return StepResult::completed(metadata: ['source' => $context->get('source')]);
+                return StepResult::completed(metadata: ['source' => $invocation->context->get('source')]);
             }
         };
 
@@ -167,7 +237,7 @@ final class TemporalFlowAdapterTest extends TestCase
                 return true;
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::deferred('Waiting for callback.');
             }
@@ -191,7 +261,7 @@ final class TemporalFlowAdapterTest extends TestCase
                 return true;
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 throw new RuntimeException('Provider unavailable.');
             }

@@ -17,6 +17,7 @@ use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 
 /**
@@ -138,11 +139,18 @@ final readonly class FlowRpcApplication
             throw new RpcFailure(-32602, 'Invalid retriable value');
         }
 
+        // A present `output` carries any JSON value; the key's presence
+        // distinguishes a structured null from no output at all.
+        $output = null;
+        if (array_key_exists('output', $result)) {
+            $output = new StepOutput($result['output']);
+        }
+
         $completion = new FlowDeferredCompletion(
             flowKey: $flowKey,
             stepId: $stepId,
             idempotencyKey: $idempotencyKey,
-            result: new StepResult($status, message: $message, error: $error, retriable: $retriable, metadata: $metadata),
+            result: new StepResult($status, message: $message, error: $error, retriable: $retriable, metadata: $metadata, output: $output),
             runId: $store->runId,
             attempt: $attempt,
         );

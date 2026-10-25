@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `raise` tasks: faults the workflow with the error payload.
@@ -23,11 +22,11 @@ final class OwsRaiseExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'raise';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         $raise = is_array($step->metadata['ows_raise'] ?? null) ? $step->metadata['ows_raise'] : [];
         $fault = [
             'status' => $raise['status'] ?? null,

@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\App\FlowRpcApplication;
@@ -16,7 +15,6 @@ use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 require_once dirname(__DIR__).'/vendor/autoload.php';
 
@@ -78,7 +76,7 @@ $executor = new class implements FlowStepExecutor {
         return $step->id === 'approve';
     }
 
-    public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+    public function execute(FlowStepInvocation $invocation): StepResult
     {
         return StepResult::deferred('Waiting for approval');
     }

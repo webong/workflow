@@ -279,9 +279,9 @@ final class FlowRunTest extends TestCase
         return new class($execute) implements FlowStepExecutor {
             public function __construct(private Closure $execute) {}
             public function supports(FlowStepDefinition $step): bool { return true; }
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
-                return ($this->execute)($step, $context, $previous);
+                return ($this->execute)($invocation->step, $invocation->context, $invocation->previous);
             }
         };
     }

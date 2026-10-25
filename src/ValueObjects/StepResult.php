@@ -20,13 +20,14 @@ final readonly class StepResult
         public ?int $nextRetryAt = null,
         public array $metadata = [],
         public bool $deferred = false,
+        public ?StepOutput $output = null,
     ) {
     }
 
     /** @param array<string, mixed> $metadata */
-    public static function completed(?string $message = null, array $metadata = []): self
+    public static function completed(?string $message = null, array $metadata = [], ?StepOutput $output = null): self
     {
-        return new self(FlowStepStatus::COMPLETED, $message, metadata: $metadata);
+        return new self(FlowStepStatus::COMPLETED, $message, metadata: $metadata, output: $output);
     }
 
     /** @param array<string, mixed> $metadata */
@@ -36,9 +37,9 @@ final readonly class StepResult
     }
 
     /** @param array<string, mixed> $metadata */
-    public static function skipped(?string $message = null, array $metadata = []): self
+    public static function skipped(?string $message = null, array $metadata = [], ?StepOutput $output = null): self
     {
-        return new self(FlowStepStatus::SKIPPED, $message, metadata: $metadata);
+        return new self(FlowStepStatus::SKIPPED, $message, metadata: $metadata, output: $output);
     }
 
     /** @param array<string, mixed> $metadata */
@@ -64,6 +65,7 @@ final readonly class StepResult
             attempts: $this->attempts,
             nextRetryAt: $this->nextRetryAt,
             metadata: $this->metadata,
+            output: $this->output,
         );
     }
 }

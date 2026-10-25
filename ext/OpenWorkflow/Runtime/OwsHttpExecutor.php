@@ -8,12 +8,12 @@ use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `call: http` tasks over a PSR-18 client.
@@ -49,11 +49,11 @@ final class OwsHttpExecutor implements FlowStepExecutor
             && in_array($step->metadata['ows_call'] ?? null, ['http', 'openapi'], true);
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if (! $context instanceof OwsWorkflowContext) {
             throw new \RuntimeException("OWS http call '{$step->id}' requires an OwsWorkflowContext.");
         }
@@ -160,7 +160,7 @@ final class OwsHttpExecutor implements FlowStepExecutor
 
         $context->recordStepOutput($step->id, $rawOutput);
 
-        return StepResult::completed("HTTP {$method} {$uri}", ['ows_output' => $rawOutput]);
+        return StepResult::completed("HTTP {$method} {$uri}", ['ows_output' => $rawOutput], output: StepOutput::from($rawOutput));
     }
 
     /**

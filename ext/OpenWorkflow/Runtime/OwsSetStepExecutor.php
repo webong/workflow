@@ -10,6 +10,8 @@ use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsRouting;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -39,11 +41,11 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'set';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if ($context instanceof OwsWorkflowContext && OwsRouting::shouldSkip($step, $context)) {
             return StepResult::skipped('not selected by switch routing');
         }
@@ -55,7 +57,7 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         $set = $step->metadata['ows_set'] ?? [];
         if (! is_array($set) || $set === []) {
             $this->recordOutput($context, $step->id, null);
-            return StepResult::completed('set task with no assignments', ['ows_output' => null]);
+            return StepResult::completed('set task with no assignments', ['ows_output' => null], output: StepOutput::null());
         }
 
         // Raw input: the most recent executed predecessor's output, or the
@@ -84,6 +86,7 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         return StepResult::completed(
             "set " . count($output) . " data key(s)",
             ['ows_output' => $output],
+            output: StepOutput::from($output),
         );
     }
 
@@ -131,7 +134,7 @@ final class OwsSetStepExecutor implements FlowStepExecutor
         $context->consumeFault($tryId);
         $context->recordStepOutput($step->id, $output);
 
-        return StepResult::completed('caught error handled', ['ows_output' => $output]);
+        return StepResult::completed('caught error handled', ['ows_output' => $output], output: StepOutput::from($output));
     }
 
     /**

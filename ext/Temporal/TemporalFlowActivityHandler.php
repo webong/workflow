@@ -12,6 +12,8 @@ use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInput;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -67,10 +69,21 @@ final class TemporalFlowActivityHandler
         $context = new ArrayFlowContext(is_array($contextData) ? $this->stringKeyed($contextData) : []);
         $executor = $this->executorFor($step);
 
-        return $this->execution->execute(
-            $executor, $step, $context, $previous, $definition->key,
-            is_string($input['run_id'] ?? null) ? $input['run_id'] : null,
-        )->toArray();
+        // The workflow resolves input bindings before dispatching this
+        // activity (fail-closed happens there); the payload carries the
+        // resolved values keyed by binding name.
+        $inputData = $input['input'] ?? [];
+        $stepInput = new FlowStepInput(is_array($inputData) ? $this->stringKeyed($inputData) : []);
+
+        return $this->execution->execute($executor, new FlowStepInvocation(
+            step: $step,
+            input: $stepInput,
+            context: $context,
+            previous: $previous,
+            flowKey: $definition->key,
+            runId: is_string($input['run_id'] ?? null) ? $input['run_id'] : null,
+            attempt: $previous->attempts + 1,
+        ))->toArray();
     }
 
     private function executorFor(FlowStepDefinition $step): FlowStepExecutor

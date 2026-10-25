@@ -82,7 +82,6 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Order;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Services\FlowRunner;
@@ -93,6 +92,7 @@ use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -113,7 +113,7 @@ final readonly class OrderApprovalService
                 return $step->id === 'approve';
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::deferred('Waiting for approval');
             }

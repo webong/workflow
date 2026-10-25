@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\FlowStateTransition;
@@ -14,14 +13,22 @@ use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowInputBinding;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
 require dirname(__DIR__).'/vendor/autoload.php';
 
 $definition = new FlowDefinition('order_approval', [
+    // The approval emits its structured outcome; notify reads it through a
+    // declared binding instead of step metadata.
     new FlowStepDefinition('approve', 'Approve the order'),
-    new FlowStepDefinition('notify', 'Notify the customer', dependsOn: ['approve']),
+    new FlowStepDefinition('notify', 'Notify the customer', dependsOn: ['approve'], input: [
+        'order' => FlowInputBinding::output('approve', '/order_id'),
+        'decision' => FlowInputBinding::output('approve', '/decision', required: false),
+    ]),
 ]);
 
 $executor = new class implements FlowStepExecutor {
@@ -30,12 +37,18 @@ $executor = new class implements FlowStepExecutor {
         return in_array($step->id, ['approve', 'notify'], true);
     }
 
-    public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+    public function execute(FlowStepInvocation $invocation): StepResult
     {
-        return match ($step->id) {
+        return match ($invocation->step->id) {
             'approve' => StepResult::deferred('Waiting for approval'),
-            'notify' => StepResult::completed('Customer notified'),
-            default => throw new InvalidArgumentException("Unknown step: {$step->id}"),
+            'notify' => StepResult::completed(
+                'Customer notified',
+                output: StepOutput::from([
+                    'order_id' => $invocation->input->get('order'),
+                    'decision' => $invocation->input->get('decision', 'unknown'),
+                ]),
+            ),
+            default => throw new InvalidArgumentException("Unknown step: {$invocation->step->id}"),
         };
     }
 };
@@ -58,7 +71,10 @@ $state = $store->mutate(
             flowKey: $definition->key,
             stepId: 'approve',
             idempotencyKey: 'approval-event-1',
-            result: StepResult::completed('Order approved'),
+            result: StepResult::completed('Order approved', output: StepOutput::from([
+                'order_id' => 'order-42',
+                'decision' => 'approved',
+            ])),
             runId: $run->id,
             attempt: 1,
         ),
@@ -69,3 +85,7 @@ printf("After callback: %s; approve: %s\n", $state->status->value, $state->steps
 $state = $runner->run($definition, $state, $context, [$executor]);
 $store->put($definition->key, $state);
 printf("After resume: %s; notify: %s\n", $state->status->value, $state->steps['notify']->status->value);
+printf("Notify read from approve output: %s (%s)\n",
+    json_encode($state->steps['notify']->output?->value, JSON_THROW_ON_ERROR),
+    $state->steps['notify']->output === null ? 'no output' : 'structured output',
+);

@@ -67,5 +67,6 @@ final class PdoPostgresFlowStateStoreTest extends TestCase
         $store->forget('approval');
         self::assertNull($secondStore->get('approval'));
         $this->assertRunIsolation($store);
+        $this->assertStructuredOutputRoundTrip($store);
     }
 }

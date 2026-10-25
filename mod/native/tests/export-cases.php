@@ -77,6 +77,31 @@ $backoff = $record('backoff-deadline', ['operation' => 'complete', 'state' => $b
 ]]);
 $backoff['state']['steps']['send']['next_retry_at'] = 2147483647;
 $record('backoff-no-early-work', ['operation' => 'advance', 'state' => $backoff['state']]);
+
+// First-class structured output: present object, duplicate identity,
+// conflicting output, and a present JSON null.
+$outputDefinition = ['key' => 'outputs', 'steps' => [['id' => 'emit', 'retry_policy' => ['max_attempts' => 2]]]];
+$outputStart = $record('output-start', ['operation' => 'start', 'run_id' => 'output-1', 'definition' => $outputDefinition]);
+$outputWaiting = $record('output-advance', ['operation' => 'advance', 'state' => $outputStart['state']]);
+$outputCompletion = [...$outputWaiting['work'][0], 'idempotency_key' => 'with-output',
+    'result' => ['status' => 'completed', 'output' => ['total' => 100, 'nested' => ['ok' => true]]]];
+$outputDone = $record('output-complete', ['operation' => 'complete', 'state' => $outputWaiting['state'], 'completion' => $outputCompletion]);
+$record('output-duplicate', ['operation' => 'complete', 'state' => $outputDone['state'], 'completion' => $outputCompletion]);
+$outputConflict = $outputCompletion;
+$outputConflict['result'] = ['status' => 'completed', 'output' => ['total' => 200]];
+$record('output-conflict', ['operation' => 'complete', 'state' => $outputDone['state'], 'completion' => $outputConflict]);
+$record('output-null', ['operation' => 'complete', 'state' => $outputWaiting['state'], 'completion' => [
+    ...$outputWaiting['work'][0], 'idempotency_key' => 'null-output',
+    'result' => ['status' => 'completed', 'output' => null],
+]]);
+$record('output-scalar', ['operation' => 'complete', 'state' => $outputWaiting['state'], 'completion' => [
+    ...$outputWaiting['work'][0], 'idempotency_key' => 'scalar-output',
+    'result' => ['status' => 'completed', 'output' => 'approved'],
+]]);
+$record('output-list', ['operation' => 'complete', 'state' => $outputWaiting['state'], 'completion' => [
+    ...$outputWaiting['work'][0], 'idempotency_key' => 'list-output',
+    'result' => ['status' => 'completed', 'output' => [1, 2, 3]],
+]]);
 foreach (['{', 'null', '[]', '{"protocol":2}', '{"protocol":1,"operation":"unknown"}'] as $i => $invalid) {
     $record('invalid-'.$i, $invalid);
 }

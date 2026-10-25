@@ -6,7 +6,6 @@ namespace Webong\WorkFlow\Tests;
 
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowExecutionStatus;
 use Webong\WorkFlow\Enums\FlowStatus;
@@ -113,9 +112,9 @@ final class FlowExecutionTest extends TestCase
                 return $step->id === 'authorize';
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
-                return StepResult::completed(metadata: ['source' => $context->get('source')]);
+                return StepResult::completed(metadata: ['source' => $invocation->context->get('source')]);
             }
         };
     }

@@ -45,8 +45,11 @@ operator to correct the provider settings. For a shorter example, run
 1. Define the process with `FlowDefinition` and `FlowStepDefinition`.
 2. Create a `FlowRun` with a unique ID. It saves the definition used by this
    occurrence, so publishing a later version cannot change an active run.
-3. Implement `FlowStepExecutor` for your operations. Return `completed()`,
-   `failed()`, `skipped()`, or `deferred()`.
+3. Implement `FlowStepExecutor` for your operations. `execute()` receives one
+   `FlowStepInvocation` (step, resolved input bindings, context, previous
+   state, flow/run identity, attempt). Return `completed()`, `failed()`,
+   `skipped()`, or `deferred()`; a completed result may carry structured
+   output via `StepOutput::from($value)`.
 4. Run eligible steps with `FlowRunner` and save the returned `FlowState`.
 5. Apply a callback with its run ID, step ID, attempt, and event ID. Then
    explicitly resume to execute the next eligible steps.

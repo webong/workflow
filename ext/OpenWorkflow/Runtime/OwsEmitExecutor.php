@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `emit` tasks: builds the CloudEvent envelope
@@ -28,11 +28,11 @@ final class OwsEmitExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'emit';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if (! $context instanceof OwsWorkflowContext) {
             throw new \RuntimeException("OWS emit task '{$step->id}' requires an OwsWorkflowContext.");
         }
@@ -72,7 +72,7 @@ final class OwsEmitExecutor implements FlowStepExecutor
 
         $context->recordStepOutput($step->id, $event);
 
-        return StepResult::completed('emitted event', ['ows_output' => $event]);
+        return StepResult::completed('emitted event', ['ows_output' => $event], output: StepOutput::from($event));
     }
 
     /**

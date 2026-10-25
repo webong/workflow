@@ -8,7 +8,9 @@ use InvalidArgumentException;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\FlowEvaluator;
+use Webong\WorkFlow\Services\FlowInputResolver;
 use Webong\WorkFlow\Services\FlowStateTransition;
+use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
@@ -94,6 +96,11 @@ final class TemporalFlowWorkflow
                     updatedAt: $previous->updatedAt,
                     attempts: $previous->attempts + 1,
                 ));
+                // Bindings resolve against workflow history (deterministic on
+                // replay); a required unresolved binding fails closed before
+                // the activity runs.
+                $input = (new FlowInputResolver())
+                    ->resolve($step, $this->state, new ArrayFlowContext($context));
                 /** @var array<string, mixed> $stepData */
                 $stepData = yield $this->activities->execute([
                     'definition' => $definition->toArray(),
@@ -101,6 +108,7 @@ final class TemporalFlowWorkflow
                     'run_id' => $this->state->run?->id,
                     'context' => $context,
                     'previous' => $previous->toArray(),
+                    'input' => $input->all(),
                 ]);
                 $result = StepState::fromArray($stepData);
                 $this->state = (new FlowEvaluator())->evaluate($definition, $this->state->withStep($step->id, $result));

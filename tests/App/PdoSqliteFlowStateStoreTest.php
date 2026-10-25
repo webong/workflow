@@ -63,6 +63,7 @@ final class PdoSqliteFlowStateStoreTest extends TestCase
             $store->forget('approval');
             self::assertNull($secondStore->get('approval'));
             $this->assertRunIsolation($store);
+            $this->assertStructuredOutputRoundTrip($store);
         } finally {
             unset($connection);
             @unlink($path);

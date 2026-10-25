@@ -12,6 +12,7 @@ use Webong\WorkFlow\Enums\FlowEventType;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepState;
 use Webong\WorkFlow\Services\NullFlowEventSink;
 
@@ -21,6 +22,7 @@ final class FlowRunner
         private readonly FlowEvaluator $evaluator = new FlowEvaluator(),
         private readonly FlowEventSink $events = new NullFlowEventSink(),
         private readonly FlowStepExecution $execution = new FlowStepExecution(),
+        private readonly FlowInputResolver $inputs = new FlowInputResolver(),
     )
     {
     }
@@ -85,7 +87,18 @@ final class FlowRunner
             }
 
             $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STEP_STARTED, $definition->key, $step->id));
-            $stepState = $this->execution->execute($executor, $step, $context, $previous, $definition->key, $state->run?->id);
+            // Bindings resolve before the executor is chosen to run: a
+            // required unresolved binding fails closed without invoking it.
+            $input = $this->inputs->resolve($step, $state, $context);
+            $stepState = $this->execution->execute($executor, new FlowStepInvocation(
+                step: $step,
+                input: $input,
+                context: $context,
+                previous: $previous,
+                flowKey: $definition->key,
+                runId: $state->run?->id,
+                attempt: $previous->attempts + 1,
+            ));
             $state = $state->withStep($step->id, $stepState);
             $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(
                 match ($stepState->status) {

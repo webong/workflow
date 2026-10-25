@@ -58,6 +58,7 @@ final class ProductionFlowStateStoreTest extends TestCase
         self::assertSame('completed', $store->get('setup')?->status->value);
         self::assertSame('running', $store->get('setup')?->metadata['previous']);
         $this->assertRunIsolation($store);
+        $this->assertStructuredOutputRoundTrip($store);
     }
 
     public function test_redis_store_uses_the_production_lock_provider(): void
@@ -87,6 +88,7 @@ final class ProductionFlowStateStoreTest extends TestCase
         self::assertSame('completed', $store->get('setup')?->status->value);
         self::assertSame('running', $store->get('setup')?->metadata['previous']);
         $this->assertRunIsolation($store);
+        $this->assertStructuredOutputRoundTrip($store);
 
         $store->forget('setup');
     }

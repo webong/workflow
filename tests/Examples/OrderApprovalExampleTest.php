@@ -22,7 +22,10 @@ final class OrderApprovalExampleTest extends TestCase
         self::assertSame(
             "After start: running; approve: pending\n"
             ."After callback: running; approve: completed\n"
-            ."After resume: completed; notify: completed\n",
+            ."After resume: completed; notify: completed\n"
+            ."Notify read from approve output: "
+            .json_encode(['order_id' => 'order-42', 'decision' => 'approved'], JSON_THROW_ON_ERROR)
+            ." (structured output)\n",
             $output,
         );
     }

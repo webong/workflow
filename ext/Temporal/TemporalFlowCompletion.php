@@ -7,6 +7,7 @@ namespace Webong\WorkFlow\Temporal;
 use InvalidArgumentException;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 
 /**
@@ -22,6 +23,22 @@ final readonly class TemporalFlowCompletion
     public function toArray(): array
     {
         $result = $this->completion->result;
+        $payload = [
+            'status' => $result->status->value,
+            'message' => $result->message,
+            'error' => $result->error,
+            'retriable' => $result->retriable,
+            'attempts' => $result->attempts,
+            'next_retry_at' => $result->nextRetryAt,
+            'metadata' => $result->metadata,
+            'deferred' => $result->deferred,
+        ];
+
+        // A present output is carried as JSON; an absent output omits the
+        // key so a present null survives the signal round trip.
+        if ($result->output !== null) {
+            $payload['output'] = $result->output->value;
+        }
 
         return [
             'flow_key' => $this->completion->flowKey,
@@ -29,16 +46,7 @@ final readonly class TemporalFlowCompletion
             'idempotency_key' => $this->completion->idempotencyKey,
             'run_id' => $this->completion->runId,
             'attempt' => $this->completion->attempt,
-            'result' => [
-                'status' => $result->status->value,
-                'message' => $result->message,
-                'error' => $result->error,
-                'retriable' => $result->retriable,
-                'attempts' => $result->attempts,
-                'next_retry_at' => $result->nextRetryAt,
-                'metadata' => $result->metadata,
-                'deferred' => $result->deferred,
-            ],
+            'result' => $payload,
         ];
     }
 
@@ -57,6 +65,14 @@ final readonly class TemporalFlowCompletion
             throw new InvalidArgumentException('Invalid Temporal completion status.');
         }
 
+        $output = null;
+        if (array_key_exists('output', $result)) {
+            $outputValue = $result['output'];
+            if (is_array($outputValue) || is_scalar($outputValue) || $outputValue === null) {
+                $output = new StepOutput($outputValue);
+            }
+        }
+
         return new self(new FlowDeferredCompletion(
             flowKey: is_string($data['flow_key'] ?? null) ? $data['flow_key'] : '',
             stepId: is_string($data['step_id'] ?? null) ? $data['step_id'] : '',
@@ -72,6 +88,7 @@ final readonly class TemporalFlowCompletion
                 nextRetryAt: is_int($result['next_retry_at'] ?? null) ? $result['next_retry_at'] : null,
                 metadata: is_array($result['metadata'] ?? null) ? $result['metadata'] : [],
                 deferred: ($result['deferred'] ?? false) === true,
+                output: $output,
             ),
         ));
     }

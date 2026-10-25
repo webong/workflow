@@ -10,6 +10,7 @@ final readonly class FlowStepDefinition
 {
     /**
      * @param list<string> $dependsOn
+     * @param array<string, FlowInputBinding> $input Declarative input bindings, keyed by input name.
      * @param array<string, mixed> $metadata
      */
     public function __construct(
@@ -20,6 +21,7 @@ final readonly class FlowStepDefinition
         public array $dependsOn = [],
         public array $metadata = [],
         public ?FlowRetryPolicy $retryPolicy = null,
+        public array $input = [],
     ) {
         if ($this->id === '') {
             throw new \InvalidArgumentException('A flow step must have an id.');
@@ -39,6 +41,7 @@ final readonly class FlowStepDefinition
         $backoffSeconds = is_array($retryPolicy) ? ($retryPolicy['backoff_seconds'] ?? null) : null;
         $metadataValue = $data['metadata'] ?? null;
         $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
+        $input = self::bindingsFromArray($data['input'] ?? [], is_string($id) ? $id : '');
 
         return new self(
             id: is_string($id) ? $id : '',
@@ -57,13 +60,14 @@ final readonly class FlowStepDefinition
                     idempotent: is_bool($retryPolicy['idempotent'] ?? null) ? $retryPolicy['idempotent'] : true,
                 )
                 : null,
+            input: $input,
         );
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'id' => $this->id,
             'label' => $this->label,
             'critical' => $this->critical,
@@ -72,5 +76,42 @@ final readonly class FlowStepDefinition
             'metadata' => $this->metadata,
             'retry_policy' => $this->retryPolicy?->toArray(),
         ];
+
+        // Omitted when empty so definitions serialized before bindings
+        // existed keep the exact same canonical shape.
+        if ($this->input !== []) {
+            $bindings = [];
+            foreach ($this->input as $name => $binding) {
+                $bindings[$name] = $binding instanceof FlowInputBinding
+                    ? $binding->toArray()
+                    : $binding;
+            }
+            $data['input'] = $bindings;
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param mixed $bindings
+     * @return array<string, FlowInputBinding>
+     */
+    private static function bindingsFromArray(mixed $bindings, string $stepId): array
+    {
+        if (! is_array($bindings)) {
+            throw new \InvalidArgumentException("Flow step '{$stepId}' input bindings must be an object.");
+        }
+
+        $parsed = [];
+        foreach ($bindings as $name => $binding) {
+            if (! is_string($name) || $name === '') {
+                throw new \InvalidArgumentException("Flow step '{$stepId}' input binding names must be non-empty strings.");
+            }
+            $parsed[$name] = $binding instanceof FlowInputBinding
+                ? $binding
+                : FlowInputBinding::fromArray($binding);
+        }
+
+        return $parsed;
     }
 }

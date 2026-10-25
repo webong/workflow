@@ -11,6 +11,7 @@ use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -38,13 +39,14 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
     }
 
     /** @param array<string, mixed> $metadata */
-    public function completed(FlowState $state, string $stepId, ?string $message = null, array $metadata = []): FlowState
+    public function completed(FlowState $state, string $stepId, ?string $message = null, array $metadata = [], ?StepOutput $output = null): FlowState
     {
         return $state->withStep($stepId, new StepState(
             status: FlowStepStatus::COMPLETED,
             message: $message,
             updatedAt: date(\DATE_ATOM),
             metadata: $metadata,
+            output: $output,
         ));
     }
 
@@ -150,6 +152,10 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             $completion->result->status->value, $completion->result->message, $completion->result->error,
             $completion->result->retriable, $completion->result->metadata,
             $completion->result->nextRetryAt, $completion->result->deferred,
+            // The presence flag keeps an absent output distinct from a
+            // present JSON null when duplicate events are compared.
+            $completion->result->output !== null,
+            $completion->result->output?->value,
         ]);
 
         if (isset($events[$eventKey])) {
@@ -215,6 +221,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             attempts: $attempts,
             nextRetryAt: $nextRetryAt,
             metadata: $metadata,
+            output: $result->output,
         ));
     }
 }

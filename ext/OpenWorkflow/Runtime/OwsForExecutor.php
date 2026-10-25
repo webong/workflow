@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `for` tasks for data-only bodies: evaluates the collection
@@ -30,11 +30,11 @@ final class OwsForExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'for';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if (! $context instanceof OwsWorkflowContext) {
             throw new \RuntimeException("OWS for task '{$step->id}' requires an OwsWorkflowContext.");
         }
@@ -43,7 +43,7 @@ final class OwsForExecutor implements FlowStepExecutor
         $body = is_array($step->metadata['ows_body'] ?? null) ? $step->metadata['ows_body'] : [];
         if ($body === []) {
             $context->recordStepOutput($step->id, null);
-            return StepResult::completed('for task with an empty body', ['ows_output' => null]);
+            return StepResult::completed('for task with an empty body', ['ows_output' => null], output: StepOutput::null());
         }
 
         $rawInput = OwsRouting::resolveChainInput($step, $context);
@@ -81,6 +81,6 @@ final class OwsForExecutor implements FlowStepExecutor
 
         $context->recordStepOutput($step->id, $output);
 
-        return StepResult::completed('iterated ' . count($collection) . ' item(s)', ['ows_output' => $output]);
+        return StepResult::completed('iterated ' . count($collection) . ' item(s)', ['ows_output' => $output], output: StepOutput::from($output));
     }
 }

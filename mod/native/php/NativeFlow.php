@@ -8,7 +8,6 @@ use InvalidArgumentException;
 use JsonException;
 use Throwable;
 use TypeError;
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\FlowEvaluator;
@@ -20,6 +19,8 @@ use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
@@ -114,7 +115,7 @@ final class NativeFlow implements FlowStepExecutor
         return true;
     }
 
-    public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+    public function execute(FlowStepInvocation $invocation): StepResult
     {
         return StepResult::deferred();
     }
@@ -155,6 +156,17 @@ final class NativeFlow implements FlowStepExecutor
 
         $resultMetadata = (array) ($metadata ?? []);
 
+        // Output presence travels with the key: an explicit JSON null is a
+        // present structured null, a missing key means no output.
+        $output = null;
+        if (array_key_exists('output', $result)) {
+            $outputValue = $result['output'];
+            if (! is_array($outputValue) && ! is_scalar($outputValue) && $outputValue !== null) {
+                throw new InvalidArgumentException('Invalid output parameter.');
+            }
+            $output = new StepOutput($outputValue);
+        }
+
         return new FlowDeferredCompletion(
             flowKey: self::string($data, 'flow_key'),
             stepId: self::string($data, 'step_id'),
@@ -167,6 +179,7 @@ final class NativeFlow implements FlowStepExecutor
                 error: self::optionalString($result, 'error'),
                 retriable: $result['retriable'] ?? null,
                 metadata: $resultMetadata,
+                output: $output,
             ),
         );
     }

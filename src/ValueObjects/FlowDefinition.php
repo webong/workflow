@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\ValueObjects;
 
 use InvalidArgumentException;
+use Webong\WorkFlow\Enums\FlowInputSource;
 
 final readonly class FlowDefinition
 {
@@ -46,6 +47,22 @@ final readonly class FlowDefinition
             foreach ($step->dependsOn as $dependency) {
                 if (! in_array($dependency, $ids, true)) {
                     throw new \InvalidArgumentException("Flow step '{$step->id}' depends on unknown step '{$dependency}'.");
+                }
+            }
+
+            foreach ($step->input as $name => $binding) {
+                if (! $binding instanceof FlowInputBinding) {
+                    throw new \InvalidArgumentException("Flow step '{$step->id}' input binding '{$name}' must be a FlowInputBinding.");
+                }
+                if ($binding->source !== FlowInputSource::OUTPUT) {
+                    continue;
+                }
+                $sourceStep = (string) $binding->step;
+                if (! in_array($sourceStep, $ids, true)) {
+                    throw new \InvalidArgumentException("Flow step '{$step->id}' reads output of unknown step '{$sourceStep}'.");
+                }
+                if (! in_array($sourceStep, $step->dependsOn, true)) {
+                    throw new \InvalidArgumentException("Flow step '{$step->id}' reads output of step '{$sourceStep}', which is not a declared dependency.");
                 }
             }
         }

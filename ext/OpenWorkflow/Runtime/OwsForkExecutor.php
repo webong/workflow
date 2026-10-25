@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Executes OWS `fork` tasks for data-only branches. With `compete: true` the
@@ -29,11 +29,11 @@ final class OwsForkExecutor implements FlowStepExecutor
         return ($step->metadata['ows_type'] ?? null) === 'fork';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        $step = $invocation->step;
+        $context = $invocation->context;
+
         if (! $context instanceof OwsWorkflowContext) {
             throw new \RuntimeException("OWS fork task '{$step->id}' requires an OwsWorkflowContext.");
         }
@@ -42,7 +42,7 @@ final class OwsForkExecutor implements FlowStepExecutor
         $branches = is_array($fork['branches'] ?? null) ? $fork['branches'] : [];
         if ($branches === []) {
             $context->recordStepOutput($step->id, null);
-            return StepResult::completed('fork with no branches', ['ows_output' => null]);
+            return StepResult::completed('fork with no branches', ['ows_output' => null], output: StepOutput::null());
         }
 
         $rawInput = OwsRouting::resolveChainInput($step, $context);
@@ -72,6 +72,7 @@ final class OwsForkExecutor implements FlowStepExecutor
         return StepResult::completed(
             $compete ? 'competing fork: first branch won' : 'ran ' . count($branches) . ' branch(es)',
             ['ows_output' => $output],
+            output: StepOutput::from($output),
         );
     }
 }

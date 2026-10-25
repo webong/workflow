@@ -22,10 +22,12 @@ background for you.
 
 1. Define a `FlowDefinition` with stable step IDs. IDs are persisted, so
    changing an ID is a state migration, not just a label change. Set
-   `dependsOn` when a step must wait for another.
+   `dependsOn` when a step must wait for another. Declare `input` bindings
+   when a step needs data from the run context or a dependency's output.
 2. Implement `FlowStepExecutor` for each domain operation. `supports()` chooses
-   the step; `execute()` returns a `StepResult`. Return `completed()`,
-   `failed()`, `skipped()`, or `deferred()` as appropriate. Do not put request
+   the step; `execute()` receives one `FlowStepInvocation` and returns a
+   `StepResult`. Return `completed()`, `failed()`, `skipped()`, or
+   `deferred()` as appropriate. Do not put request
    or framework objects in the definition or persisted state.
 3. Create `new FlowRun($runId, $definition)` and begin with its
    `initialState()`. Wrap your subject's store in `RunScopedFlowStateStore`
@@ -41,12 +43,49 @@ disappears when the PHP process exits. For durable state, use a
 are described in [the Laravel guide](laravel.md); the standalone service has
 a PDO PostgreSQL store in [`app/`](../app/README.md).
 
+## Structured output and input bindings
+
+A step's business result can be structured data instead of a message. Return
+`StepResult::completed('...', output: StepOutput::from(['total' => 100]))`
+and the value becomes first-class on the step state: serialized as the
+`output` field, carried through stores, RPC, Temporal, and the native
+protocol. An absent output is different from an explicit null: the `output`
+key exists only when the step produced one.
+
+Declare what a step consumes on its definition; the runner resolves the
+bindings before the executor runs:
+
+```php
+$definition = new FlowDefinition('invoice', [
+    new FlowStepDefinition('total', 'Compute total'),
+    new FlowStepDefinition('charge', 'Charge', dependsOn: ['total'], input: [
+        // Reads the dependency's structured output.
+        'amount' => FlowInputBinding::output('total', '/total'),
+        // Reads the run context; optional bindings resolve to nothing
+        // (absent from the input) when the path does not exist.
+        'note' => FlowInputBinding::context('/memo', required: false),
+    ]),
+]);
+
+// Inside the executor:
+$amount = $invocation->input->get('amount'); // 100
+```
+
+Paths are RFC 6901 JSON Pointers (`/total`, `/items/0`, `/a~1b` for a key
+containing a slash). Output bindings may only reference steps listed in
+`dependsOn`; unknown or non-dependency references are rejected when the
+definition is built. A required binding that cannot resolve fails the pass
+before the executor runs, so an unresolved value can never trigger an
+external effect. Resolved input travels only through `$invocation->input`;
+metadata is for execution bookkeeping, not domain data.
+
 ## Finish a deferred step
 
 `StepResult::deferred()` leaves the step pending. When your provider webhook,
 operator action, or background task returns, build a `FlowDeferredCompletion`
 with the same flow key, run ID, step ID, attempt number, a stable
-event/idempotency key, and a terminal `StepResult`. Apply it with
+event/idempotency key, and a terminal `StepResult` — the terminal result may
+carry structured output just like a synchronous completion. Apply it with
 `FlowStateTransition::complete()` inside
 `AtomicFlowStateStore::mutate()` so concurrent callbacks see the same state.
 

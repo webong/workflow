@@ -20,6 +20,7 @@ final readonly class StepState
         public int $attempts = 0,
         public ?int $nextRetryAt = null,
         public array $metadata = [],
+        public ?StepOutput $output = null,
     ) {
     }
 
@@ -34,6 +35,18 @@ final readonly class StepState
         $metadataValue = $data['metadata'] ?? null;
         $metadata = (array) (is_array($metadataValue) ? $metadataValue : []);
 
+        // Presence is the distinguishing bit: a stored `output: null` is a
+        // present JSON null, a missing key means the step has no output.
+        // Documents written before outputs existed have no key and stay
+        // output-less; malformed values are ignored rather than guessed.
+        $output = null;
+        if (array_key_exists('output', $data)) {
+            $outputValue = $data['output'];
+            if (is_array($outputValue) || is_scalar($outputValue) || $outputValue === null) {
+                $output = new StepOutput($outputValue);
+            }
+        }
+
         return new self(
             status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,
             message: is_string($data['message'] ?? null) ? $data['message'] : null,
@@ -43,13 +56,14 @@ final readonly class StepState
             attempts: is_int($attempts) ? max(0, $attempts) : 0,
             nextRetryAt: is_int($data['next_retry_at'] ?? null) ? $data['next_retry_at'] : null,
             metadata: $metadata,
+            output: $output,
         );
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'status' => $this->status->value,
             'message' => $this->message,
             'error' => $this->error,
@@ -59,5 +73,13 @@ final readonly class StepState
             'next_retry_at' => $this->nextRetryAt,
             'metadata' => $this->metadata,
         ];
+
+        // An absent output is never serialized as null: the key is omitted
+        // so old and new documents keep the same canonical shape.
+        if ($this->output !== null) {
+            $data['output'] = $this->output->value;
+        }
+
+        return $data;
     }
 }

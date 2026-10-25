@@ -11,6 +11,7 @@ use Webong\WorkFlow\Contracts\FlowMutableContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
@@ -22,41 +23,50 @@ final readonly class FlowStepExecution
     {
     }
 
-    public function execute(FlowStepExecutor $executor, FlowStepDefinition $step, FlowContext $context, StepState $previous, string $flowKey, ?string $runId = null): StepState
+    public function execute(FlowStepExecutor $executor, FlowStepInvocation $invocation): StepState
     {
         $workflowMeta = [
-            'flow_key' => $flowKey,
-            'run_id' => $runId,
-            'step_id' => $step->id,
-            'attempt' => $previous->attempts + 1,
+            'flow_key' => $invocation->flowKey,
+            'run_id' => $invocation->runId,
+            'step_id' => $invocation->step->id,
+            'attempt' => $invocation->attempt,
         ];
         // Read-only contexts stay isolated (previous behavior). Mutable
         // contexts get a write-through overlay view so opt-in data flow
         // (e.g. OWS `set` tasks) propagates between steps while still seeing
         // the per-step `_workflow` metadata.
-        $executionContext = $this->executionContext($context, $workflowMeta);
+        $executionContext = $this->executionContext($invocation->context, $workflowMeta);
+        $effective = new FlowStepInvocation(
+            step: $invocation->step,
+            input: $invocation->input,
+            context: $executionContext,
+            previous: $invocation->previous,
+            flowKey: $invocation->flowKey,
+            runId: $invocation->runId,
+            attempt: $invocation->attempt,
+        );
         try {
-            $result = $executor->execute($step, $executionContext, $previous);
+            $result = $executor->execute($effective);
         } catch (Throwable $exception) {
             $correlationId = bin2hex(\random_bytes(16));
-            $this->failures->report($exception, $correlationId, $flowKey, $step->id, $runId);
+            $this->failures->report($exception, $correlationId, $invocation->flowKey, $invocation->step->id, $invocation->runId);
             $result = new StepResult(
                 FlowStepStatus::FAILED,
                 error: 'Flow step failed.',
-                retriable: $step->retryPolicy->enabled ?? $step->retriable,
+                retriable: $invocation->step->retryPolicy->enabled ?? $invocation->step->retriable,
                 metadata: ['error_code' => 'step_execution_failed', 'correlation_id' => $correlationId],
             );
         }
 
-        $attempts = $previous->attempts + 1;
+        $attempts = $invocation->previous->attempts + 1;
         $retriable = $result->retriable;
         $nextRetryAt = $result->nextRetryAt;
 
         if ($result->status === FlowStepStatus::FAILED) {
-            $retriable = ($retriable ?? $step->retryPolicy->enabled ?? $step->retriable)
-                && ($step->retryPolicy?->canRetry($attempts) ?? true);
+            $retriable = ($retriable ?? $invocation->step->retryPolicy->enabled ?? $invocation->step->retriable)
+                && ($invocation->step->retryPolicy?->canRetry($attempts) ?? true);
             $nextRetryAt = $retriable
-                ? max($nextRetryAt ?? 0, time() + ($step->retryPolicy->backoffSeconds ?? 0))
+                ? max($nextRetryAt ?? 0, time() + ($invocation->step->retryPolicy->backoffSeconds ?? 0))
                 : null;
         }
 
@@ -71,6 +81,7 @@ final readonly class FlowStepExecution
             attempts: $attempts,
             nextRetryAt: $nextRetryAt,
             metadata: $metadata,
+            output: $result->output,
         );
     }
 

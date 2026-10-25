@@ -90,11 +90,11 @@ final class FlowEvaluatorTest extends TestCase
                 return in_array($step->id, ['authorize', 'subscribe'], true);
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
-                $this->executed[] = $step->id;
+                $this->executed[] = $invocation->step->id;
 
-                return StepResult::completed(metadata: ['context' => $context->get('source')]);
+                return StepResult::completed(metadata: ['context' => $invocation->context->get('source')]);
             }
         };
 
@@ -121,7 +121,7 @@ final class FlowEvaluatorTest extends TestCase
                 return $step->id === 'authorize';
             }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 throw new RuntimeException('provider unavailable');
             }
@@ -257,7 +257,7 @@ final class FlowEvaluatorTest extends TestCase
         $executor = new class implements FlowStepExecutor {
             public function supports(FlowStepDefinition $step): bool { return true; }
 
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::deferred('Waiting for provider callback.');
             }
@@ -423,7 +423,7 @@ final class FlowEvaluatorTest extends TestCase
         $events = new CollectingFlowEventSink();
         $executor = new class implements FlowStepExecutor {
             public function supports(FlowStepDefinition $step): bool { return true; }
-            public function execute(FlowStepDefinition $step, FlowContext $context, StepState $previous): StepResult
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
             {
                 return StepResult::deferred();
             }

@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+- Added first-class structured step output: `StepResult` and `StepState`
+  carry a transport-neutral `StepOutput` whose presence is distinguishable
+  from a JSON null. Absent output serializes no `output` key; old state
+  documents keep loading. Output is carried through synchronous and deferred
+  completions, retries, all state stores, the JSON-RPC `flow.complete`
+  request/response, Temporal activities and signals, generated TypeScript
+  contracts, and native parity fixtures.
+- Added declarative, serializable input bindings on `FlowStepDefinition`
+  (JSON Pointer paths over the run context or a declared dependency's
+  output). Required unresolved bindings fail closed before an executor runs;
+  optional unresolved bindings are absent from the resolved input; unknown
+  source steps and non-dependency references are rejected at definition
+  time.
+- Changed `FlowStepExecutor::execute()` to receive one typed
+  `FlowStepInvocation` (step definition, resolved `FlowStepInput`, context,
+  previous state, flow/run identity, attempt). Resolved input travels only
+  through the invocation — never metadata. See the upgrade notes in
+  [run lifecycle](docs/run-lifecycle.md) and ADR 0008.
+- The OWS adapter writes task outputs as first-class `StepOutput` (keeping
+  the legacy `ows_output` metadata write) and reads step outputs through
+  `OwsOutputs`, which prefers first-class output and falls back to older
+  `ows_output` metadata.
 - Added an experimental elephc build target under `mod/elephc/` that compiles
   the same core to native code with no embedded PHP runtime, with a generated C
   header, a C consumer, and `make elephc-build` / `make elephc-test` host

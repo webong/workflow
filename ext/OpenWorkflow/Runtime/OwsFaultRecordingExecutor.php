@@ -7,8 +7,8 @@ namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 /**
  * Wraps a host executor so faults raised inside a try scope are recorded on
@@ -33,20 +33,19 @@ final class OwsFaultRecordingExecutor implements FlowStepExecutor
         return $this->inner->supports($step);
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
         try {
-            return $this->inner->execute($step, $context, $previous);
+            return $this->inner->execute($invocation);
         } catch (OwsFaultException $fault) {
-            $this->record($step, $context, $fault->toFault(
+            $step = $invocation->step;
+            $this->record($step, $invocation->context, $fault->toFault(
                 is_string($step->metadata['ows_instance'] ?? null) ? $step->metadata['ows_instance'] : $step->id,
             ));
             throw $fault;
         } catch (\Throwable $e) {
-            $this->record($step, $context, [
+            $step = $invocation->step;
+            $this->record($step, $invocation->context, [
                 'status' => 500,
                 'type' => 'https://serverlessworkflow.io/errors/types/runtime',
                 'title' => $e->getMessage() !== '' ? $e->getMessage() : get_class($e),

@@ -12,6 +12,21 @@ export type FlowEventType =
     | 'blocked'
     | 'reset';
 
+/**
+ * A declarative input binding. Paths are RFC 6901 JSON Pointers; the empty
+ * pointer selects the whole source document.
+ */
+export interface FlowInputBinding {
+    /** Where the value comes from: the run context or a dependency output. */
+    source: 'context' | 'output';
+    /** JSON Pointer into the source document. */
+    pointer: string;
+    /** Source step id for `output` bindings; always declared in depends_on. */
+    step: string | null;
+    /** Unresolved required bindings fail closed before the executor runs. */
+    required: boolean;
+}
+
 export interface FlowStepDefinition {
     id: string;
     label: string;
@@ -20,6 +35,11 @@ export interface FlowStepDefinition {
     depends_on: string[];
     metadata: Record<string, unknown>;
     retry_policy: FlowRetryPolicy | null;
+    /**
+     * Declarative input bindings keyed by input name. Absent when the step
+     * declares none (documents written before bindings exist).
+     */
+    input?: Record<string, FlowInputBinding>;
 }
 
 export interface FlowDefinition {
@@ -38,6 +58,12 @@ export interface StepState {
     attempts: number;
     next_retry_at: number | null;
     metadata: Record<string, unknown>;
+    /**
+     * First-class structured output of the step. The property is omitted
+     * when the step has no output; when present it carries any JSON value,
+     * including an explicit null.
+     */
+    output?: unknown;
 }
 
 export interface FlowState {

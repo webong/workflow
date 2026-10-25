@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkParser;
 use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsOutputs;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSetStepExecutor;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsSwitchStepExecutor;
 use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext;
@@ -499,5 +500,63 @@ YAML)->flowDefinition;
             $context->lastOutput(),
             "Workflow output after executing '{$key}' must match the CTK expected output",
         );
+    }
+
+    public function testSetTaskEmitsFirstClassStructuredOutput(): void
+    {
+        $scenario = $this->scenarios['set: Set Task'] ?? null;
+        self::assertNotNull($scenario);
+        $definition = $this->openWorkflow->registerOwsDefinition($scenario->definition)->flowDefinition;
+        self::assertNotNull($definition);
+
+        $context = new OwsWorkflowContext($scenario->input ?? []);
+        $state = $this->runner->run($definition, new FlowState(FlowStatus::PENDING), $context, [new OwsSetStepExecutor()]);
+
+        self::assertSame('completed', $state->status->value);
+
+        $step = $state->steps['setShape'] ?? null;
+        self::assertNotNull($step);
+        // The task output is now first-class on the step state...
+        self::assertNotNull($step->output);
+        self::assertSame($context->lastOutput(), $step->output->value);
+        // ...while the legacy metadata write is retained for older readers.
+        self::assertSame($step->output->value, $step->metadata['ows_output'] ?? null);
+        self::assertSame($step->output->value, OwsOutputs::fromStep($step));
+
+        // The serialized state carries the output for RPC, stores, and the
+        // native protocol without metadata as transport.
+        $serialized = $step->toArray();
+        self::assertSame($context->lastOutput(), $serialized['output']);
+        self::assertSame($context->lastOutput(), $serialized['metadata']['ows_output']);
+    }
+
+    public function testOwsOutputsPrefersFirstClassOutputAndFallsBackToLegacyMetadata(): void
+    {
+        $firstClass = new \Webong\WorkFlow\ValueObjects\StepState(
+            \Webong\WorkFlow\Enums\FlowStepStatus::COMPLETED,
+            output: new \Webong\WorkFlow\ValueObjects\StepOutput(['from' => 'first-class']),
+        );
+        self::assertTrue(OwsOutputs::has($firstClass));
+        self::assertSame(['from' => 'first-class'], OwsOutputs::fromStep($firstClass));
+
+        // A state persisted before outputs were first-class.
+        $legacy = \Webong\WorkFlow\ValueObjects\StepState::fromArray([
+            'status' => 'completed',
+            'metadata' => ['ows_output' => ['from' => 'legacy']],
+        ]);
+        self::assertTrue(OwsOutputs::has($legacy));
+        self::assertSame(['from' => 'legacy'], OwsOutputs::fromStep($legacy));
+
+        // A recorded legacy null is still a recorded output.
+        $legacyNull = \Webong\WorkFlow\ValueObjects\StepState::fromArray([
+            'status' => 'completed',
+            'metadata' => ['ows_output' => null],
+        ]);
+        self::assertTrue(OwsOutputs::has($legacyNull));
+        self::assertNull(OwsOutputs::fromStep($legacyNull));
+
+        $absent = new \Webong\WorkFlow\ValueObjects\StepState(\Webong\WorkFlow\Enums\FlowStepStatus::COMPLETED);
+        self::assertFalse(OwsOutputs::has($absent));
+        self::assertNull(OwsOutputs::fromStep($absent));
     }
 }
