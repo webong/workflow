@@ -79,6 +79,33 @@ before the executor runs, so an unresolved value can never trigger an
 external effect. Resolved input travels only through `$invocation->input`;
 metadata is for execution bookkeeping, not domain data.
 
+## Show what operations exist (optional catalog)
+
+Executors may implement `FlowOperationProvider` to describe the operation
+they perform: a stable key, label, summary, input/output schema documents,
+and capabilities. `FlowOperationCatalog::describe()` collects one descriptor
+per step using the same `supports()` matching the runner uses. The RPC
+service exposes the result read-only through `flow.operations`, but only
+when the host binds operation providers — opt-in like OWS registration.
+A descriptor is authoring data: it never executes anything and grants no
+permissions.
+
+Optional schema checking plugs in through `FlowStepSchemaValidator`:
+wire `new FlowStepExecution(failures: $reporter, schemas: $validator)` into
+the runner. Input violations fail closed before the executor runs; output
+violations turn the step into a terminal failure with
+`error_code: output_schema_violation` instead of persisting the violating
+output. The core never interprets schemas itself.
+
+## Observability
+
+Binding resolution reports `input_resolved` / `input_unresolved` events
+through your `FlowEventSink`. Payloads carry the binding name, its source
+description, the required flag, and the outcome — never resolved values, so
+events are safe to forward to private logs or telemetry by default. A
+required unresolved binding records a `failed` outcome, then fails the pass
+closed.
+
 ## Finish a deferred step
 
 `StepResult::deferred()` leaves the step pending. When your provider webhook,
@@ -94,6 +121,15 @@ result, or targeting the wrong run or attempt, is rejected. It updates
 the state, but does **not** automatically run newly eligible steps. Your host
 must call `FlowRunner::run()` again (or dispatch its own job) to resume the
 flow. The executable example shows both calls.
+
+A deferred attempt can declare a wait deadline:
+`StepResult::deferred('waiting', deadlineAt: $epochSeconds)`. The deadline
+rides on the step state (`deadline_at`) for every surface to read. Core
+never expires work on its own clock; when the deadline passes, your host or
+driver applies `FlowStateTransition::timedOut()`, which turns the waiting
+attempt into a terminal non-retriable failure. A callback that arrives
+after the deadline but before the transition is still accepted — reconcile
+the external provider yourself.
 
 Avoid external side effects while holding a database transaction or Redis
 lock. For a slow or irreversible operation, dispatch it from your host and

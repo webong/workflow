@@ -10,10 +10,12 @@ use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
+use Webong\WorkFlow\Services\FlowOperationCatalog;
 use Webong\WorkFlow\Services\FlowStateTransition;
 use Webong\WorkFlow\Services\RunScopedFlowStateStore;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
+use Webong\WorkFlow\ValueObjects\FlowOperation;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowState;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
@@ -25,12 +27,17 @@ use Webong\WorkFlow\ValueObjects\StepResult;
  */
 final readonly class FlowRpcApplication
 {
+    /**
+     * @param iterable<mixed> $operationProviders Executors able to describe
+     *     their operations; binding any enables the `flow.operations` method.
+     */
     public function __construct(
         private FlowDefinitionProvider $definitions,
         private FlowStateStoreFactory $stores,
         private FlowExecutionDispatcher $execution,
         private FlowStateTransition $transitions = new FlowStateTransition(),
         private ?OpenWorkflow $ows = null,
+        private iterable $operationProviders = [],
     ) {
     }
 
@@ -47,6 +54,7 @@ final readonly class FlowRpcApplication
             'flow.complete' => $this->complete($params),
             'flow.resume' => $this->resume($params),
             'flow.cancel' => $this->cancel($params),
+            'flow.operations' => $this->operations($params),
             'ows.validate' => $this->owsValidate($params),
             'ows.register' => $this->owsRegister($params),
             default => throw new RpcFailure(-32601, 'Method not found'),
@@ -258,6 +266,30 @@ final readonly class FlowRpcApplication
             -32601,
             'OWS document registration is not enabled on this host',
         );
+    }
+
+    /**
+     * Read-only operation catalog for one flow: the descriptors host
+     * executors publish for the definition's steps. Available only when
+     * the host binds operation providers (ADR 0009: the catalog is
+     * authoring data, not an execution or upload endpoint).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function operations(array $params): array
+    {
+        if ($this->operationProviders === []) {
+            throw new RpcFailure(-32601, 'The operation catalog is not enabled on this host');
+        }
+
+        $definition = $this->definitions->definition($this->flowKey($params));
+        $operations = (new FlowOperationCatalog())->describe($definition, $this->operationProviders);
+
+        return ['operations' => array_map(
+            static fn (FlowOperation $operation): array => $operation->toArray(),
+            $operations,
+        )];
     }
 
     /** @param array<string, mixed> $params */

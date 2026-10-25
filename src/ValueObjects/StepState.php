@@ -21,6 +21,7 @@ final readonly class StepState
         public ?int $nextRetryAt = null,
         public array $metadata = [],
         public ?StepOutput $output = null,
+        public ?int $deadlineAt = null,
     ) {
     }
 
@@ -57,6 +58,7 @@ final readonly class StepState
             nextRetryAt: is_int($data['next_retry_at'] ?? null) ? $data['next_retry_at'] : null,
             metadata: $metadata,
             output: $output,
+            deadlineAt: is_int($data['deadline_at'] ?? null) ? $data['deadline_at'] : null,
         );
     }
 
@@ -78,6 +80,10 @@ final readonly class StepState
         // so old and new documents keep the same canonical shape.
         if ($this->output !== null) {
             $data['output'] = $this->output->value;
+        }
+
+        if ($this->deadlineAt !== null) {
+            $data['deadline_at'] = $this->deadlineAt;
         }
 
         return $data;

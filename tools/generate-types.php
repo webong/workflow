@@ -25,6 +25,7 @@ $files = [
     'src/ValueObjects/FlowState.php',
     'src/ValueObjects/FlowAction.php',
     'src/ValueObjects/FlowPresentation.php',
+    'src/ValueObjects/FlowOperation.php',
     'src/ValueObjects/FlowRetryPolicy.php',
     'src/ValueObjects/FlowEvent.php',
 ];

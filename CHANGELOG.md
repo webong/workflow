@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Added safe binding-resolution diagnostics: `input_resolved` /
+  `input_unresolved` events carry binding names and source descriptions,
+  never resolved values (ADR 0009).
+- Added an optional schema hook: hosts wiring a `FlowStepSchemaValidator`
+  get fail-closed input validation before the executor runs and terminal
+  output-violation failures instead of persisted violating outputs. The
+  core interprets no schema language.
+- Added the optional operation catalog: executors may implement
+  `FlowOperationProvider` to publish stable operation descriptors
+  (key, label, summary, input/output schemas, capabilities);
+  `FlowOperationCatalog::describe()` collects them per step. The JSON-RPC
+  service exposes them read-only via `flow.operations`, opt-in by binding
+  providers.
+- Added wait deadlines for deferred attempts: `StepResult::deferred(...,
+  deadlineAt: $epoch)` records a first-class `deadline_at` on step state,
+  and `FlowStateTransition::timedOut()` is the explicit host-owned timeout
+  transition. Core never expires work on its own clock.
 - Added first-class structured step output: `StepResult` and `StepState`
   carry a transport-neutral `StepOutput` whose presence is distinguishable
   from a JSON null. Absent output serializes no `output` key; old state

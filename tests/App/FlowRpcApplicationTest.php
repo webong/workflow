@@ -7,6 +7,7 @@ namespace Webong\WorkFlow\Tests\App;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
+use Webong\WorkFlow\Contracts\FlowOperationProvider;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Contracts\ForgettableFlowStateStore;
@@ -18,6 +19,7 @@ use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;
 use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowOperation;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\StepResult;
@@ -239,7 +241,7 @@ final class FlowRpcApplicationTest extends TestCase
         self::assertSame(1, $executor->calls);
     }
 
-    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null, bool $ows = false): FlowRpcApplication
+    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null, bool $ows = false, bool $operations = false): FlowRpcApplication
     {
         $definitions ??= new class implements FlowDefinitionProvider {
             public function definition(string $flowKey): FlowDefinition
@@ -269,7 +271,49 @@ final class FlowRpcApplicationTest extends TestCase
             $stores,
             new FlowExecutionDispatcher([new InlineFlowExecutionDriver(new FlowRunner(), [$executor])]),
             ows: $ows ? new OpenWorkflow() : null,
+            operationProviders: $operations ? [$executor] : [],
         );
+    }
+
+    public function testOperationCatalogIsOptInAndReturnsStepDescriptors(): void
+    {
+        // Without a bound provider the method does not exist for this host.
+        $application = $this->application($this->noopExecutor(), operations: false);
+        try {
+            $application->invoke('flow.operations', ['flow_key' => 'demo']);
+            self::fail('The catalog must be opt-in.');
+        } catch (RpcFailure $exception) {
+            self::assertSame(-32601, $exception->rpcCode);
+            self::assertSame('The operation catalog is not enabled on this host', $exception->getMessage());
+        }
+
+        $provider = new class implements FlowStepExecutor, FlowOperationProvider {
+            public function supports(FlowStepDefinition $step): bool
+            {
+                return $step->id === 'approve';
+            }
+
+            public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
+            {
+                return StepResult::deferred('Awaiting approval');
+            }
+
+            public function operation(FlowStepDefinition $step): ?FlowOperation
+            {
+                return new FlowOperation(
+                    key: 'demo.approve',
+                    label: 'Approve',
+                    inputSchema: ['type' => 'object'],
+                    capabilities: ['approval'],
+                );
+            }
+        };
+
+        $enabled = $this->application($provider, operations: true);
+        $report = $enabled->invoke('flow.operations', ['flow_key' => 'demo']);
+        self::assertSame(['approve'], array_keys($report['operations']));
+        self::assertSame('demo.approve', $report['operations']['approve']['key']);
+        self::assertSame(['approval'], $report['operations']['approve']['capabilities']);
     }
 
     public function testOwsMethodsAreUnavailableUnlessTheHostEnablesThem(): void

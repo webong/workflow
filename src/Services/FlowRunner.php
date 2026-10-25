@@ -89,7 +89,7 @@ final class FlowRunner
             $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STEP_STARTED, $definition->key, $step->id));
             // Bindings resolve before the executor is chosen to run: a
             // required unresolved binding fails closed without invoking it.
-            $input = $this->inputs->resolve($step, $state, $context);
+            $input = $this->inputs->resolve($this->events, $definition->key, $step, $state, $context);
             $stepState = $this->execution->execute($executor, new FlowStepInvocation(
                 step: $step,
                 input: $input,

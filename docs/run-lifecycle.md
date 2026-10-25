@@ -147,6 +147,9 @@ resume but omits it from responses.
 - RPC mutation notifications without a JSON-RPC request `id` do not execute.
   Read notifications still follow JSON-RPC notification semantics.
 - Supply the authorizer argument to `FlowActionDispatcher`.
+- Binding resolution now reports `input_resolved` / `input_unresolved`
+  events (names and sources only, never values); the operation catalog and
+  schema validation are opt-in contracts — see ADR 0009.
 - Replace assertions or UI logic that expected raw executor exception text
   with public error codes and private correlation-based diagnostics.
 - Deploy changed Temporal workflow code with your host's worker-versioning

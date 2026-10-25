@@ -21,6 +21,7 @@ final readonly class StepResult
         public array $metadata = [],
         public bool $deferred = false,
         public ?StepOutput $output = null,
+        public ?int $deadlineAt = null,
     ) {
     }
 
@@ -48,10 +49,17 @@ final readonly class StepResult
         return new self(FlowStepStatus::PENDING, $message, metadata: $metadata);
     }
 
-    /** @param array<string, mixed> $metadata */
-    public static function deferred(?string $message = null, ?int $nextRetryAt = null, array $metadata = []): self
+    /**
+     * Leaves the step waiting for an external outcome. `nextRetryAt` is the
+     * retry hint for failed attempts; `deadlineAt` is the absolute wait
+     * deadline for this attempt — the host applies the timeout transition
+     * when it passes (core owns no scheduler).
+     *
+     * @param array<string, mixed> $metadata
+     */
+    public static function deferred(?string $message = null, ?int $nextRetryAt = null, array $metadata = [], ?int $deadlineAt = null): self
     {
-        return new self(FlowStepStatus::PENDING, message: $message, nextRetryAt: $nextRetryAt, metadata: [...$metadata, 'deferred' => true], deferred: true);
+        return new self(FlowStepStatus::PENDING, message: $message, nextRetryAt: $nextRetryAt, metadata: [...$metadata, 'deferred' => true], deferred: true, deadlineAt: $deadlineAt);
     }
 
     public function toState(): StepState
@@ -66,6 +74,7 @@ final readonly class StepResult
             nextRetryAt: $this->nextRetryAt,
             metadata: $this->metadata,
             output: $this->output,
+            deadlineAt: $this->deadlineAt,
         );
     }
 }

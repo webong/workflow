@@ -100,7 +100,7 @@ final class TemporalFlowWorkflow
                 // replay); a required unresolved binding fails closed before
                 // the activity runs.
                 $input = (new FlowInputResolver())
-                    ->resolve($step, $this->state, new ArrayFlowContext($context));
+                    ->resolve(new \Webong\WorkFlow\Services\NullFlowEventSink(), $definition->key, $step, $this->state, new ArrayFlowContext($context));
                 /** @var array<string, mixed> $stepData */
                 $stepData = yield $this->activities->execute([
                     'definition' => $definition->toArray(),

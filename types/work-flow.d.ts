@@ -7,6 +7,8 @@ export type FlowEventType =
     | 'step_failed'
     | 'step_skipped'
     | 'step_deferred'
+    | 'input_resolved'
+    | 'input_unresolved'
     | 'completed'
     | 'attention_required'
     | 'blocked'
@@ -49,6 +51,20 @@ export interface FlowDefinition {
     metadata: Record<string, unknown>;
 }
 
+/**
+ * A stable description of one host-approved operation. Schemas are opaque
+ * documents the host interprets; a descriptor never executes anything.
+ */
+export interface FlowOperation {
+    key: string;
+    label: string;
+    summary: string | null;
+    input_schema: Record<string, unknown> | null;
+    output_schema: Record<string, unknown> | null;
+    capabilities: string[];
+    metadata: Record<string, unknown>;
+}
+
 export interface StepState {
     status: FlowStepStatus;
     message: string | null;
@@ -64,6 +80,8 @@ export interface StepState {
      * including an explicit null.
      */
     output?: unknown;
+    /** Absolute epoch wait deadline for a deferred attempt; omitted when unset. */
+    deadline_at?: number;
 }
 
 export interface FlowState {

@@ -40,6 +40,10 @@ final readonly class TemporalFlowCompletion
             $payload['output'] = $result->output->value;
         }
 
+        if ($result->deadlineAt !== null) {
+            $payload['deadline_at'] = $result->deadlineAt;
+        }
+
         return [
             'flow_key' => $this->completion->flowKey,
             'step_id' => $this->completion->stepId,
@@ -89,6 +93,7 @@ final readonly class TemporalFlowCompletion
                 metadata: is_array($result['metadata'] ?? null) ? $result['metadata'] : [],
                 deferred: ($result['deferred'] ?? false) === true,
                 output: $output,
+                deadlineAt: is_int($result['deadline_at'] ?? null) ? $result['deadline_at'] : null,
             ),
         ));
     }

@@ -102,6 +102,13 @@ $record('output-list', ['operation' => 'complete', 'state' => $outputWaiting['st
     ...$outputWaiting['work'][0], 'idempotency_key' => 'list-output',
     'result' => ['status' => 'completed', 'output' => [1, 2, 3]],
 ]]);
+
+// Wait deadlines ride first-class on step state (omitted when unset).
+$deadlineState = $waiting['state'];
+$deadlineState['steps']['approve']['deadline_at'] = 2147483647;
+$record('deadline-round-trip', ['operation' => 'evaluate', 'state' => $deadlineState]);
+$deadlineState['steps']['approve']['deadline_at'] = 'not-an-int';
+$record('deadline-invalid', ['operation' => 'evaluate', 'state' => $deadlineState]);
 foreach (['{', 'null', '[]', '{"protocol":2}', '{"protocol":1,"operation":"unknown"}'] as $i => $invalid) {
     $record('invalid-'.$i, $invalid);
 }

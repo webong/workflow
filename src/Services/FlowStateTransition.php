@@ -93,6 +93,41 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         );
     }
 
+    /**
+     * Explicit timeout transition for a waiting deferred step whose wait
+     * deadline passed. The host (or its driver) owns the wakeup that calls
+     * this; core never expires work on its own clock. The step becomes a
+     * terminal non-retriable failure so the run can surface for operator
+     * reconciliation, exactly like an explicit business failure.
+     */
+    public function timedOut(FlowDefinition $definition, FlowState $state, string $stepId, ?string $message = null): FlowState
+    {
+        $state->run?->assertDefinition($definition);
+
+        if ($definition->step($stepId) === null) {
+            throw new InvalidArgumentException("Unknown flow definition step '{$stepId}'.");
+        }
+
+        $step = $state->steps[$stepId] ?? null;
+        if ($step === null
+            || $step->status !== FlowStepStatus::PENDING
+            || ($step->metadata['deferred'] ?? false) !== true) {
+            throw new InvalidArgumentException("Flow step '{$stepId}' is not awaiting deferred completion.");
+        }
+
+        if ($state->status === \Webong\WorkFlow\Enums\FlowStatus::CANCELLED) {
+            throw new InvalidArgumentException('A cancelled run cannot time out.');
+        }
+
+        return $this->evaluator->evaluate($definition, $state->withStep($stepId, new StepState(
+            status: FlowStepStatus::FAILED,
+            error: $message ?? 'Wait deadline exceeded.',
+            updatedAt: $this->timestamp !== null ? ($this->timestamp)() : date(\DATE_ATOM),
+            retriable: false,
+            attempts: $step->attempts,
+        )));
+    }
+
     public function complete(
         FlowDefinition $definition,
         FlowState $state,
@@ -156,6 +191,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             // present JSON null when duplicate events are compared.
             $completion->result->output !== null,
             $completion->result->output?->value,
+            $completion->result->deadlineAt,
         ]);
 
         if (isset($events[$eventKey])) {
@@ -202,6 +238,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
 
         $retriable = $result->retriable;
         $nextRetryAt = $result->nextRetryAt;
+        $deadlineAt = $result->status === FlowStepStatus::PENDING ? $result->deadlineAt : null;
         $step = $definition?->step($stepId);
         if ($result->status === FlowStepStatus::FAILED && $step !== null) {
             $retriable = ($retriable ?? $step->retryPolicy->enabled ?? $step->retriable)
@@ -222,6 +259,7 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
             nextRetryAt: $nextRetryAt,
             metadata: $metadata,
             output: $result->output,
+            deadlineAt: $deadlineAt,
         ));
     }
 }

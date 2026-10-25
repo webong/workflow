@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\Services;
 
+use InvalidArgumentException;
 use Throwable;
 use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowFailureReporter;
 use Webong\WorkFlow\Contracts\FlowMutableContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
+use Webong\WorkFlow\Contracts\FlowStepSchemaValidator;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
@@ -19,12 +21,27 @@ use Webong\WorkFlow\ValueObjects\StepState;
 /** Shared execution semantics for inline workers and Temporal Activities. */
 final readonly class FlowStepExecution
 {
-    public function __construct(private FlowFailureReporter $failures = new NullFlowFailureReporter())
-    {
+    public function __construct(
+        private FlowFailureReporter $failures = new NullFlowFailureReporter(),
+        private readonly ?FlowStepSchemaValidator $schemas = null,
+    ) {
     }
 
     public function execute(FlowStepExecutor $executor, FlowStepInvocation $invocation): StepState
     {
+        // Input schemas gate the executor call: a violation fails closed
+        // before any side effect, like an unresolved required binding.
+        if ($this->schemas !== null) {
+            $inputViolations = $this->schemas->validateInput($invocation->step, $invocation->input);
+            if ($inputViolations !== []) {
+                throw new InvalidArgumentException(sprintf(
+                    "Flow step '%s' input violates its schema: %s",
+                    $invocation->step->id,
+                    implode('; ', $inputViolations),
+                ));
+            }
+        }
+
         $workflowMeta = [
             'flow_key' => $invocation->flowKey,
             'run_id' => $invocation->runId,
@@ -58,6 +75,21 @@ final readonly class FlowStepExecution
             );
         }
 
+        // Output schemas never block the executor (its effect already
+        // happened), but a violating output must not persist as the step's
+        // business result: the step fails terminally instead.
+        if ($this->schemas !== null && $result->output !== null) {
+            $outputViolations = $this->schemas->validateOutput($invocation->step, $result->output);
+            if ($outputViolations !== []) {
+                $result = new StepResult(
+                    FlowStepStatus::FAILED,
+                    error: 'Step output violated its schema.',
+                    retriable: false,
+                    metadata: ['error_code' => 'output_schema_violation', 'schema_violations' => $outputViolations],
+                );
+            }
+        }
+
         $attempts = $invocation->previous->attempts + 1;
         $retriable = $result->retriable;
         $nextRetryAt = $result->nextRetryAt;
@@ -82,6 +114,7 @@ final readonly class FlowStepExecution
             nextRetryAt: $nextRetryAt,
             metadata: $metadata,
             output: $result->output,
+            deadlineAt: $result->deferred ? $result->deadlineAt : null,
         );
     }
 
