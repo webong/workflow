@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.0-rc.1 - 2026-10-26
+
 - Added server-side definition authoring: `FlowDefinitionValidator` checks a
   canonical document's topology, bindings, operation availability, required
   capabilities, and optional operation schemas without executing, registering,

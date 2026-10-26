@@ -214,50 +214,46 @@ These repositories are references, not code sources for WorkFlow's MIT codebase.
 Do not copy implementations or introduce dependencies without a licensing
 review. This is not a legal conclusion about any particular deployment.
 
-## Concrete lessons for current WorkFlow contracts
+## Adopted lessons in current WorkFlow contracts
 
-### 1. Make step output first-class
+### 1. Step output is first-class
 
-`StepResult` and `StepState` currently have status, message, error, retry
-data, and metadata, but no domain-neutral output. The OWS adapter carries
-outputs through adapter metadata and `OwsWorkflowContext`, proving the need
-while showing metadata is not the right long-term transport.
+`StepResult` and `StepState` carry a domain-neutral `StepOutput` whose
+presence is distinguishable from a JSON `null` value. It is persisted and
+serialized across the native ABI, JSON-RPC, Laravel/PDO stores, and Temporal
+adapter. The OWS adapter uses the same first-class field while retaining a
+legacy metadata read/write path for older state. Output remains
+transport-neutral; HTTP status and headers belong in adapter metadata.
 
-Add a nullable `StepOutput` object whose presence is distinguishable from a
-JSON `null` value. Persist it in `StepState` and serialize it across the
-native ABI, JSON-RPC, Laravel/PDO stores, and Temporal adapter with a state
-migration. Keep it transport-neutral; HTTP status/headers belong in adapter
-metadata. This is the highest-value change because every later binding, schema,
-client, and editor feature depends on stable outputs.
+### 2. Typed bindings do not select a framework or expression language
 
-### 2. Add typed bindings without selecting a framework or expression language
+`FlowStepDefinition::dependsOn` defines ordering, while serializable
+`FlowInputBinding` objects select data from run context and predecessor
+outputs. Validation rejects unknown steps, forward references, and reads from
+non-dependencies. Required unresolved bindings fail before an executor can
+perform an external effect.
 
-`FlowStepDefinition::dependsOn` already defines ordering. Add a separate
-serializable input-binding contract for data selection from run context and
-predecessor `StepOutput` values. Validation should reject unknown steps,
-forward references, and reads from non-dependencies.
+Core embeds no PHP callables and requires no expression language. RFC 6901
+JSON Pointers cover ordinary selection; richer languages can sit behind the
+optional resolver contract.
 
-Do not embed PHP callables or require JSONata/jq in core. A portable path form
-such as JSON Pointer covers ordinary selection; richer languages can sit behind
-an optional `FlowValueResolver`. Required unresolved bindings must fail before
-an executor performs an external effect.
+### 3. The operation catalog is separate from execution
 
-### 3. Separate an operation catalog from execution
-
-`FlowStepExecutor::supports()` should remain execution authority. Add an
-optional catalog contract with stable operation key, label, input schema,
-output schema, and capabilities. Laravel, CLI, RPC, documentation, Boost
-guidance, or a future editor can consume the same catalog.
+`FlowStepExecutor::supports()` remains execution authority. The optional
+`FlowOperationProvider`, `FlowOperationDirectory`, and
+`FlowOperationCatalog` contracts describe stable operation keys, labels,
+schemas, and capabilities. Laravel, CLI, RPC, documentation, Boost guidance,
+or a future editor can consume the same descriptions.
 
 The catalog describes host-approved executors. It must not turn arbitrary URLs
 or client code into executable operations.
 
-### 4. Make binding resolution observable and safe
+### 4. Binding resolution is observable and safe
 
-Extend `FlowEventSink` with structured resolution outcomes: source,
-destination, resolver ID, success/warning/error, run, step, and attempt. Values
-should be omitted or redacted by default. A persisted failure should identify
-the binding without exposing credentials or unrelated context.
+`FlowEventSink` receives structured `input_resolved` and `input_unresolved`
+outcomes containing the binding and source description, required flag, and
+outcome. Resolved values are never included, so a failure identifies the
+binding without exposing credentials or unrelated context.
 
 ### 5. Keep scheduling in the driver
 
@@ -270,9 +266,10 @@ native hosts have different atomicity constraints. Core may expose a pure
 
 WorkFlow already correlates completion to flow, run, step, attempt, and
 idempotency key, while the RPC claim prevents overlapping passes. Preserve
-that stronger generic callback contract. Useful additions are an optional wait
-deadline, an explicit timeout/cancellation transition, and driver-owned wakeup
-mechanisms—not replacing callbacks with polling or making Temporal mandatory.
+that stronger generic callback contract. Wait deadlines and the explicit
+`timedOut()` transition are now part of the state contract. Wakeups remain
+driver-owned; callbacks are not replaced with polling and Temporal remains
+optional.
 
 ### 7. Leave child workflows and visual authoring until the contracts settle
 
@@ -281,18 +278,21 @@ concurrency limits, and per-item outcome aggregation. Those belong after output
 and binding contracts. Likewise, an editor should consume the serialized
 definition and operation catalog rather than create a second workflow model.
 
-## Adoption order
+## Adoption status
 
-1. Add `StepOutput` to result/state serialization, persistence, migrations,
-   and all cross-language/runtime surfaces.
-2. Add minimal binding objects, a resolver interface, and validation for
-   context and predecessor outputs.
-3. Add input/output schema hooks around executor calls.
-4. Add safe resolution events and diagnostics.
-5. Add an optional operation catalog and expose it only where hosts authorize.
-6. Add deadlines and timeout transitions to deferred work.
-7. Consider ready-set concurrency and child runs only after those contracts are
-   proven by real workflows.
+1. **Complete:** `StepOutput` in result/state serialization, persistence,
+   migrations, and all cross-language/runtime surfaces (ADR 0008).
+2. **Complete:** minimal bindings, a resolver interface, and validation for
+   context and predecessor outputs (ADR 0008).
+3. **Complete:** optional input/output schema hooks around executor calls
+   (ADR 0009).
+4. **Complete:** safe resolution events and diagnostics (ADR 0009).
+5. **Complete:** an optional operation catalog exposed only where hosts
+   authorize it (ADR 0009 and ADR 0010).
+6. **Complete:** deadlines and explicit timeout transitions for deferred work
+   (ADR 0009).
+7. **Deferred deliberately:** consider ready-set concurrency and child runs
+   only after the completed contracts are proven by real consuming workflows.
 
 ## What not to do
 

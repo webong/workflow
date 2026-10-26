@@ -9,8 +9,8 @@ binary works on every Linux distribution or operating system.
 | Job | What it proves |
 | --- | --- |
 | Validation | Actions/shell syntax and release-asset validation tests |
-| PHP 8.3 | Composer validation, PHPStan, PHPUnit with PostgreSQL/Redis, generated TypeScript contracts |
-| Native AMD64 / ARM64 | TypePHP compilation, 41 PHP 8.3 parity cases, C ABI ownership/thread checks, six Node tests, then the same checks after unpacking the SDK into a clean runtime |
+| PHP 8.3 | Composer validation, PHPStan, PHPUnit with PostgreSQL/MySQL/SQLite/Redis, generated TypeScript/Python/Go contracts |
+| Native AMD64 / ARM64 | TypePHP compilation, 55 PHP 8.3 parity cases, C ABI ownership/thread checks, six Node tests, then the same checks after unpacking the SDK into a clean runtime |
 | RPC AMD64 / ARM64 | Go unit tests/vet, FrankenPHP image build, HTTP authentication and lifecycle tests with PostgreSQL |
 
 Each architecture runs on its own native GitHub runner. The compiler stays
