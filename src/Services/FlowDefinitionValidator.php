@@ -40,11 +40,15 @@ use Webong\WorkFlow\ValueObjects\FlowValidationReport;
  * Operation, capability, and schema checks need host executors. When none
  * are supplied the report says so (`operations_unchecked`) instead of
  * guessing. Nothing here is authoritative about runtime data: an unresolved
- * binding still fails closed in FlowInputResolver, and the core never
- * interprets schema values or the data that flows through them.
+ * binding still fails closed in FlowInputResolver. Runtime schema validation
+ * remains host-owned; this authoring service reads only optional `required`
+ * and `properties` hints and never inspects runtime values.
  */
 final readonly class FlowDefinitionValidator
 {
+    /** @var list<mixed> */
+    private array $executors;
+
     /**
      * @param iterable<mixed> $executors Executors bound on this host; only
      *     FlowStepExecutor instances participate in operation checks.
@@ -53,9 +57,11 @@ final readonly class FlowDefinitionValidator
      *     warning when the document declares requirements.
      */
     public function __construct(
-        private iterable $executors = [],
+        iterable $executors = [],
         private ?array $grantedCapabilities = null,
+        private FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
     ) {
+        $this->executors = $this->executorResolver->normalize($executors);
     }
 
     public function validate(mixed $definition): FlowValidationReport
@@ -67,9 +73,7 @@ final readonly class FlowDefinitionValidator
             ]);
         }
 
-        $executors = is_array($this->executors)
-            ? array_values($this->executors)
-            : iterator_to_array($this->executors, false);
+        $executors = $this->executors;
 
         $diagnostics = [];
 
@@ -89,12 +93,15 @@ final readonly class FlowDefinitionValidator
                 ? $this->warning('no_steps', 'The flow definition declares no steps.', '/steps')
                 : $this->error('invalid_steps', 'Flow steps must be a list of step objects.', '/steps');
             $stepsValue = [];
+        } elseif (! array_is_list($stepsValue)) {
+            $diagnostics[] = $this->error('invalid_steps', 'Flow steps must be a list of step objects.', '/steps');
+            $stepsValue = [];
         } elseif ($stepsValue === []) {
             $diagnostics[] = $this->warning('no_steps', 'The flow definition declares no steps.', '/steps');
         }
 
         /** @var list<mixed> $rawSteps */
-        $rawSteps = array_values($stepsValue);
+        $rawSteps = $stepsValue;
 
         $idIndexes = $this->stepIds($rawSteps, $diagnostics);
         $dependencies = $this->dependencies($rawSteps, $idIndexes, $diagnostics);
@@ -366,10 +373,10 @@ final readonly class FlowDefinitionValidator
                 }
 
                 $pointer = $binding['pointer'] ?? '';
-                if (! is_string($pointer) || ($pointer !== '' && ! str_starts_with($pointer, '/'))) {
+                if (! is_string($pointer) || ! JsonPointer::isValid($pointer)) {
                     $diagnostics[] = $this->error(
                         'invalid_pointer',
-                        "Step '{$id}' input '{$name}' pointer must be empty or start with '/'.",
+                        "Step '{$id}' input '{$name}' pointer must be a valid RFC 6901 JSON Pointer.",
                         $bindingPath.'/pointer',
                         $id,
                     );
@@ -460,13 +467,7 @@ final readonly class FlowDefinitionValidator
                 continue;
             }
 
-            $executor = null;
-            foreach ($executors as $candidate) {
-                if ($candidate instanceof FlowStepExecutor && $candidate->supports($step)) {
-                    $executor = $candidate;
-                    break;
-                }
-            }
+            $executor = $this->executorResolver->resolve($step, $executors);
 
             if ($executor === null) {
                 if ($executors !== []) {

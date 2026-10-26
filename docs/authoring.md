@@ -132,17 +132,17 @@ need not be registered, and no store or executor is invoked.
   "id": 1,
   "method": "flow.validate",
   "params": {
-    "definition": { "key": "orders", "version": 1, "steps": [] },
-    "capabilities": ["approval"]
+    "definition": { "key": "orders", "version": 1, "steps": [] }
   }
 }
 ```
 
 - `definition` is required and must be an object. Otherwise the call fails
   with `-32602 Invalid definition`.
-- `capabilities` is optional. When present it must be a list of non-empty
-  strings; otherwise the call fails with `-32602 Invalid capabilities`. When
-  omitted, capability checks are skipped.
+- Capability grants come from the trusted host's `FlowRpcApplication`
+  configuration. RPC callers cannot supply or override them. When the host
+  binds no grant list, capability requirements produce
+  `capabilities_unchecked` warnings.
 - The host's bound operation providers supply operation, input, and output
   checks. They never gain execution rights by being bound.
 
@@ -210,6 +210,11 @@ it contains no `error`-severity diagnostic. Warnings never block a run.
 | `types/work_flow.py` | Python 3.11+ |
 | `types/work_flow.go` | Go |
 
+In Go, `StepState.Output` is `json.RawMessage`: `nil` means the `output` key
+was absent, while `json.RawMessage("null")` means the step explicitly produced
+JSON null. This preserves the same output-presence contract as PHP, TypeScript,
+and Python.
+
 The authoring types are `FlowDefinition`, `FlowStepDefinition`,
 `FlowInputBinding`, `FlowOperation`, `FlowDiagnostic`,
 `FlowValidationReport`, and `FlowValidateParams`. They are transport shapes:
@@ -219,7 +224,6 @@ stays on the server.
 ```ts
 const response = await call('flow.validate', {
   definition: { key: 'orders', version: 1, steps: [] },
-  capabilities: ['approval'],
 } satisfies FlowValidateParams);
 ```
 
@@ -233,8 +237,8 @@ authoring loop without a framework:
 2. The example prints the operations the host publishes.
 3. It constructs a definition from those descriptors, binding `notify` to
    `approve`'s structured output.
-4. It validates the document through `flow.validate` with explicit
-   capabilities.
+4. It validates the document through `flow.validate` using capabilities bound
+   by the trusted host.
 5. It starts the flow, observes the deferred `approve` step, completes it, and
    resumes to `notify`.
 

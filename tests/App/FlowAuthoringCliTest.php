@@ -191,6 +191,20 @@ final class FlowAuthoringCliTest extends TestCase
         self::assertSame([], $data['diagnostics']);
     }
 
+    public function testInspectLoadsTheExecutorBootstrapOnlyOnce(): void
+    {
+        $counter = $this->file('');
+        [$code, , $stderr] = $this->invoke([
+            'inspect',
+            $this->definition($this->validDocument()),
+            '--executors='.$this->executors($counter),
+            '--capabilities=approval',
+        ]);
+
+        self::assertSame(0, $code, $stderr);
+        self::assertSame('x', file_get_contents($counter));
+    }
+
     public function testInspectFailsForAnUnparseableDefinition(): void
     {
         [$code, $stdout] = $this->invoke([
@@ -256,7 +270,7 @@ final class FlowAuthoringCliTest extends TestCase
         ];
     }
 
-    private function executors(): string
+    private function executors(?string $counterFile = null): string
     {
         $code = <<<'PHP'
 <?php
@@ -304,6 +318,14 @@ return [new class implements FlowStepExecutor, FlowOperationProvider, FlowOperat
     }
 }];
 PHP;
+
+        if ($counterFile !== null) {
+            $code = str_replace(
+                "<?php\n",
+                "<?php\nfile_put_contents(".var_export($counterFile, true).", 'x', FILE_APPEND);\n",
+                $code,
+            );
+        }
 
         return $this->file($code);
     }

@@ -16,8 +16,9 @@ use InvalidArgumentException;
  * input into runnable behavior.
  *
  * Schemas are JSON-Schema-shaped documents (or any host-chosen schema
- * form); the core treats them as opaque serializable values and never
- * interprets them.
+ * form). Runtime execution treats them as opaque serializable values;
+ * FlowDefinitionValidator optionally reads only the authoring hints described
+ * by ADR 0010 (`required` and `properties`).
  */
 final readonly class FlowOperation
 {

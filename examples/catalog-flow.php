@@ -136,13 +136,13 @@ $application = new FlowRpcApplication(
     $stores,
     new FlowExecutionDispatcher([new InlineFlowExecutionDriver(new FlowRunner(), [$executor])]),
     operationProviders: [$executor],
+    grantedCapabilities: ['approval'],
 );
 
 // 5. Validate the document without registering it. The definition travels in
-//    the request, and the host's granted capabilities are explicit.
+//    the request; granted capabilities come from trusted host configuration.
 $validation = $application->invoke('flow.validate', [
     'definition' => $definition->toArray(),
-    'capabilities' => ['approval'],
 ]);
 $diagnostics = is_array($validation['diagnostics'] ?? null) ? $validation['diagnostics'] : [];
 $errors = 0;

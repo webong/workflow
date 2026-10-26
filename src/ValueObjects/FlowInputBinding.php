@@ -35,8 +35,9 @@ final readonly class FlowInputBinding
             throw new InvalidArgumentException('A context input binding cannot reference a step.');
         }
 
-        if ($this->pointer !== '' && ! str_starts_with($this->pointer, '/')) {
-            throw new InvalidArgumentException("A JSON Pointer must be empty or start with '/', got '{$this->pointer}'.");
+        if ($this->pointer !== ''
+            && (! str_starts_with($this->pointer, '/') || preg_match('/~(?:[^01]|$)/', $this->pointer) === 1)) {
+            throw new InvalidArgumentException("Invalid RFC 6901 JSON Pointer '{$this->pointer}'.");
         }
     }
 

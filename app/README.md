@@ -95,6 +95,8 @@ Check for a top-level JSON-RPC `error` before reading either field.
 | `flow.complete` | `flow_key`, `subject`, `run_id`, `step_id`, `attempt`, `idempotency_key`, `result` | State after a deferred step completes |
 | `flow.resume` | `flow_key`, `subject`, `run_id` | State after one eligible execution pass |
 | `flow.cancel` | `flow_key`, `subject`, `run_id` | Cancelled state; future callbacks and work stop |
+| `flow.validate` | `definition` | Structured authoring diagnostics without registering or executing the definition |
+| `flow.operations` | `flow_key` | Host-published operation descriptors for the registered definition |
 
 `subject` is an object with string `type` and `id` fields. `result.status`
 may be `completed`, `failed`, or `skipped`, with optional `message` and
@@ -121,8 +123,10 @@ For a real deployment, provide a trusted PHP bootstrap that returns a
 PostgreSQL, MySQL, and SQLite — selected with `WORKFLOW_DB_DRIVER`; you can
 supply another implementation of the same store interface. Build a
 derived image or mount trusted application code and set `WORKFLOW_BOOTSTRAP`
-to its absolute path. Never accept PHP code or flow definitions from RPC
-callers. `WORKFLOW_PHP_PUBLIC` selects the bundled PHP bridge document root.
+to its absolute path. Never accept PHP code or client definitions for
+registration or execution; `flow.validate` may inspect an unregistered
+definition but cannot run or save it. `WORKFLOW_PHP_PUBLIC` selects the
+bundled PHP bridge document root.
 
 `flow.start` currently supports the `inline` execution driver only. The
 Laravel queue and Temporal execution adapters remain separate; this module
@@ -151,6 +155,10 @@ is no automatic lease expiry or blind replay. See [run lifecycle](../docs/run-li
   `127.0.0.1:8080` outside Compose. `/healthz` has no authentication and
   exposes no flow data.
   It checks process liveness, not PHP execution or database readiness.
+- `WORKFLOW_CAPABILITIES` is an optional comma-separated grant list used by
+  `flow.validate` in the example bootstrap. It is trusted host configuration;
+  RPC callers cannot override it. Leave it unset to return
+  `capabilities_unchecked` when definitions require capabilities.
 - The Docker health check probes `/healthz` on port 8080. Set
   `WORKFLOW_HEALTH_URL` as well if you change the internal listen address.
 - Database connection settings in the example are selected with

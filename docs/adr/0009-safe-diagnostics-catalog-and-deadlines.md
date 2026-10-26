@@ -27,7 +27,11 @@ before the exception.
 `FlowStepSchemaValidator` lets a host (or an optional extension) check
 resolved input and step output against schemas from wherever the host
 keeps them — an operation descriptor, step metadata, or host configuration.
-The core interprets neither the schema form nor the violations.
+Runtime execution interprets neither the schema form nor the violations.
+ADR 0010 later permits the authoring-only validator to read the optional
+`required` and `properties` hints from operation descriptors; that shallow
+linting never validates runtime values and does not change this execution
+boundary.
 
 - Input violations throw before the executor is invoked (fail closed, same
   class as unresolved required bindings).
@@ -39,7 +43,7 @@ The core interprets neither the schema form nor the violations.
 ### 3. The operation catalog describes; it never executes
 
 `FlowOperation` is a serializable descriptor: stable operation key, label,
-summary, input/output schema documents (opaque to the core), capabilities,
+summary, input/output schema documents (opaque to runtime execution), capabilities,
 and metadata. Executors may implement `FlowOperationProvider::operation()`;
 `FlowOperationCatalog::describe()` collects descriptors per step using the
 same `supports()` matching the runner uses, so a descriptor always

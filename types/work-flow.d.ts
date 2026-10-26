@@ -130,8 +130,6 @@ export interface FlowValidationReport {
 export interface FlowValidateParams {
     /** The document to validate; it need not be registered. */
     definition: FlowDefinition;
-    /** Capabilities the host grants. Omit to skip capability checks. */
-    capabilities?: string[];
 }
 
 /**

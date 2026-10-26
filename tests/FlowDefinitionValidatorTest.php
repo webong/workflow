@@ -231,6 +231,47 @@ final class FlowDefinitionValidatorTest extends TestCase
         self::assertFalse($this->validator()->validate(42)->isValid());
     }
 
+    public function testItRejectsAJsonObjectWhereTheCanonicalDocumentRequiresAStepList(): void
+    {
+        $report = $this->validator()->validate([
+            'key' => 'orders',
+            'steps' => ['first' => ['id' => 'a']],
+        ]);
+
+        self::assertFalse($report->isValid());
+        self::assertSame('/steps', $this->first($report, 'invalid_steps')->path);
+    }
+
+    public function testItRejectsPointersWithInvalidRfc6901Escapes(): void
+    {
+        $report = $this->validator()->validate([
+            'key' => 'orders',
+            'steps' => [[
+                'id' => 'a',
+                'input' => ['bad' => ['source' => 'context', 'pointer' => '/bad~2pointer']],
+            ]],
+        ]);
+
+        self::assertFalse($report->isValid());
+        self::assertSame('/steps/0/input/bad/pointer', $this->first($report, 'invalid_pointer')->path);
+    }
+
+    public function testItCanReuseAnExecutorGeneratorAcrossValidations(): void
+    {
+        $executor = $this->executor(['a']);
+        $executors = (static function () use ($executor): \Generator {
+            yield $executor;
+        })();
+        $validator = new FlowDefinitionValidator($executors, ['approval']);
+        $document = [
+            'key' => 'orders',
+            'steps' => [['id' => 'a', 'input' => ['order' => ['source' => 'context', 'pointer' => '/order_id']]]],
+        ];
+
+        self::assertTrue($validator->validate($document)->isValid());
+        self::assertTrue($validator->validate($document)->isValid());
+    }
+
     public function testAnEmptyStepListIsValidButWarned(): void
     {
         $report = (new FlowDefinitionValidator())->validate(['key' => 'orders', 'steps' => []]);

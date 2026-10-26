@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\ValueObjects;
 
+use Webong\WorkFlow\Services\CanonicalFlowPayload;
+
 /**
  * First-class structured output of one step.
  *
@@ -20,6 +22,7 @@ final readonly class StepOutput
     public function __construct(
         public mixed $value = null,
     ) {
+        CanonicalFlowPayload::normalize($this->value);
     }
 
     public static function from(mixed $value): self

@@ -82,7 +82,9 @@ final readonly class FlowAuthoringCli
             return $this->fail('Usage: workflow validate <definition.json|-> [--executors=file.php] [--capabilities=a,b] [--json]');
         }
 
-        $report = $this->report($this->definition($file), $options);
+        $document = $this->definition($file);
+        $executors = $this->executors($this->flag($options, 'executors'));
+        $report = $this->report($document, $options, $executors);
 
         if ($this->json($options)) {
             $this->write($this->encode($report->toArray()));
@@ -171,7 +173,7 @@ final readonly class FlowAuthoringCli
 
         $document = $this->definition($file);
         $executors = $this->executors($this->flag($options, 'executors'));
-        $report = $this->report($document, $options);
+        $report = $this->report($document, $options, $executors);
 
         try {
             $definition = FlowDefinition::fromArray($document);
@@ -237,11 +239,12 @@ final readonly class FlowAuthoringCli
     /**
      * @param array<string, mixed> $document
      * @param array{positional: list<string>, flags: array<string, string|bool>} $options
+     * @param list<mixed> $executors
      */
-    private function report(array $document, array $options): FlowValidationReport
+    private function report(array $document, array $options, array $executors): FlowValidationReport
     {
         return (new FlowDefinitionValidator(
-            $this->executors($this->flag($options, 'executors')),
+            $executors,
             $this->grantedCapabilities($this->flag($options, 'capabilities')),
         ))->validate($document);
     }

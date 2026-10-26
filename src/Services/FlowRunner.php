@@ -23,6 +23,7 @@ final class FlowRunner
         private readonly FlowEventSink $events = new NullFlowEventSink(),
         private readonly FlowStepExecution $execution = new FlowStepExecution(),
         private readonly FlowInputResolver $inputs = new FlowInputResolver(),
+        private readonly FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
     )
     {
     }
@@ -43,7 +44,7 @@ final class FlowRunner
         if (in_array($state->status, [\Webong\WorkFlow\Enums\FlowStatus::CANCELLED, \Webong\WorkFlow\Enums\FlowStatus::COMPLETED], true)) {
             return $state;
         }
-        $executors = is_array($executors) ? $executors : iterator_to_array($executors, false);
+        $executors = $this->executorResolver->normalize($executors);
         $this->events->record(new \Webong\WorkFlow\ValueObjects\FlowEvent(FlowEventType::STARTED, $definition->key));
 
         foreach ($definition->executionSteps() as $step) {
@@ -74,13 +75,7 @@ final class FlowRunner
                 continue;
             }
 
-            $executor = null;
-            foreach ($executors as $candidate) {
-                if ($candidate instanceof FlowStepExecutor && $candidate->supports($step)) {
-                    $executor = $candidate;
-                    break;
-                }
-            }
+            $executor = $this->executorResolver->resolve($step, $executors);
 
             if (! $executor instanceof FlowStepExecutor) {
                 throw new RuntimeException("No executor registered for flow step '{$step->id}'.");

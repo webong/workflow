@@ -145,7 +145,6 @@ return [
             'description' => 'Parameters for the flow.validate JSON-RPC method.',
             'fields' => [
                 ['name' => 'definition', 'type' => 'FlowDefinition', 'description' => 'The document to validate; it need not be registered.'],
-                ['name' => 'capabilities', 'type' => 'string[]', 'optional' => true, 'description' => 'Capabilities the host grants. Omit to skip capability checks.'],
             ],
         ],
         'FlowOperationsResult' => [

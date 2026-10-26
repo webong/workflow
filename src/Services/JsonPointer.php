@@ -27,8 +27,8 @@ final class JsonPointer
             return [true, $document];
         }
 
-        if (! str_starts_with($pointer, '/')) {
-            throw new InvalidArgumentException("A JSON Pointer must be empty or start with '/', got '{$pointer}'.");
+        if (! self::isValid($pointer)) {
+            throw new InvalidArgumentException("Invalid RFC 6901 JSON Pointer '{$pointer}'.");
         }
 
         $value = $document;
@@ -54,6 +54,12 @@ final class JsonPointer
         }
 
         return [true, $value];
+    }
+
+    public static function isValid(string $pointer): bool
+    {
+        return $pointer === ''
+            || (str_starts_with($pointer, '/') && preg_match('/~(?:[^01]|$)/', $pointer) !== 1);
     }
 
     /** Escapes one reference token so it can be used in a JSON Pointer. */

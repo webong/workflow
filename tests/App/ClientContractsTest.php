@@ -63,4 +63,14 @@ final class ClientContractsTest extends TestCase
         $diagnosticFields = array_column($manifest['types']['FlowDiagnostic']['fields'], 'name');
         self::assertSame(['code', 'message', 'severity', 'path', 'step_id', 'details'], $diagnosticFields);
     }
+
+    public function testTheGoStateContractPreservesAbsentAndExplicitNullOutputs(): void
+    {
+        /** @var array{enums: array<string, mixed>, types: array<string, mixed>} $manifest */
+        $manifest = require dirname(__DIR__, 2).'/tools/contracts.php';
+        $go = ClientContractGenerator::render($manifest)['go'];
+
+        self::assertStringContainsString('import "encoding/json"', $go);
+        self::assertStringContainsString('Output json.RawMessage `json:"output,omitempty"`', $go);
+    }
 }

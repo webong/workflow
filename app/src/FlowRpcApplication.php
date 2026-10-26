@@ -28,9 +28,14 @@ use Webong\WorkFlow\ValueObjects\StepResult;
  */
 final readonly class FlowRpcApplication
 {
+    /** @var list<mixed> */
+    private array $operationProviders;
+
     /**
      * @param iterable<mixed> $operationProviders Executors able to describe
      *     their operations; binding any enables the `flow.operations` method.
+     * @param list<string>|null $grantedCapabilities Capabilities this host
+     *     grants. RPC callers cannot override this trust boundary.
      */
     public function __construct(
         private FlowDefinitionProvider $definitions,
@@ -38,8 +43,18 @@ final readonly class FlowRpcApplication
         private FlowExecutionDispatcher $execution,
         private FlowStateTransition $transitions = new FlowStateTransition(),
         private ?OpenWorkflow $ows = null,
-        private iterable $operationProviders = [],
+        iterable $operationProviders = [],
+        private ?array $grantedCapabilities = null,
     ) {
+        $this->operationProviders = is_array($operationProviders)
+            ? array_values($operationProviders)
+            : iterator_to_array($operationProviders, false);
+
+        foreach ($this->grantedCapabilities ?? [] as $capability) {
+            if (! is_string($capability) || $capability === '') {
+                throw new \InvalidArgumentException('Granted capabilities must be non-empty strings.');
+            }
+        }
     }
 
     /**
@@ -287,24 +302,11 @@ final readonly class FlowRpcApplication
             throw new RpcFailure(-32602, 'Invalid definition');
         }
 
-        $capabilities = $params['capabilities'] ?? null;
-        $granted = null;
-        if ($capabilities !== null) {
-            if (! is_array($capabilities) || ! array_is_list($capabilities)) {
-                throw new RpcFailure(-32602, 'Invalid capabilities');
-            }
-            /** @var list<string> $parsed */
-            $parsed = [];
-            foreach ($capabilities as $capability) {
-                if (! is_string($capability) || $capability === '') {
-                    throw new RpcFailure(-32602, 'Invalid capabilities');
-                }
-                $parsed[] = $capability;
-            }
-            $granted = $parsed;
+        if (array_key_exists('capabilities', $params)) {
+            throw new RpcFailure(-32602, 'Capabilities are configured by the host');
         }
 
-        $report = (new FlowDefinitionValidator($this->operationProviders, $granted))->validate($definition);
+        $report = (new FlowDefinitionValidator($this->operationProviders, $this->grantedCapabilities))->validate($definition);
 
         return $report->toArray();
     }

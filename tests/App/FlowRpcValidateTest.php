@@ -44,11 +44,10 @@ final class FlowRpcValidateTest extends TestCase
         );
     }
 
-    public function testItChecksCapabilitiesWhenTheRequestSuppliesThem(): void
+    public function testItChecksCapabilitiesFromHostConfiguration(): void
     {
-        $result = $this->application($this->provider())->invoke('flow.validate', [
+        $result = $this->application($this->provider(), ['approval'])->invoke('flow.validate', [
             'definition' => $this->document(),
-            'capabilities' => ['approval'],
         ]);
 
         self::assertTrue($result['valid']);
@@ -57,9 +56,8 @@ final class FlowRpcValidateTest extends TestCase
 
     public function testItReportsMissingCapabilitiesAsErrors(): void
     {
-        $result = $this->application($this->provider())->invoke('flow.validate', [
+        $result = $this->application($this->provider(), ['something-else'])->invoke('flow.validate', [
             'definition' => $this->document(),
-            'capabilities' => ['something-else'],
         ]);
 
         self::assertFalse($result['valid']);
@@ -87,18 +85,19 @@ final class FlowRpcValidateTest extends TestCase
         }
     }
 
-    public function testItRejectsMalformedCapabilities(): void
+    public function testItRejectsCallerSuppliedCapabilityGrants(): void
     {
         $application = $this->application();
 
-        foreach ([['key' => 'value'], ['approval', 42], [''], 'approval'] as $capabilities) {
-            try {
-                $application->invoke('flow.validate', ['definition' => $this->document(), 'capabilities' => $capabilities]);
-                self::fail('Malformed capabilities were accepted.');
-            } catch (RpcFailure $exception) {
-                self::assertSame(-32602, $exception->rpcCode);
-                self::assertSame('Invalid capabilities', $exception->getMessage());
-            }
+        try {
+            $application->invoke('flow.validate', [
+                'definition' => $this->document(),
+                'capabilities' => ['approval'],
+            ]);
+            self::fail('Caller-supplied capability grants were accepted.');
+        } catch (RpcFailure $exception) {
+            self::assertSame(-32602, $exception->rpcCode);
+            self::assertSame('Capabilities are configured by the host', $exception->getMessage());
         }
     }
 
@@ -133,7 +132,8 @@ final class FlowRpcValidateTest extends TestCase
         ] : $document;
     }
 
-    private function application(?FlowStepExecutor $provider = null): FlowRpcApplication
+    /** @param list<string>|null $grantedCapabilities */
+    private function application(?FlowStepExecutor $provider = null, ?array $grantedCapabilities = null): FlowRpcApplication
     {
         $definitions = new class implements FlowDefinitionProvider {
             public function definition(string $flowKey): FlowDefinition
@@ -154,6 +154,7 @@ final class FlowRpcValidateTest extends TestCase
             $stores,
             new FlowExecutionDispatcher([]),
             operationProviders: $provider === null ? [] : [$provider],
+            grantedCapabilities: $grantedCapabilities,
         );
     }
 

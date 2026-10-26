@@ -105,8 +105,6 @@ class FlowValidationReport(TypedDict):
 class FlowValidateParams(TypedDict):
     # The document to validate; it need not be registered.
     definition: FlowDefinition
-    # Capabilities the host grants. Omit to skip capability checks.
-    capabilities: NotRequired[list[str]]
 
 # Result of the flow.operations JSON-RPC method.
 class FlowOperationsResult(TypedDict):

@@ -45,7 +45,8 @@ the specific checks, the document is re-parsed with
 to construct is never reported valid.
 
 `flow.validate` and `workflow validate` both call this class. The CLI adds no
-rules; it parses arguments, loads an executor file, and renders the report.
+rules; it parses arguments, loads an executor file once, and renders the
+report.
 
 ### 2. Diagnostics are data
 
@@ -66,7 +67,9 @@ A validator with no executors cannot know what operations exist, so it says so
 with `operations_unchecked`. A validator with no granted-capability list cannot
 know whether requirements are satisfied, so it says `capabilities_unchecked`
 when any requirement was found. Both are warnings; callers that need a strict
-answer must supply the host context.
+answer must supply the host context. RPC capabilities are bound when the host
+constructs `FlowRpcApplication`; request callers cannot claim grants. The CLI
+operator supplies them explicitly with `--capabilities` as local host context.
 
 ### 4. Operation discovery is a separate, description-only contract
 

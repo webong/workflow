@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Services;
 
 use Webong\WorkFlow\Contracts\FlowOperationProvider;
-use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowOperation;
 
@@ -20,31 +19,27 @@ use Webong\WorkFlow\ValueObjects\FlowOperation;
  */
 final readonly class FlowOperationCatalog
 {
+    public function __construct(
+        private FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
+    ) {
+    }
+
     /**
      * @param iterable<mixed> $executors
      * @return array<string, FlowOperation> Keyed by step id; steps without a descriptor are omitted.
      */
     public function describe(FlowDefinition $definition, iterable $executors): array
     {
-        $executors = is_array($executors) ? $executors : iterator_to_array($executors, false);
+        $executors = $this->executorResolver->normalize($executors);
         $operations = [];
 
         foreach ($definition->steps as $step) {
-            foreach ($executors as $executor) {
-                if (! $executor instanceof FlowStepExecutor || ! $executor->supports($step)) {
-                    continue;
+            $executor = $this->executorResolver->resolve($step, $executors);
+            if ($executor instanceof FlowOperationProvider) {
+                $operation = $executor->operation($step);
+                if ($operation !== null) {
+                    $operations[$step->id] = $operation;
                 }
-
-                // The first supporting executor is the execution authority;
-                // only its descriptor counts.
-                if ($executor instanceof FlowOperationProvider) {
-                    $operation = $executor->operation($step);
-                    if ($operation !== null) {
-                        $operations[$step->id] = $operation;
-                    }
-                }
-
-                break;
             }
         }
 

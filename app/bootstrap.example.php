@@ -14,6 +14,7 @@ use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 
 require_once dirname(__DIR__).'/vendor/autoload.php';
@@ -83,6 +84,10 @@ $executor = new class implements FlowStepExecutor {
 };
 
 $serializer = new DefaultFlowStateSerializer();
+$configuredCapabilities = getenv('WORKFLOW_CAPABILITIES');
+$grantedCapabilities = is_string($configuredCapabilities) && trim($configuredCapabilities) !== ''
+    ? array_values(array_filter(array_map('trim', explode(',', $configuredCapabilities)), static fn (string $value): bool => $value !== ''))
+    : null;
 
 $factory = match ($driver) {
     'postgres' => new PdoPostgresFlowStateStoreFactory($connection, $serializer),
@@ -96,4 +101,5 @@ return new FlowRpcApplication(
     execution: new FlowExecutionDispatcher([
         new InlineFlowExecutionDriver(new FlowRunner(), [$executor]),
     ]),
+    grantedCapabilities: $grantedCapabilities,
 );

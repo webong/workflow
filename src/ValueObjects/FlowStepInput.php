@@ -32,7 +32,7 @@ final readonly class FlowStepInput
 
     public function get(string $name, mixed $default = null): mixed
     {
-        return $this->values[$name] ?? $default;
+        return array_key_exists($name, $this->values) ? $this->values[$name] : $default;
     }
 
     /** @return array<string, mixed> */

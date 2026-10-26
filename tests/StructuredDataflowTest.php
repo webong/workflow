@@ -60,6 +60,24 @@ final class StructuredDataflowTest extends TestCase
         self::assertNotNull(StepState::fromArray($presentNullData)->output);
     }
 
+    public function test_input_get_distinguishes_a_present_null_from_an_absent_value(): void
+    {
+        $input = new FlowStepInput(['present' => null]);
+
+        self::assertTrue($input->has('present'));
+        self::assertNull($input->get('present', 'fallback'));
+        self::assertFalse($input->has('absent'));
+        self::assertSame('fallback', $input->get('absent', 'fallback'));
+    }
+
+    public function test_step_output_rejects_values_that_cannot_cross_json_boundaries(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Flow payloads must contain only JSON-compatible values.');
+
+        StepOutput::from(new \stdClass());
+    }
+
     public function test_scalar_object_and_list_outputs_round_trip(): void
     {
         $serializer = new DefaultFlowStateSerializer();
@@ -268,6 +286,13 @@ final class StructuredDataflowTest extends TestCase
         self::assertFalse(JsonPointer::resolve($document, '/items/0/deep')[0], 'Scalars have no children');
         self::assertTrue(JsonPointer::resolve(['k' => null], '/k')[0]);
         self::assertSame([false, null], JsonPointer::resolve($document, '/items/x'));
+    }
+
+    public function test_json_pointer_rejects_invalid_tilde_escapes(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+
+        JsonPointer::resolve(['bad~2key' => 'value'], '/bad~2key');
     }
 
     public function test_a_required_unresolved_binding_fails_before_the_executor_runs(): void

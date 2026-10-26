@@ -2,15 +2,17 @@
 
 package workflow
 
+import "encoding/json"
+
 // Overall status of one flow run.
 type FlowStatus string
 
 const (
-	FlowStatusPending FlowStatus = "pending"
-	FlowStatusRunning FlowStatus = "running"
+	FlowStatusPending   FlowStatus = "pending"
+	FlowStatusRunning   FlowStatus = "running"
 	FlowStatusAttention FlowStatus = "attention"
 	FlowStatusCompleted FlowStatus = "completed"
-	FlowStatusBlocked FlowStatus = "blocked"
+	FlowStatusBlocked   FlowStatus = "blocked"
 	FlowStatusCancelled FlowStatus = "cancelled"
 )
 
@@ -18,29 +20,29 @@ const (
 type FlowStepStatus string
 
 const (
-	FlowStepStatusPending FlowStepStatus = "pending"
-	FlowStepStatusRunning FlowStepStatus = "running"
+	FlowStepStatusPending   FlowStepStatus = "pending"
+	FlowStepStatusRunning   FlowStepStatus = "running"
 	FlowStepStatusCompleted FlowStepStatus = "completed"
-	FlowStepStatusFailed FlowStepStatus = "failed"
-	FlowStepStatusSkipped FlowStepStatus = "skipped"
+	FlowStepStatusFailed    FlowStepStatus = "failed"
+	FlowStepStatusSkipped   FlowStepStatus = "skipped"
 )
 
 // Kinds of state-change events a host may persist or stream.
 type FlowEventType string
 
 const (
-	FlowEventTypeStarted FlowEventType = "started"
-	FlowEventTypeStepStarted FlowEventType = "step_started"
-	FlowEventTypeStepCompleted FlowEventType = "step_completed"
-	FlowEventTypeStepFailed FlowEventType = "step_failed"
-	FlowEventTypeStepSkipped FlowEventType = "step_skipped"
-	FlowEventTypeStepDeferred FlowEventType = "step_deferred"
-	FlowEventTypeInputResolved FlowEventType = "input_resolved"
-	FlowEventTypeInputUnresolved FlowEventType = "input_unresolved"
-	FlowEventTypeCompleted FlowEventType = "completed"
+	FlowEventTypeStarted           FlowEventType = "started"
+	FlowEventTypeStepStarted       FlowEventType = "step_started"
+	FlowEventTypeStepCompleted     FlowEventType = "step_completed"
+	FlowEventTypeStepFailed        FlowEventType = "step_failed"
+	FlowEventTypeStepSkipped       FlowEventType = "step_skipped"
+	FlowEventTypeStepDeferred      FlowEventType = "step_deferred"
+	FlowEventTypeInputResolved     FlowEventType = "input_resolved"
+	FlowEventTypeInputUnresolved   FlowEventType = "input_unresolved"
+	FlowEventTypeCompleted         FlowEventType = "completed"
 	FlowEventTypeAttentionRequired FlowEventType = "attention_required"
-	FlowEventTypeBlocked FlowEventType = "blocked"
-	FlowEventTypeReset FlowEventType = "reset"
+	FlowEventTypeBlocked           FlowEventType = "blocked"
+	FlowEventTypeReset             FlowEventType = "reset"
 )
 
 // Where a step input binding reads from.
@@ -48,16 +50,16 @@ type FlowInputSource string
 
 const (
 	FlowInputSourceContext FlowInputSource = "context"
-	FlowInputSourceOutput FlowInputSource = "output"
+	FlowInputSourceOutput  FlowInputSource = "output"
 )
 
 // How a validation finding affects authoring. Only error blocks.
 type FlowDiagnosticSeverity string
 
 const (
-	FlowDiagnosticSeverityError FlowDiagnosticSeverity = "error"
+	FlowDiagnosticSeverityError   FlowDiagnosticSeverity = "error"
 	FlowDiagnosticSeverityWarning FlowDiagnosticSeverity = "warning"
-	FlowDiagnosticSeverityInfo FlowDiagnosticSeverity = "info"
+	FlowDiagnosticSeverityInfo    FlowDiagnosticSeverity = "info"
 )
 
 // A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
@@ -150,8 +152,6 @@ type FlowValidationReport struct {
 type FlowValidateParams struct {
 	// The document to validate; it need not be registered.
 	Definition FlowDefinition `json:"definition"`
-	// Capabilities the host grants. Omit to skip capability checks.
-	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // Result of the flow.operations JSON-RPC method.
@@ -191,7 +191,7 @@ type StepState struct {
 	// Execution bookkeeping.
 	Metadata map[string]any `json:"metadata"`
 	// First-class structured output; the key is omitted when the step has no output.
-	Output any `json:"output,omitempty"`
+	Output json.RawMessage `json:"output,omitempty"`
 	// Absolute epoch deadline for a deferred attempt.
 	DeadlineAt *int `json:"deadline_at,omitempty"`
 }
