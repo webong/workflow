@@ -77,4 +77,21 @@ final readonly class StepResult
             deadlineAt: $this->deadlineAt,
         );
     }
+
+    /** @return array<string, mixed> */
+    public function toArray(): array
+    {
+        return [
+            'status' => $this->status->value,
+            'message' => $this->message,
+            'error' => $this->error,
+            'retriable' => $this->retriable,
+            'attempts' => $this->attempts,
+            'nextRetryAt' => $this->nextRetryAt,
+            'metadata' => $this->metadata,
+            'deferred' => $this->deferred,
+            'output' => $this->output?->value,
+            'deadlineAt' => $this->deadlineAt,
+        ];
+    }
 }

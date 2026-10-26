@@ -5,7 +5,7 @@ ENV COMPOSER_ALLOW_SUPERUSER=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git jq unzip libpq-dev libsqlite3-dev libzip-dev \
-    && docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite zip \
+    && docker-php-ext-install pdo_mysql pdo_pgsql pdo_sqlite zip sockets \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && rm -rf /var/lib/apt/lists/*

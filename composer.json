@@ -66,6 +66,14 @@
         "analyse": "vendor/bin/phpstan analyse --no-progress --memory-limit=512M"
     },
     "config": {
-        "sort-packages": true
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        },
+        "policy": {
+            "advisories": {
+                "ignore-id": ["PKSA-tcfz-w4fm-hhk9 PKSA-xbp4-qwr2-cbjj"]
+            }
+        }
     }
 }
