@@ -1,0 +1,30 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+use Webong\WorkFlow\App\FlowAuthoringCli;
+
+// Support both this repository (vendor/ next to bin/) and a package installed
+// as a Composer dependency (vendor/autoload.php three levels up from
+// vendor/webong/workflow/bin/workflow).
+$autoloaders = [
+    dirname(__DIR__).'/vendor/autoload.php',
+    dirname(__DIR__, 3).'/autoload.php',
+];
+
+$loaded = false;
+foreach ($autoloaders as $autoloader) {
+    if (is_file($autoloader)) {
+        require $autoloader;
+        $loaded = true;
+        break;
+    }
+}
+
+if (! $loaded) {
+    fwrite(STDERR, "Error: cannot locate the Composer autoloader. Run 'composer install' first.\n");
+    exit(2);
+}
+
+exit((new FlowAuthoringCli())->run(array_slice($argv, 1)));

@@ -79,6 +79,33 @@ before the executor runs, so an unresolved value can never trigger an
 external effect. Resolved input travels only through `$invocation->input`;
 metadata is for execution bookkeeping, not domain data.
 
+## Validate before you start
+
+`FlowDefinitionValidator` checks a document without executing, registering,
+or persisting it:
+
+```php
+use Webong\WorkFlow\Services\FlowDefinitionValidator;
+
+$report = (new FlowDefinitionValidator($executors, ['approval']))
+    ->validate($definition->toArray());
+
+foreach ($report->diagnostics as $diagnostic) {
+    echo "{$diagnostic->severity->value} {$diagnostic->path} {$diagnostic->code}: {$diagnostic->message}\n";
+}
+
+$ok = $report->isValid(); // false when any diagnostic has error severity
+```
+
+Supply executors to check operation availability and optional schemas, and the
+capabilities your host grants to check capability requirements. Omitting them
+is allowed; the report then warns with `operations_unchecked` or
+`capabilities_unchecked` instead of pretending those surfaces were checked.
+Diagnostics are data with stable codes and JSON Pointer paths, so they can be
+logged or rendered. The same module backs `flow.validate` and the `workflow`
+CLI; see the [authoring guide](authoring.md) for the CLI, diagnostic codes,
+and generated Node/Python/Go contracts.
+
 ## Show what operations exist (optional catalog)
 
 Executors may implement `FlowOperationProvider` to describe the operation

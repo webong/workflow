@@ -1,6 +1,6 @@
 ---
 name: work-flow-development
-description: Build and integrate WorkFlow definitions, executors, state transitions, deferred callbacks, and optional Laravel persistence.
+description: Build and integrate WorkFlow definitions, executors, state transitions, deferred callbacks, definition validation, and optional Laravel persistence.
 ---
 
 # WorkFlow Development
@@ -39,11 +39,10 @@ Use `FlowStepDefinition`, never the old `StepDefinition` name. Dependencies must
 reference existing step IDs, and definitions must not contain cycles.
 
 <code-snippet name="Flow step executor" lang="php">
-use Webong\WorkFlow\Contracts\FlowContext;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 
 $executor = new class implements FlowStepExecutor {
     public function supports(FlowStepDefinition $step): bool
@@ -51,11 +50,12 @@ $executor = new class implements FlowStepExecutor {
         return $step->id === 'authorize';
     }
 
-    public function execute(
-        FlowStepDefinition $step,
-        FlowContext $context,
-        StepState $previous,
-    ): StepResult {
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        // Bindings declared on the step definition arrive resolved; read
+        // them from the invocation, never from metadata.
+        $order = $invocation->input->get('order');
+
         return StepResult::completed('Channel authorized.');
     }
 };
@@ -137,6 +137,43 @@ visibility is not authorization. Route private exceptions through
 Use idempotent retry policies with bounded attempts. Side effects execute
 outside storage locks under the host's claim/outbox and delivery strategy.
 
+## Authoring and validation
+
+Check a definition before starting it. `FlowDefinitionValidator` accepts the
+canonical document (or a `FlowDefinition`) plus optional executors and optional
+granted capabilities, and returns a `FlowValidationReport` instead of throwing:
+
+```php
+use Webong\WorkFlow\Services\FlowDefinitionValidator;
+
+$report = (new FlowDefinitionValidator($executors, ['approval']))
+    ->validate($definition->toArray());
+
+$report->isValid();      // false when any error-severity diagnostic exists
+$report->diagnostics;    // FlowDiagnostic[] with code, path, severity, details
+```
+
+The same module backs the `workflow` CLI and the `flow.validate` JSON-RPC
+method, so never reimplement the rules in a client or an adapter:
+
+- `bin/workflow validate flow.json --executors=executors.php --capabilities=approval`
+- `bin/workflow inspect flow.json ...` adds bindings and operation descriptors
+- `bin/workflow operations --executors=executors.php` lists the host catalog
+- `--json` emits the same object as `flow.validate`
+- exit codes: `0` valid, `1` invalid/unparseable, `2` usage or input error
+
+`flow.validate` is pure: the definition travels in the request, need not be
+registered, and no store or executor runs. Diagnostics use stable codes and
+RFC 6901 JSON Pointer paths. Missing host context is reported rather than
+hidden: no executors yields `operations_unchecked`; no capabilities yields
+`capabilities_unchecked` when a requirement exists. Both are warnings.
+
+Node, Python, and Go contracts are generated from `tools/contracts.php` with
+`composer types`: `types/work-flow.d.ts`, `types/work_flow.py`, and
+`types/work_flow.go`. They carry types only; validation stays server-side. CI
+fails when the checked-in files drift. See `docs/authoring.md` for the full
+diagnostic table and a catalog-backed example.
+
 ## Upgrade checks
 
 For an existing integration, read `docs/run-lifecycle.md` in the installed
@@ -154,5 +191,5 @@ make docker-test
 </code-snippet>
 
 This runs PHPUnit, PostgreSQL and Redis integration coverage, PHPStan, and
-TypeScript contract generation. Preserve the package's framework-agnostic
-boundary when adding Laravel conveniences.
+generated Node, Python, and Go contract checks. Preserve the package's
+framework-agnostic boundary when adding Laravel conveniences.

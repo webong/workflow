@@ -178,11 +178,24 @@ Node, Python, PHP, Go, or another backend can use an HTTP client to call the
 [JSON-RPC application](../app/README.md). That guide includes Docker startup,
 authentication, and complete `curl` requests you can translate to your client.
 
+If you are authoring a definition rather than running one, call
+`flow.validate` (or use the `workflow` CLI) instead of starting a run. The
+[authoring guide](authoring.md) documents the method, the diagnostic codes,
+and the generated Node/Python/Go types. Clients carry types only; validation
+stays on the server.
+
 The difference matters: RPC calls reference a server-registered `flow_key`
 and a subject/run identity. The server loads and saves state and runs trusted
 PHP executors. Native calls carry the whole state snapshot and return work
 for the caller to perform. Native `protocol: 1` messages are **not** JSON-RPC
 2.0 requests and cannot be sent unchanged to `/rpc`.
+
+RPC also exposes `flow.validate`, which checks a definition document without
+registering or running it. Use it before `flow.start`, in CI, or from an
+editor. The generated Node, Python, and Go contracts carry the request and
+response types only; validation stays on the server. See the
+[authoring guide](authoring.md) for `flow.validate`, the `workflow` CLI, and
+the diagnostic codes.
 
 Keep RPC private to trusted backends. Browser/mobile apps should call their
 own authorized backend, never receive the service bearer token. If Node or

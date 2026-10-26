@@ -62,6 +62,7 @@ repeated. Starting the process again uses a new run ID.
 | Your application needs | Guide |
 | --- | --- |
 | Flows inside a PHP application or CLI | [PHP library: start, save, complete, resume](docs/php-library.md) |
+| Authoring and validating a flow definition without running it | [Authoring guide: CLI, `flow.validate`, and generated contracts](docs/authoring.md) |
 | Laravel models with database or Redis state | [Laravel installation and example](docs/laravel.md) |
 | Choosing between PHP, Node, Python, and other languages | [Language integration guide with runnable examples](docs/languages.md) |
 | Calls from another language or backend | [Go/FrankenPHP JSON-RPC service](app/README.md) |
@@ -106,13 +107,16 @@ code and correlation ID. Supply `FlowFailureReporter` to send the original
 exception to private logs. Explicit messages returned by your executors must
 also be safe to display.
 
-## Laravel Boost and TypeScript
+## Laravel Boost and generated contracts
 
 The package includes [Laravel Boost guidelines and a skill](docs/laravel.md#laravel-boost)
 to help apps integrate the run, callback, and persistence contracts.
 
 [types/work-flow.d.ts](types/work-flow.d.ts) describes the serialized API.
-`composer types` regenerates the PHP-derived contracts used by CI.
+`composer types` regenerates the PHP-derived TypeScript, Python, and Go
+contracts used by CI. Those contracts are types only: validation lives on the
+server, so a client sends `flow.validate` and renders the diagnostics it
+returns. See the [authoring guide](docs/authoring.md).
 
 ## Test the package
 

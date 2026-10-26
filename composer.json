@@ -47,6 +47,9 @@
             "Webong\\WorkFlow\\Tests\\": "tests/"
         }
     },
+    "bin": [
+        "bin/workflow"
+    ],
     "extra": {
         "laravel": {
             "providers": [
@@ -56,7 +59,10 @@
     },
     "scripts": {
         "test": "vendor/bin/phpunit --testdox",
-        "types": "php tools/generate-types.php",
+        "types": [
+            "php tools/generate-types.php",
+            "php tools/generate-clients.php"
+        ],
         "analyse": "vendor/bin/phpstan analyse --no-progress --memory-limit=512M"
     },
     "config": {

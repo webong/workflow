@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+- Added server-side definition authoring: `FlowDefinitionValidator` checks a
+  canonical document's topology, bindings, operation availability, required
+  capabilities, and optional operation schemas without executing, registering,
+  or persisting anything. It returns structured `FlowDiagnostic` entries with
+  stable codes and RFC 6901 JSON Pointer paths instead of throwing, and its
+  report is valid only when no `error`-severity finding exists (ADR 0010).
+- Added the `flow.validate` JSON-RPC method. The definition travels in the
+  request and need not be registered; optional `capabilities` supply the
+  host's grants, and bound operation providers supply operation and schema
+  checks. One validator backs both this method and the CLI.
+- Added the `workflow` CLI (`bin/workflow`): `validate`, `inspect`, and
+  `operations`, with text or `--json` output, stdin support, an
+  `--executors=file.php` host context, `--capabilities=a,b` grants, and
+  stable exit codes. It is a presentation layer only: no rules, no execution.
+- Added generated Node, Python, and Go contracts for the authoring and state
+  surfaces (`types/work-flow.d.ts`, `types/work_flow.py`, `types/work_flow.go`)
+  from one manifest, `tools/contracts.php`, via `composer types`. Clients
+  carry types only; validation stays server-side.
+- Added `FlowOperationDirectory`, an optional description-only contract for
+  listing the operations a host publishes before a definition exists, and
+  `examples/catalog-flow.php`, which discovers operations, validates a
+  definition through `flow.validate`, starts it, completes a deferred step,
+  and resumes to structured outputs.
+
 - Added safe binding-resolution diagnostics: `input_resolved` /
   `input_unresolved` events carry binding names and source descriptions,
   never resolved values (ADR 0009).

@@ -55,4 +55,10 @@ final class JsonPointer
 
         return [true, $value];
     }
+
+    /** Escapes one reference token so it can be used in a JSON Pointer. */
+    public static function escape(string $token): string
+    {
+        return str_replace(['~', '/'], ['~0', '~1'], $token);
+    }
 }

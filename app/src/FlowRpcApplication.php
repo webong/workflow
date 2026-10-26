@@ -9,6 +9,7 @@ use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
+use Webong\WorkFlow\Services\FlowDefinitionValidator;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowOperationCatalog;
 use Webong\WorkFlow\Services\FlowStateTransition;
@@ -54,6 +55,7 @@ final readonly class FlowRpcApplication
             'flow.complete' => $this->complete($params),
             'flow.resume' => $this->resume($params),
             'flow.cancel' => $this->cancel($params),
+            'flow.validate' => $this->validateDefinition($params),
             'flow.operations' => $this->operations($params),
             'ows.validate' => $this->owsValidate($params),
             'ows.register' => $this->owsRegister($params),
@@ -266,6 +268,45 @@ final readonly class FlowRpcApplication
             -32601,
             'OWS document registration is not enabled on this host',
         );
+    }
+
+    /**
+     * Validate a canonical flow definition without executing, registering,
+     * or persisting it. The definition travels in the request, so an author
+     * can check a document this server has never seen. Always available:
+     * this is a pure function over the request plus the host's bound
+     * executors (ADR 0010).
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function validateDefinition(array $params): array
+    {
+        $definition = $params['definition'] ?? null;
+        if (! is_array($definition)) {
+            throw new RpcFailure(-32602, 'Invalid definition');
+        }
+
+        $capabilities = $params['capabilities'] ?? null;
+        $granted = null;
+        if ($capabilities !== null) {
+            if (! is_array($capabilities) || ! array_is_list($capabilities)) {
+                throw new RpcFailure(-32602, 'Invalid capabilities');
+            }
+            /** @var list<string> $parsed */
+            $parsed = [];
+            foreach ($capabilities as $capability) {
+                if (! is_string($capability) || $capability === '') {
+                    throw new RpcFailure(-32602, 'Invalid capabilities');
+                }
+                $parsed[] = $capability;
+            }
+            $granted = $parsed;
+        }
+
+        $report = (new FlowDefinitionValidator($this->operationProviders, $granted))->validate($definition);
+
+        return $report->toArray();
     }
 
     /**
