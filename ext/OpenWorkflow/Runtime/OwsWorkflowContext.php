@@ -6,6 +6,8 @@ namespace Webong\WorkFlow\OpenWorkflow\Runtime;
 
 use ArrayObject;
 use Webong\WorkFlow\Contracts\FlowMutableContext;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 /**
  * Workflow context implementing the OWS 1.0.3 data flow model.
@@ -48,6 +50,41 @@ final class OwsWorkflowContext implements FlowMutableContext
         $this->outputs = new ArrayObject([]);
         $this->routing = new ArrayObject([]);
         $this->faults = new ArrayObject([]);
+    }
+
+    /**
+     * Rebuild the transient OWS data-flow view from durable step outputs and
+     * routing metadata before resuming a persisted run.
+     *
+     * @param array<string, mixed> $input Original workflow input
+     */
+    public static function resume(array $input, FlowDefinition $definition, FlowState $state): self
+    {
+        $context = new self($input);
+        foreach ($definition->executionSteps() as $step) {
+            $stepState = $state->steps[$step->id] ?? null;
+            if ($stepState === null) {
+                continue;
+            }
+            if (OwsOutputs::has($stepState)) {
+                $context->recordStepOutput($step->id, OwsOutputs::fromStep($stepState));
+            }
+            $routing = $stepState->metadata['ows_routing'] ?? null;
+            if (is_array($routing)
+                && is_bool($routing['terminated'] ?? null)
+                && (is_string($routing['chosen'] ?? null) || ($routing['chosen'] ?? null) === null)
+                && is_array($routing['skip'] ?? null)
+                && is_int($routing['switch_position'] ?? null)) {
+                $context->recordRouting($step->id, [
+                    'terminated' => $routing['terminated'],
+                    'chosen' => $routing['chosen'],
+                    'skip' => array_values(array_filter($routing['skip'], 'is_string')),
+                    'switch_position' => $routing['switch_position'],
+                ]);
+            }
+        }
+
+        return $context;
     }
 
     public function has(string $key): bool

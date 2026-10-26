@@ -22,6 +22,12 @@ The current progress and step outcomes of one Flow Run.
 **Step Attempt**:
 One invocation of a Step's operation within a Flow Run. A retry is a new attempt of that same step.
 
+**Ready Set**:
+All Steps eligible to begin from the same Flow State snapshot. It describes eligibility, not a claim or a promise that the Steps will execute concurrently.
+
+**Child Run**:
+A distinct Flow Run started by a parent Step. It has its own identity and state; the parent may either wait for its outcome or continue after dispatch.
+
 **Deferred Completion**:
 An external outcome for a waiting Step Attempt, identified by its Flow Run, Step, attempt number, and event identity.
 

@@ -62,6 +62,14 @@ const (
 	FlowDiagnosticSeverityInfo    FlowDiagnosticSeverity = "info"
 )
 
+// Whether a driver accepted asynchronous work or completed it synchronously.
+type FlowExecutionStatus string
+
+const (
+	FlowExecutionStatusDispatched FlowExecutionStatus = "dispatched"
+	FlowExecutionStatusCompleted  FlowExecutionStatus = "completed"
+)
+
 // A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
 type FlowInputBinding struct {
 	// The run context or a dependency output.
@@ -158,6 +166,38 @@ type FlowValidateParams struct {
 type FlowOperationsResult struct {
 	// Descriptors keyed by step id.
 	Operations map[string]FlowOperation `json:"operations"`
+}
+
+// A runtime-neutral child run request correlated to one parent step attempt.
+type FlowChildRunRequest struct {
+	// Definition identity the host resolves.
+	ChildFlowKey string `json:"child_flow_key"`
+	// Stable child identity for this parent attempt.
+	ChildRunID string `json:"child_run_id"`
+	// Child workflow input.
+	Input map[string]any `json:"input"`
+	// Parent flow identity.
+	ParentFlowKey string `json:"parent_flow_key"`
+	// Parent run identity when tracked.
+	ParentRunID *string `json:"parent_run_id"`
+	// Parent step awaiting or dispatching the child.
+	ParentStepID string `json:"parent_step_id"`
+	// One-based parent attempt used for callback correlation.
+	ParentAttempt int `json:"parent_attempt"`
+	// Whether the parent waits for the child outcome.
+	Await bool `json:"await"`
+}
+
+// The host result of dispatching one child run.
+type FlowChildRunReceipt struct {
+	// Child definition identity.
+	ChildFlowKey string `json:"child_flow_key"`
+	// Child run identity.
+	ChildRunID string `json:"child_run_id"`
+	// Dispatched or synchronously completed.
+	Status FlowExecutionStatus `json:"status"`
+	// Synchronous child output; omitted when unavailable.
+	Output json.RawMessage `json:"output,omitempty"`
 }
 
 // Retry policy a host may honour for a retriable step.

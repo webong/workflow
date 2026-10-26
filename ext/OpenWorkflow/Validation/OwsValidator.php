@@ -97,12 +97,11 @@ final class OwsValidator
             return;
         }
 
-        // Check for unsupported task types
-        $unsupportedTypes = ['wait', 'listen'];
-        foreach ($unsupportedTypes as $type) {
-            if (isset($task[$type])) {
-                $warnings[] = "{$path}/{$type}: '{$type}' requires a durable runtime (Temporal or host scheduler)";
-            }
+        if (isset($task['wait'])) {
+            $warnings[] = "{$path}/wait: 'wait' requires a host scheduler or Temporal timer";
+        }
+        if (isset($task['listen'])) {
+            $warnings[] = "{$path}/listen: 'listen' requires a host event correlation adapter";
         }
 
         // `set` is supported: its value must be an object of key => jq expression

@@ -128,6 +128,53 @@ final class FlowStateTransition implements FlowDeferredCompletionHandler
         )));
     }
 
+    /**
+     * Applies the outcome recorded for a deferred deadline. Ordinary
+     * deadlines fail through timedOut(); scheduled waits opt into successful
+     * completion with `deadline_transition: complete`.
+     */
+    public function deadlineReached(FlowDefinition $definition, FlowState $state, string $stepId): FlowState
+    {
+        $state->run?->assertDefinition($definition);
+
+        if ($definition->step($stepId) === null) {
+            throw new InvalidArgumentException("Unknown flow definition step '{$stepId}'.");
+        }
+
+        if ($state->status === \Webong\WorkFlow\Enums\FlowStatus::CANCELLED) {
+            throw new InvalidArgumentException('A cancelled run cannot reach a deadline.');
+        }
+
+        $step = $state->steps[$stepId] ?? null;
+        if ($step === null
+            || $step->status !== FlowStepStatus::PENDING
+            || ($step->metadata['deferred'] ?? false) !== true
+            || $step->deadlineAt === null) {
+            throw new InvalidArgumentException("Flow step '{$stepId}' has no deferred deadline.");
+        }
+        $now = $this->clock !== null ? ($this->clock)() : time();
+        if ($step->deadlineAt > $now) {
+            throw new InvalidArgumentException("Flow step '{$stepId}' deadline has not been reached.");
+        }
+        if (($step->metadata['deadline_transition'] ?? null) !== 'complete') {
+            return $this->timedOut($definition, $state, $stepId);
+        }
+
+        $metadata = $step->metadata;
+        unset($metadata['deferred'], $metadata['deadline_transition'], $metadata['deadline_output_present'], $metadata['deadline_output']);
+        $output = ($step->metadata['deadline_output_present'] ?? false) === true
+            ? StepOutput::from($step->metadata['deadline_output'] ?? null)
+            : null;
+        $next = $this->withStepResult(
+            $state,
+            $stepId,
+            StepResult::completed('Scheduled wait completed.', $metadata, $output),
+            $definition,
+        );
+
+        return $this->evaluator->evaluate($definition, $next);
+    }
+
     public function complete(
         FlowDefinition $definition,
         FlowState $state,

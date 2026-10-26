@@ -14,6 +14,7 @@ use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowOperationCatalog;
 use Webong\WorkFlow\Services\FlowStateTransition;
 use Webong\WorkFlow\Services\RunScopedFlowStateStore;
+use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
 use Webong\WorkFlow\ValueObjects\FlowOperation;
@@ -109,21 +110,28 @@ final readonly class FlowRpcApplication
         $flowKey = $this->flowKey($params);
         $context = $this->object($params['context'] ?? [], 'context');
         $store = $this->store($subject, $params);
+        $driverProvided = array_key_exists('driver', $params);
+        $driver = $params['driver'] ?? 'inline';
 
-        if (($params['driver'] ?? 'inline') !== 'inline') {
-            throw new RpcFailure(-32602, 'The standalone RPC starter currently supports the inline driver only');
+        if (! is_string($driver) || $driver === '' || ! $this->execution->has($driver)) {
+            throw new RpcFailure(-32602, 'Unknown or unavailable execution driver');
         }
 
         $created = false;
-        $state = $store->mutate($flowKey, function (?FlowState $current) use ($flowKey, $context, $store, &$created): FlowState {
+        $state = $store->mutate($flowKey, function (?FlowState $current) use ($flowKey, $context, $driver, $driverProvided, $store, &$created): FlowState {
             if ($current !== null) {
+                $recorded = $current->metadata['execution_driver'] ?? null;
+                if ($driverProvided && is_string($recorded) && $recorded !== $driver) {
+                    throw new RpcFailure(-32009, "Flow run is already assigned to the '{$recorded}' driver");
+                }
+
                 return $current;
             }
 
             $created = true;
 
             return (new FlowRun($store->runId, $this->definitions->definition($flowKey)))->initialState()->withMetadata([
-                'execution_driver' => 'inline',
+                'execution_driver' => $driver,
                 '_rpc_context' => $context,
             ]);
         });
@@ -215,20 +223,44 @@ final readonly class FlowRpcApplication
         // Deliberately outside mutate: a rollback cannot undo an external effect.
         // If dispatch or persistence fails, retain the claim for host reconciliation.
         $run = $state->run ?? throw new RpcFailure(-32004, 'Flow run not found');
+        $driver = $state->metadata['execution_driver'] ?? 'inline';
+        if (! is_string($driver) || ! $this->execution->has($driver)) {
+            throw new RpcFailure(-32602, 'The stored execution driver is unavailable on this host');
+        }
+        $executionId = $state->metadata['execution_id']
+            ?? $this->executionId($subject, $run->definition, $store->runId);
         $receipt = $this->execution->dispatch(new FlowExecutionRequest(
             definition: $run->definition,
             state: $state,
             context: $this->object($state->metadata['_rpc_context'] ?? [], 'stored context'),
-            executionId: $store->runId,
+            driver: $driver,
+            executionId: is_string($executionId) && $executionId !== ''
+                ? $executionId
+                : $this->executionId($subject, $run->definition, $store->runId),
             subject: $subject,
         ));
-        $next = $receipt->state ?? throw new RpcFailure(-32603, 'Inline execution did not return a flow state');
-        $state = $store->mutate($flowKey, static function (?FlowState $current) use ($claim, $next): FlowState {
+        $next = ($receipt->state ?? $state)->withMetadata([
+            'execution_driver' => $receipt->driver,
+            'execution_status' => $receipt->status->value,
+            'execution_id' => $receipt->executionId,
+        ]);
+        $state = $store->mutate($flowKey, static function (?FlowState $current) use ($claim, $next, $receipt): FlowState {
             if (($current?->metadata['_rpc_claim'] ?? null) !== $claim) {
                 throw new RpcFailure(-32009, 'Flow execution claim has changed');
             }
+            // Inline execution owns the returned state. An async receipt only
+            // acknowledges dispatch, so preserve any authoritative state a
+            // fast worker may already have written before this final save.
+            $authoritative = $receipt->status === \Webong\WorkFlow\Enums\FlowExecutionStatus::DISPATCHED
+                ? $current
+                : $next;
 
-            return $next->withMetadata(['_rpc_claim' => null]);
+            return $authoritative->withMetadata([
+                'execution_driver' => $receipt->driver,
+                'execution_status' => $receipt->status->value,
+                'execution_id' => $receipt->executionId,
+                '_rpc_claim' => null,
+            ]);
         });
 
         return ['state' => $this->publicState($state)];
@@ -383,6 +415,16 @@ final readonly class FlowRpcApplication
     private function flowKey(array $params): string
     {
         return $this->string($params, 'flow_key');
+    }
+
+    private function executionId(FlowStateSubject $subject, FlowDefinition $definition, string $runId): string
+    {
+        $identity = '';
+        foreach ([$subject->type, $subject->id, $definition->key, $runId] as $component) {
+            $identity .= strlen($component).':'.$component;
+        }
+
+        return 'workflow-rpc:'.hash('sha256', $identity);
     }
 
     /** @param array<string, mixed> $params */

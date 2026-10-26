@@ -78,6 +78,17 @@ Unexpected exceptions obey the same attempt limit and backoff as returned
 failures. Core hosts schedule another pass after `nextRetryAt`; no background
 scheduler is installed. Temporal uses its timers with a bounded retry policy.
 
+`FlowReadySet` exposes every step eligible at one state snapshot. It is safe
+to use as a scheduling plan, not as a lock: concurrent hosts must atomically
+claim each step before performing effects. Core does not impose a worker pool,
+queue, lease duration, or maximum parallelism.
+
+A child run is another run, not nested mutable state. Its request carries the
+parent attempt identity so replaying one attempt addresses the same child and
+retrying the parent creates a new child identity. Awaited children leave the
+parent step deferred and report their result through the normal completion
+contract; fire-and-forget children let the parent continue after dispatch.
+
 `FlowStateTransition::cancel()` stops future work and callbacks. It does not
 undo completed side effects or interrupt an operation already executing.
 For Temporal, the host uses Temporal's own cancellation API; cancel any
@@ -99,11 +110,13 @@ execution claims, outbox delivery, scheduling, and external idempotency. Do
 not perform network calls while holding a database or Redis mutation lock.
 
 The RPC module persists a claim, executes outside the lock, then saves the
-result under the same claim. Overlapping resume, completion, or cancellation
-requests receive `-32009`. If the worker stops or saving fails, the claim
-remains visible through `flow.get`. A host operator must reconcile external
-effects before clearing it or replacing the run. Claims do not auto-expire,
-because an elapsed timeout cannot prove that an external operation failed.
+inline result or async receipt under the same claim. Async receipt persistence
+preserves any state already written by a fast worker. Overlapping resume,
+completion, or cancellation requests receive `-32009`. If the worker stops or
+saving fails, the claim remains visible through `flow.get`. A host operator
+must reconcile external effects before clearing it or replacing the run.
+Claims do not auto-expire, because an elapsed timeout cannot prove that an
+external operation failed.
 
 Temporal's history is authoritative for Temporal runs. Its `snapshot` query
 returns current workflow state. A host can copy that state to a read store,

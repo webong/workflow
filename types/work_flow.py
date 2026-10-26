@@ -21,6 +21,9 @@ FlowInputSource = Literal['context', 'output']
 # How a validation finding affects authoring. Only error blocks.
 FlowDiagnosticSeverity = Literal['error', 'warning', 'info']
 
+# Whether a driver accepted asynchronous work or completed it synchronously.
+FlowExecutionStatus = Literal['dispatched', 'completed']
+
 # A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
 class FlowInputBinding(TypedDict):
     # The run context or a dependency output.
@@ -110,6 +113,36 @@ class FlowValidateParams(TypedDict):
 class FlowOperationsResult(TypedDict):
     # Descriptors keyed by step id.
     operations: dict[str, FlowOperation]
+
+# A runtime-neutral child run request correlated to one parent step attempt.
+class FlowChildRunRequest(TypedDict):
+    # Definition identity the host resolves.
+    child_flow_key: str
+    # Stable child identity for this parent attempt.
+    child_run_id: str
+    # Child workflow input.
+    input: dict[str, Any]
+    # Parent flow identity.
+    parent_flow_key: str
+    # Parent run identity when tracked.
+    parent_run_id: str | None
+    # Parent step awaiting or dispatching the child.
+    parent_step_id: str
+    # One-based parent attempt used for callback correlation.
+    parent_attempt: int
+    # Whether the parent waits for the child outcome.
+    await: bool
+
+# The host result of dispatching one child run.
+class FlowChildRunReceipt(TypedDict):
+    # Child definition identity.
+    child_flow_key: str
+    # Child run identity.
+    child_run_id: str
+    # Dispatched or synchronously completed.
+    status: FlowExecutionStatus
+    # Synchronous child output; omitted when unavailable.
+    output: NotRequired[Any]
 
 # Retry policy a host may honour for a retriable step.
 class FlowRetryPolicy(TypedDict):

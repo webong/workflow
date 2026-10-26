@@ -62,6 +62,18 @@ final class TemporalFlowWorkflow
                 }
 
                 if ($this->isDeferred($previous)) {
+                    if (($previous->metadata['deadline_transition'] ?? null) === 'complete'
+                        && $previous->deadlineAt !== null) {
+                        $delay = max(0, $previous->deadlineAt - \Temporal\Workflow::now()->getTimestamp());
+                        if ($delay > 0) {
+                            yield \Temporal\Workflow::timer($delay);
+                        }
+                        $this->state = (new FlowStateTransition(
+                            timestamp: static fn (): string => \Temporal\Workflow::now()->format(DATE_ATOM),
+                            clock: static fn (): int => \Temporal\Workflow::now()->getTimestamp(),
+                        ))->deadlineReached($definition, $this->state, $step->id);
+                        continue;
+                    }
                     yield \Temporal\Workflow::await(fn (): bool => $this->completions->has($step->id));
                     $completion = $this->completions->shift($step->id);
                     if ($completion !== null) {
@@ -101,15 +113,19 @@ final class TemporalFlowWorkflow
                 // the activity runs.
                 $input = (new FlowInputResolver())
                     ->resolve(new \Webong\WorkFlow\Services\NullFlowEventSink(), $definition->key, $step, $this->state, new ArrayFlowContext($context));
-                /** @var array<string, mixed> $stepData */
-                $stepData = yield $this->activities->execute([
+                $activityInput = [
                     'definition' => $definition->toArray(),
                     'step_id' => $step->id,
                     'run_id' => $this->state->run?->id,
                     'context' => $context,
                     'previous' => $previous->toArray(),
                     'input' => $input->all(),
-                ]);
+                ];
+                if (isset($definition->metadata['ows_dsl_version'])) {
+                    $activityInput['state'] = $this->state->toArray();
+                }
+                /** @var array<string, mixed> $stepData */
+                $stepData = yield $this->activities->execute($activityInput);
                 $result = StepState::fromArray($stepData);
                 $this->state = (new FlowEvaluator())->evaluate($definition, $this->state->withStep($step->id, $result));
                 if ($result->status === FlowStepStatus::PENDING && ! $this->isDeferred($result)) {

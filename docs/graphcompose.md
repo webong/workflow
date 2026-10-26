@@ -258,25 +258,28 @@ binding without exposing credentials or unrelated context.
 ### 5. Keep scheduling in the driver
 
 GraphCompose shows the value of concurrent ready sets, but `FlowRunner`
-should not become implicitly concurrent. Inline, queue, Temporal, RPC, and
-native hosts have different atomicity constraints. Core may expose a pure
-`eligibleSteps()`; the selected driver decides how to claim and run them.
+should not become implicitly concurrent. `FlowReadySet` now exposes every
+step eligible from one snapshot; inline, queue, Temporal, RPC, and native
+hosts still decide how to atomically claim, limit, and run them.
 
 ### 6. Build on WorkFlow's existing deferred completion contract
 
 WorkFlow already correlates completion to flow, run, step, attempt, and
 idempotency key, while the RPC claim prevents overlapping passes. Preserve
-that stronger generic callback contract. Wait deadlines and the explicit
-`timedOut()` transition are now part of the state contract. Wakeups remain
-driver-owned; callbacks are not replaced with polling and Temporal remains
-optional.
+that stronger generic callback contract. Ordinary wait deadlines use the
+explicit `timedOut()` transition; scheduled OWS waits record a successful
+outcome applied by `deadlineReached()`. Wakeups remain driver-owned; callbacks
+are not replaced with polling and Temporal remains optional.
 
-### 7. Leave child workflows and visual authoring until the contracts settle
+### 7. Child workflows are another run, not nested state
 
-GraphCompose's `forEach` model offers useful parent/child identity,
-concurrency limits, and per-item outcome aggregation. Those belong after output
-and binding contracts. Likewise, an editor should consume the serialized
-definition and operation catalog rather than create a second workflow model.
+`FlowChildRunRequest` carries child identity plus the parent attempt identity,
+and `FlowChildRunDispatcher` leaves definition lookup and execution with the
+host. Awaited children reuse deferred completion; fire-and-forget children
+continue after dispatch. Per-item aggregation and concurrency limits remain a
+host policy rather than a second state model. An editor should still consume
+the serialized definition and operation catalog rather than create another
+workflow model.
 
 ## Adoption status
 
@@ -291,8 +294,11 @@ definition and operation catalog rather than create a second workflow model.
    authorize it (ADR 0009 and ADR 0010).
 6. **Complete:** deadlines and explicit timeout transitions for deferred work
    (ADR 0009).
-7. **Deferred deliberately:** consider ready-set concurrency and child runs
-   only after the completed contracts are proven by real consuming workflows.
+7. **Complete:** pure ready-set eligibility, host-dispatched child runs,
+   standalone RPC selection of registered queue/Temporal drivers, and OWS
+   wait/listen/child-workflow coordination (ADR 0011).
+8. **Deferred deliberately:** a visual editor and arbitrary client-supplied
+   execution remain out of scope; tooling consumes the server-owned catalog.
 
 ## What not to do
 

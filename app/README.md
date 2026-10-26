@@ -90,7 +90,7 @@ Check for a top-level JSON-RPC `error` before reading either field.
 | Method | Required params | Result |
 | --- | --- | --- |
 | `flow.definition` | `flow_key` | The host-defined flow definition |
-| `flow.start` | `flow_key`, `subject`, `run_id` | Existing or newly started run; optional initial `context` object |
+| `flow.start` | `flow_key`, `subject`, `run_id` | Existing or newly started run; optional `context` object and registered `driver` name |
 | `flow.get` | `flow_key`, `subject`, `run_id` | Current state, or `null` before start |
 | `flow.complete` | `flow_key`, `subject`, `run_id`, `step_id`, `attempt`, `idempotency_key`, `result` | State after a deferred step completes |
 | `flow.resume` | `flow_key`, `subject`, `run_id` | State after one eligible execution pass |
@@ -102,8 +102,8 @@ Check for a top-level JSON-RPC `error` before reading either field.
 may be `completed`, `failed`, or `skipped`, with optional `message` and
 `error`, a boolean `retriable`, and a `metadata` object. An explicit
 `retriable: false` prevents retry even when the step has a retry policy.
-`flow.start` currently accepts only the `inline` execution driver;
-the API does not expose queue or Temporal execution yet. JSON-RPC batches are
+`flow.start` defaults to `inline` and accepts only driver names registered by
+the trusted PHP bootstrap. JSON-RPC batches are
 accepted. Mutation notifications without an `id` do not execute; read
 notifications return no response. Internal failures return generic JSON-RPC
 errors. Initial context is saved for resume and omitted from responses.
@@ -128,11 +128,45 @@ registration or execution; `flow.validate` may inspect an unregistered
 definition but cannot run or save it. `WORKFLOW_PHP_PUBLIC` selects the
 bundled PHP bridge document root.
 
-`flow.start` currently supports the `inline` execution driver only. The
-Laravel queue and Temporal execution adapters remain separate; this module
-does not silently switch runtimes. It persists an execution claim, commits
-the database transaction, runs the executor outside the store lock, and saves
-the result under that claim.
+For example, a standalone host can register its queue publisher without a
+Laravel dependency:
+
+```php
+use Webong\WorkFlow\Services\FlowExecutionDispatcher;
+use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
+use Webong\WorkFlow\Services\QueuedFlowExecutionDriver;
+
+$execution = new FlowExecutionDispatcher([
+    new InlineFlowExecutionDriver($runner, $executors),
+    new QueuedFlowExecutionDriver(
+        dispatch: fn ($request): string => $queue->publish($request->toArray()),
+    ),
+    // new TemporalFlowExecutionDriver($startTemporalWorkflow),
+]);
+```
+
+The queue callback returns its stable job/execution ID. The consumer loads the
+saved run, performs the claimed work, and persists through the same store.
+
+Register `QueuedFlowExecutionDriver` or `TemporalFlowExecutionDriver` in the
+bootstrap's `FlowExecutionDispatcher` to expose `queue` or `temporal`.
+Merely installing an adapter or setting environment variables enables
+nothing. The RPC service persists the selected driver before dispatch,
+commits the transaction, dispatches outside the store lock, and saves the
+result or receipt under that claim. An async receipt never overwrites state a
+fast worker already advanced.
+
+Repeating `flow.start` for the same run never dispatches twice. Explicit
+`flow.resume` dispatches the run again with its stored driver and execution
+ID; async drivers must make that operation idempotent. Queue workers use the
+ordinary store as authority. Temporal history remains authoritative, so
+deferred completions and cancellation must reach the Temporal signal/client,
+not `flow.complete` on a stale database projection.
+
+On first dispatch, RPC derives a deterministic opaque execution ID from the
+subject type/id, flow key, and logical run ID. This prevents equal `run_id`
+values in different subjects or flows from colliding in Temporal or a queue.
+The driver's returned execution ID is then persisted and reused on resume.
 Keep inline work short; return `deferred()` for an external wait and complete
 it through `flow.complete`. External operations still need their own stable
 idempotency keys.

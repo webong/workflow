@@ -177,7 +177,28 @@ and records that name in the state snapshot. `InlineFlowExecutionDriver` runs
 `FlowRunner` immediately. `LaravelQueueFlowExecutionDriver` and
 `TemporalFlowExecutionDriver` accept host-provided dispatch callbacks; merely
 installing this package does not create jobs, workers, or a Temporal client.
-The standalone JSON-RPC application currently exposes only inline execution.
+The standalone JSON-RPC application accepts any driver registered by its
+trusted bootstrap. Core supplies `QueuedFlowExecutionDriver` for a
+framework-neutral dispatch callback; the optional Laravel and Temporal
+adapters provide their own drivers.
+
+## Run a ready set concurrently
+
+`FlowReadySet::steps($definition, $state)` returns all steps eligible from one
+snapshot. The inline runner still executes deterministically in declaration
+order. A queue or distributed driver may atomically claim each returned step
+and fan the claims out, then merge each outcome through its state store.
+
+Eligibility is not a claim. Never enqueue work from a stale ready set without
+an atomic compare-and-set or equivalent store mutation; two schedulers can
+observe the same ready step. Core intentionally leaves the claim, lease,
+outbox, and concurrency limit to the host.
+
+Child flows cross `FlowChildRunDispatcher`. `FlowChildRunRequest` includes the
+child flow/run identity and the parent flow/run/step/attempt identity. Return a
+`DISPATCHED` receipt when the child will finish later, then complete the
+deferred parent attempt with its existing `FlowDeferredCompletion` callback.
+Return `COMPLETED` with a `StepOutput` when the child finished synchronously.
 
 ## Useful types
 

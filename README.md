@@ -96,6 +96,12 @@ WorkFlow core does not schedule retries, deliver an outbox, or guarantee
 exactly-once external effects. Your host owns those guarantees. See the
 [lifecycle guide](docs/run-lifecycle.md) before adding concurrent workers.
 
+For concurrent drivers, `FlowReadySet::steps()` returns every step eligible
+from the same persisted snapshot. It does not claim work: the host must claim
+each step atomically before fan-out. Child workflows use the neutral
+`FlowChildRunDispatcher`; an awaited child completes its parent through the
+same run/step/attempt callback contract as any other deferred operation.
+
 ## Actions and errors
 
 `FlowAction` and `FlowPresentation` describe what a host may show.

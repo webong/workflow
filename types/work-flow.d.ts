@@ -27,6 +27,11 @@ export type FlowInputSource = 'context' | 'output';
 export type FlowDiagnosticSeverity = 'error' | 'warning' | 'info';
 
 /**
+ * Whether a driver accepted asynchronous work or completed it synchronously.
+ */
+export type FlowExecutionStatus = 'dispatched' | 'completed';
+
+/**
  * A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
  */
 export interface FlowInputBinding {
@@ -138,6 +143,42 @@ export interface FlowValidateParams {
 export interface FlowOperationsResult {
     /** Descriptors keyed by step id. */
     operations: Record<string, FlowOperation>;
+}
+
+/**
+ * A runtime-neutral child run request correlated to one parent step attempt.
+ */
+export interface FlowChildRunRequest {
+    /** Definition identity the host resolves. */
+    child_flow_key: string;
+    /** Stable child identity for this parent attempt. */
+    child_run_id: string;
+    /** Child workflow input. */
+    input: Record<string, unknown>;
+    /** Parent flow identity. */
+    parent_flow_key: string;
+    /** Parent run identity when tracked. */
+    parent_run_id: string | null;
+    /** Parent step awaiting or dispatching the child. */
+    parent_step_id: string;
+    /** One-based parent attempt used for callback correlation. */
+    parent_attempt: number;
+    /** Whether the parent waits for the child outcome. */
+    await: boolean;
+}
+
+/**
+ * The host result of dispatching one child run.
+ */
+export interface FlowChildRunReceipt {
+    /** Child definition identity. */
+    child_flow_key: string;
+    /** Child run identity. */
+    child_run_id: string;
+    /** Dispatched or synchronously completed. */
+    status: FlowExecutionStatus;
+    /** Synchronous child output; omitted when unavailable. */
+    output?: unknown;
 }
 
 /**

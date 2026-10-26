@@ -53,9 +53,12 @@ The adapter currently translates and executes the following capabilities:
 | Recovery and faults | `try`/`catch`, `raise` | Record OWS faults and route matching catches. |
 | Events | `emit` | Build a CloudEvent envelope; delivery remains host-owned. |
 | HTTP operations | `call: http`, `call: openapi` | Execute through a host-provided PSR-18 client. |
+| Durable waits | `wait` | Persist a successful wake deadline; the host scheduler or Temporal timer applies it. |
+| Event waits | `listen` | Persist the consumption strategy; a host event adapter supplies the correlated completion. |
+| Child workflows | `run: workflow` | Dispatch through a host `FlowChildRunDispatcher`; awaited children defer the parent attempt. |
 | Identity | `document.namespace`, `document.name`, `document.version` (semver) | Preserved without coercion to integer. Registered under a composite key `namespace/name@version`. |
 
-**Still excluded:** durable `wait`/`listen`, `run: workflow`, true parallel fork execution, lifecycle events, and expressions the selected jq backend cannot evaluate. Unsupported constructs are reported; they are never silently discarded.
+**Still excluded:** built-in scheduling/event infrastructure, container and shell execution, true parallel fork execution, lifecycle events, and expressions the selected jq backend cannot evaluate. Host-bound wait/listen/child coordination was added by ADR 0011; unsupported constructs are still reported and never silently discarded.
 
 ### Data flow implementation
 
@@ -102,16 +105,16 @@ covering this subset execute end-to-end against their pinned expected output
 - Publish a **supported-feature matrix** documenting exactly which CTK scenarios pass, which are intentionally unsupported, and why (delivered: `docs/open-workflow-ctk-matrix.md`, pinned by test so it cannot go stale).
 - Describe the initial product as a **limited OWS importer**, not a conforming OWS runtime.
 
-Current CTK posture (see the matrix for detail): all 21 vendored, pinned
-scenarios validate and pass their statically-checkable assertions. The runtime
-suite separately exercises their delivered behavior and expected outputs.
-This is still not a full OWS conformance claim: the repository does not run
-the complete upstream CTK runner, and the durable features listed below remain
-unsupported.
+Current CTK posture (see the matrix for detail): all 21 scenarios in the
+complete pinned v1.0.3 feature set validate, pass their statically-checkable
+assertions, and link to named end-to-end runtime tests. This is still not an
+external conformance certification: host-bound capabilities and deployment
+behavior remain the host's responsibility.
 
 ### Future work (not in this ADR)
 
-- Durable event correlation (`wait`/`listen`), sub-workflows (`run: workflow`), true parallel fork execution, and lifecycle events require additional runtime capabilities in the core or execution drivers.
+- True parallel fork execution, lifecycle events, and additional protocol/process task types require more runtime capabilities.
+- Host schedulers and event adapters may build richer correlation and subscription policies on the delivered wait/listen seams.
 - Full CTK conformance is a separate product milestone.
 - The TypePHP native target (`mod/typephp`) compiles the core and excludes optional adapters. This module would not be available through the native binary/shared library unless explicitly included in the build.
 
@@ -152,7 +155,7 @@ unsupported.
 - **Emit (`emit`)**: builds the CloudEvent envelope (generated id/time, specversion 1.0, evaluated source/type/data) as task output; actual delivery stays host-owned.
 - **Raise (`raise`)**: faults the workflow with the error payload and its document-path `instance`; faults raised inside a try scope are catchable.
 - **HTTP transport (`call: http`, `call: openapi`)**: `OwsHttpExecutor` runs protocol calls over any PSR-18 client (host-owned transport; adapter-owned semantics) — method, endpoint URI with simple `{placeholder}` interpolation, headers, query, JSON body, basic/bearer authentication with runtime expressions, `content`/`response` output modes, task-base `output.as` filtering with `$input` bound, and non-2xx responses faulting as OWS communication errors (catchable). `call: openapi` resolves the document, operationId, and parameters through the same client.
-- Deliberately still unsupported: `wait`/`listen` (durable timers and event correlation require a durable runtime — Temporal or a host scheduler) and sub-workflows (`run: workflow`).
+- Host-bound durable coordination: `wait` records a successful deadline transition, `listen` records a subscription for an event adapter, and `run: workflow` dispatches through `FlowChildRunDispatcher` (ADR 0011). None of these installs a scheduler, broker, or child-definition registry.
 
 ## References
 

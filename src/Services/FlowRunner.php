@@ -24,6 +24,7 @@ final class FlowRunner
         private readonly FlowStepExecution $execution = new FlowStepExecution(),
         private readonly FlowInputResolver $inputs = new FlowInputResolver(),
         private readonly FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
+        private readonly FlowReadySet $ready = new FlowReadySet(),
     )
     {
     }
@@ -56,22 +57,7 @@ final class FlowRunner
                 throw new \InvalidArgumentException('Stored steps must be step states.');
             }
 
-            if (in_array($previous->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED, FlowStepStatus::RUNNING], true)
-                || ($previous->status === FlowStepStatus::PENDING && ($previous->metadata['deferred'] ?? false) === true)) {
-                continue;
-            }
-
-            if ($previous->status === FlowStepStatus::FAILED
-                && (! ($previous->retriable ?? $step->retryPolicy->enabled ?? $step->retriable)
-                    || ! ($step->retryPolicy?->canRetry($previous->attempts) ?? true))) {
-                continue;
-            }
-
-            if ($previous->nextRetryAt !== null && $previous->nextRetryAt > time()) {
-                continue;
-            }
-
-            if ($step->dependsOn !== [] && ! $this->dependenciesCompleted($step->dependsOn, $state)) {
+            if (! $this->ready->isReady($step, $state)) {
                 continue;
             }
 
@@ -123,20 +109,6 @@ final class FlowRunner
         ));
 
         return $result;
-    }
-
-    /** @param list<string> $dependencies */
-    private function dependenciesCompleted(array $dependencies, FlowState $state): bool
-    {
-        foreach ($dependencies as $dependency) {
-            $step = $state->steps[$dependency] ?? null;
-
-            if ($step === null || ! in_array($step->status, [FlowStepStatus::COMPLETED, FlowStepStatus::SKIPPED], true)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
 }

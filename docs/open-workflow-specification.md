@@ -108,6 +108,19 @@ assert($state->status === FlowStatus::COMPLETED);
 assert($context->lastOutput() === ['label' => 42]);
 ```
 
+`OwsWorkflowContext` is a transient execution view, not another state store.
+When resuming after a durable wait, event, or child result, rebuild it from the
+original workflow input and saved state so output chaining and switch routing
+continue correctly:
+
+```php
+$context = OwsWorkflowContext::resume($originalInput, $definition, $state);
+$state = $runner->run($definition, $state, $context, $executors);
+```
+
+The Temporal Activity handler performs this reconstruction from workflow
+history automatically.
+
 Register only the executors you intend the host to permit:
 
 - `OwsSetStepExecutor` and `OwsSwitchStepExecutor` for data flow and routing.
@@ -118,6 +131,15 @@ Register only the executors you intend the host to permit:
 - `OwsHttpExecutor` for HTTP/OpenAPI calls. Its PSR-18 client owns timeouts,
   TLS, redirects, and transport policy. Wrap it in `OwsFaultRecordingExecutor`
   when OWS catches must handle HTTP failures.
+- `OwsWaitExecutor` to persist a successful wake deadline. A host scheduler
+  calls `FlowStateTransition::deadlineReached()`; the Temporal adapter uses a
+  durable timer for the same transition.
+- `OwsListenExecutor` to persist the event consumption strategy. The host
+  matches and authenticates events, then sends an ordinary deferred
+  completion whose output is the consumed event data/envelope.
+- `OwsWorkflowRunExecutor` with a host `FlowChildRunDispatcher` for
+  `run.workflow`. Awaited children defer the parent step; fire-and-forget
+  children let it continue after dispatch.
 
 Do not accept arbitrary documents merely because they validate. The executor
 list is the host's capability and security boundary.
@@ -158,7 +180,7 @@ demo bootstrap leaves both methods disabled.
 ## Supported and unsupported behavior
 
 The shipped runtime covers the 21 vendored scenarios in the pinned 1.0.3
-fixture set:
+CTK (all 11 feature files at the official tag):
 
 - sequential `do` / `then` flow and `switch` routing;
 - `set`, task input filtering, task output filtering, and output chaining;
@@ -166,16 +188,21 @@ fixture set:
 - `try` / `catch`, `raise`, and fault propagation;
 - CloudEvent envelope creation for `emit`;
 - `call: http` and `call: openapi` through a host PSR-18 transport.
+- durable coordination contracts for `wait`, `listen`, and `run.workflow`;
+  their scheduler, event broker, and child definition lookup are host-bound.
 
-The adapter deliberately does not provide durable `wait` / `listen`,
-sub-workflows (`run: workflow`), lifecycle events, or true parallel fork
-execution. Temporal or another host scheduler can supply durable timers and
-event correlation, but that does not make Temporal a state-store driver.
+The adapter still does not provide lifecycle events, a built-in event broker,
+`listen.foreach` iteration, container/shell execution, or true parallel fork
+execution. `FlowReadySet` lets a capable driver identify concurrent branches,
+but claiming, limits, and worker fan-out remain host responsibilities.
+Temporal or another host can supply those capabilities without becoming a
+state-store driver.
 
 See the generated [capability matrix](open-workflow-ctk-matrix.md) for the
-scenario-by-scenario result. Passing this pinned fixture set is not a claim of
-full OWS conformance; that would require the complete upstream CTK and every
-required runtime behavior.
+scenario-by-scenario result. Every official v1.0.3 scenario is linked to a
+named end-to-end runtime test. WorkFlow does not claim external certification:
+host-bound capabilities and deployment behavior must still be verified in the
+target runtime.
 
 ## Version and security boundaries
 

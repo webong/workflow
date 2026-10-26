@@ -74,7 +74,10 @@ final class OwsSwitchStepExecutor implements FlowStepExecutor
         if ($decision['terminated']) {
             // The workflow output is the unmodified task input.
             $context->recordStepOutput($step->id, $taskInput);
-            return StepResult::completed('switch routed to end', ['ows_output' => $taskInput], output: StepOutput::from($taskInput));
+            return StepResult::completed('switch routed to end', [
+                'ows_output' => $taskInput,
+                'ows_routing' => $decision,
+            ], output: StepOutput::from($taskInput));
         }
 
         return StepResult::completed(

@@ -30,11 +30,14 @@ final class OwsToFlowTranslator
         'call',
         'run:http',
         'run:script',
+        'run:workflow',
         'set',
         'input-filtering',
         'data-merge',
         'for',
         'fork',
+        'wait',
+        'listen',
         'try',
         'raise',
         'emit',
@@ -367,13 +370,12 @@ final class OwsToFlowTranslator
             return $this->translateRaiseTask($task, $index, $previousTaskId);
         }
 
-        if (isset($task['wait']) || isset($task['listen'])) {
-            $this->addUnsupported(
-                feature: 'wait|listen',
-                path: "/do/{$index}",
-                reason: 'Durable waits and event listening require a durable runtime (Temporal or host scheduler)'
-            );
-            return null;
+        if (isset($task['wait'])) {
+            return $this->translateWaitTask($task, $index, $previousTaskId);
+        }
+
+        if (isset($task['listen'])) {
+            return $this->translateListenTask($task, $index, $previousTaskId);
         }
 
         // Generic task with name and action
@@ -473,12 +475,23 @@ final class OwsToFlowTranslator
                 );
                 return null;
             } elseif (isset($run['workflow'])) {
-                $this->addUnsupported(
-                    feature: 'run:workflow',
-                    path: "/do/{$index}/run/workflow",
-                    reason: 'Sub-workflow execution not supported in initial subset'
-                );
-                return null;
+                $workflow = is_array($run['workflow']) ? $run['workflow'] : [];
+                $namespace = $workflow['namespace'] ?? null;
+                $name = $workflow['name'] ?? null;
+                $version = $workflow['version'] ?? null;
+                if (! is_string($namespace) || $namespace === ''
+                    || ! is_string($name) || $name === ''
+                    || ! is_string($version) || $version === '') {
+                    $this->addUnsupported(
+                        feature: 'run:workflow',
+                        path: "/do/{$index}/run/workflow",
+                        reason: 'A child workflow requires namespace, name, and version'
+                    );
+                    return null;
+                }
+                $runType = 'workflow';
+                $runTarget = "{$namespace}/{$name}@{$version}";
+                $this->supportedFeatures[] = 'run:workflow';
             }
         }
 
@@ -486,6 +499,8 @@ final class OwsToFlowTranslator
             'ows_type' => 'run',
             'ows_run_type' => $runType,
             'ows_run_target' => $runTarget,
+            'ows_workflow' => $runType === 'workflow' && is_array($run) && is_array($run['workflow'] ?? null) ? $run['workflow'] : null,
+            'ows_await' => is_array($run) && is_bool($run['await'] ?? null) ? $run['await'] : true,
             'ows_input_expression' => $inputExpr,
             'ows_output_expression' => $outputExpr,
             'ows_original_index' => $index,
@@ -505,6 +520,43 @@ final class OwsToFlowTranslator
             metadata: $metadata,
             retryPolicy: $this->translateRetryPolicy($task['retry'] ?? null),
         );
+    }
+
+    /** @param array<string, mixed> $task */
+    private function translateWaitTask(array $task, int $index, ?string $previousTaskId): FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "wait_{$index}");
+        $metadata = [
+            'ows_type' => 'wait',
+            'ows_wait' => $task['wait'],
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        return $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
+    }
+
+    /** @param array<string, mixed> $task */
+    private function translateListenTask(array $task, int $index, ?string $previousTaskId): FlowStepDefinition
+    {
+        $taskId = (string) ($task['name'] ?? "listen_{$index}");
+        if (isset($task['foreach'])) {
+            $this->addUnsupported(
+                feature: 'listen:foreach',
+                path: "/do/{$index}/foreach",
+                reason: 'Per-event foreach execution requires a host iterator and is not implemented'
+            );
+        }
+        $metadata = [
+            'ows_type' => 'listen',
+            'ows_listen' => is_array($task['listen']) ? $task['listen'] : [],
+            'ows_instance' => "/do/{$index}/{$taskId}",
+            'ows_original_index' => $index,
+            'ows_previous' => $previousTaskId,
+        ];
+
+        return $this->chainStep($taskId, $task, $metadata, $index, $previousTaskId);
     }
 
     private function translateGenericTask(array $task, int $index, ?string $previousTaskId): ?FlowStepDefinition

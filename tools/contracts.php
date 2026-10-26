@@ -78,6 +78,13 @@ return [
                 'info' => 'INFO',
             ],
         ],
+        'FlowExecutionStatus' => [
+            'description' => 'Whether a driver accepted asynchronous work or completed it synchronously.',
+            'cases' => [
+                'dispatched' => 'DISPATCHED',
+                'completed' => 'COMPLETED',
+            ],
+        ],
     ],
     'types' => [
         'FlowInputBinding' => [
@@ -151,6 +158,28 @@ return [
             'description' => 'Result of the flow.operations JSON-RPC method.',
             'fields' => [
                 ['name' => 'operations', 'type' => 'map<FlowOperation>', 'description' => 'Descriptors keyed by step id.'],
+            ],
+        ],
+        'FlowChildRunRequest' => [
+            'description' => 'A runtime-neutral child run request correlated to one parent step attempt.',
+            'fields' => [
+                ['name' => 'child_flow_key', 'type' => 'string', 'description' => 'Definition identity the host resolves.'],
+                ['name' => 'child_run_id', 'type' => 'string', 'description' => 'Stable child identity for this parent attempt.'],
+                ['name' => 'input', 'type' => 'map<unknown>', 'description' => 'Child workflow input.'],
+                ['name' => 'parent_flow_key', 'type' => 'string', 'description' => 'Parent flow identity.'],
+                ['name' => 'parent_run_id', 'type' => 'string|null', 'description' => 'Parent run identity when tracked.'],
+                ['name' => 'parent_step_id', 'type' => 'string', 'description' => 'Parent step awaiting or dispatching the child.'],
+                ['name' => 'parent_attempt', 'type' => 'int', 'description' => 'One-based parent attempt used for callback correlation.'],
+                ['name' => 'await', 'type' => 'bool', 'description' => 'Whether the parent waits for the child outcome.'],
+            ],
+        ],
+        'FlowChildRunReceipt' => [
+            'description' => 'The host result of dispatching one child run.',
+            'fields' => [
+                ['name' => 'child_flow_key', 'type' => 'string', 'description' => 'Child definition identity.'],
+                ['name' => 'child_run_id', 'type' => 'string', 'description' => 'Child run identity.'],
+                ['name' => 'status', 'type' => 'FlowExecutionStatus', 'description' => 'Dispatched or synchronously completed.'],
+                ['name' => 'output', 'type' => 'unknown', 'optional' => true, 'description' => 'Synchronous child output; omitted when unavailable.'],
             ],
         ],
         'FlowRetryPolicy' => [

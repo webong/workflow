@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkMatrixGenerator;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkParser;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkRunner;
+use Webong\WorkFlow\OpenWorkflow\Conformance\CtkRuntimeCoverage;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkScenarioResult;
 
 /**
@@ -81,6 +82,27 @@ class CtkConformanceTest extends TestCase
         }
     }
 
+    public function testEveryPinnedScenarioHasALiveRuntimeTest(): void
+    {
+        $scenarioKeys = array_map(
+            static fn ($scenario): string => $scenario->feature.': '.$scenario->name,
+            $this->scenarios,
+        );
+        sort($scenarioKeys);
+        $coverageKeys = CtkRuntimeCoverage::scenarioKeys();
+        sort($coverageKeys);
+        self::assertSame($scenarioKeys, $coverageKeys);
+
+        foreach ($this->scenarios as $scenario) {
+            $method = CtkRuntimeCoverage::testMethod($scenario);
+            self::assertNotNull($method);
+            self::assertTrue(
+                method_exists(OwsRuntimeTest::class, $method),
+                "Runtime coverage method '{$method}' is missing for {$scenario->feature}: {$scenario->name}",
+            );
+        }
+    }
+
     public function testUnsupportedScenariosAlwaysReportTheBlockingFeature(): void
     {
         foreach ($this->results as $result) {
@@ -99,6 +121,6 @@ class CtkConformanceTest extends TestCase
         $generated = (new CtkMatrixGenerator())->generate($this->results, self::FEATURES_DIR);
         $committed = file_get_contents(self::MATRIX_PATH);
         self::assertNotFalse($committed, 'Matrix document is missing at ' . self::MATRIX_PATH);
-        $this->assertSame($generated, $committed, 'docs/open-workflow-ctk-matrix.md is stale; regenerate it (see test writes it when UPDATE_MATRIX=1)');
+        $this->assertSame($generated, $committed, 'docs/open-workflow-ctk-matrix.md is stale; run php tools/generate-ctk-matrix.php');
     }
 }

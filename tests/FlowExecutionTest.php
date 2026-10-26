@@ -14,6 +14,9 @@ use Webong\WorkFlow\Laravel\LaravelQueueFlowExecutionDriver;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
+use Webong\WorkFlow\Services\QueuedFlowExecutionDriver;
+use Webong\WorkFlow\ValueObjects\FlowChildRunReceipt;
+use Webong\WorkFlow\ValueObjects\FlowChildRunRequest;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
@@ -97,6 +100,52 @@ final class FlowExecutionTest extends TestCase
         self::assertSame($request->context, $roundTrip->context);
         self::assertSame('queue', $roundTrip->driver);
         self::assertSame('execution-1', $roundTrip->executionId);
+    }
+
+    public function test_framework_neutral_queue_driver_dispatches_a_serializable_request(): void
+    {
+        $payload = null;
+        $driver = new QueuedFlowExecutionDriver(
+            dispatch: static function (FlowExecutionRequest $request) use (&$payload): string {
+                $payload = $request->toArray();
+                return 'job-1';
+            },
+        );
+
+        $receipt = $driver->dispatch(new FlowExecutionRequest(
+            definition: $this->definition(),
+            state: new FlowState(FlowStatus::PENDING),
+            context: ['source' => 'rpc'],
+            driver: 'queue',
+        ));
+
+        self::assertIsArray($payload);
+        self::assertSame('queue', $payload['driver']);
+        self::assertSame('job-1', $receipt->executionId);
+        self::assertSame(FlowExecutionStatus::DISPATCHED, $receipt->status);
+    }
+
+    public function test_child_run_transport_values_round_trip(): void
+    {
+        $request = new FlowChildRunRequest(
+            childFlowKey: 'catalog/child@1.0.0',
+            childRunId: 'parent:child:2',
+            input: ['id' => 42],
+            parentFlowKey: 'parent',
+            parentRunId: 'run-1',
+            parentStepId: 'child',
+            parentAttempt: 2,
+        );
+        $requestRoundTrip = FlowChildRunRequest::fromArray($request->toArray());
+        self::assertEquals($request, $requestRoundTrip);
+
+        $receipt = new FlowChildRunReceipt(
+            $request->childFlowKey,
+            $request->childRunId,
+            FlowExecutionStatus::COMPLETED,
+            \Webong\WorkFlow\ValueObjects\StepOutput::from(['ok' => true]),
+        );
+        self::assertEquals($receipt, FlowChildRunReceipt::fromArray($receipt->toArray()));
     }
 
     private function definition(): FlowDefinition

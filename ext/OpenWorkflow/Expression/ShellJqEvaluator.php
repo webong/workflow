@@ -55,7 +55,19 @@ final class ShellJqEvaluator implements EvaluatorBackend
             throw ExpressionEvaluationException::evaluationError($expression, 'Unable to start jq');
         }
 
-        fwrite($pipes[0], $json);
+        $offset = 0;
+        $writeFailed = false;
+        while ($offset < strlen($json)) {
+            // jq can reject an invalid expression and close stdin before PHP
+            // writes the payload. That race is part of the process failure,
+            // not a PHP notice that should leak into the host test/runtime.
+            $written = @fwrite($pipes[0], substr($json, $offset));
+            if ($written === false || $written === 0) {
+                $writeFailed = true;
+                break;
+            }
+            $offset += $written;
+        }
         fclose($pipes[0]);
         $output = stream_get_contents($pipes[1]);
         fclose($pipes[1]);
@@ -68,6 +80,9 @@ final class ShellJqEvaluator implements EvaluatorBackend
                 $expression,
                 'jq exited with code '.$returnVar.': '.trim($error),
             );
+        }
+        if ($writeFailed) {
+            throw ExpressionEvaluationException::evaluationError($expression, 'Unable to write jq input');
         }
 
         $lines = preg_split('/\R/', trim($output));

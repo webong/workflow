@@ -7,6 +7,7 @@ namespace Webong\WorkFlow\Tests\App;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
+use Webong\WorkFlow\Contracts\FlowExecutionDriver;
 use Webong\WorkFlow\Contracts\FlowOperationProvider;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
@@ -18,7 +19,11 @@ use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowRunner;
 use Webong\WorkFlow\Services\InMemoryFlowStateStore;
 use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
+use Webong\WorkFlow\Enums\FlowExecutionStatus;
+use Webong\WorkFlow\Temporal\TemporalFlowExecutionDriver;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
+use Webong\WorkFlow\ValueObjects\FlowExecutionReceipt;
+use Webong\WorkFlow\ValueObjects\FlowExecutionRequest;
 use Webong\WorkFlow\ValueObjects\FlowOperation;
 use Webong\WorkFlow\ValueObjects\FlowStateSubject;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
@@ -63,7 +68,7 @@ final class FlowRpcApplicationTest extends TestCase
         self::assertSame($completed, $application->invoke('flow.get', $params));
     }
 
-    public function testItRejectsUnknownMethodsAndNonInlineExecution(): void
+    public function testItRejectsUnknownMethodsAndUnregisteredExecutionDrivers(): void
     {
         $application = $this->application(new class implements FlowStepExecutor {
             public function supports(FlowStepDefinition $step): bool
@@ -90,6 +95,95 @@ final class FlowRpcApplicationTest extends TestCase
             'subject' => ['type' => 'order', 'id' => '42'],
             'driver' => 'temporal',
         ]);
+    }
+
+    public function test_it_starts_a_registered_async_driver_once_and_persists_its_receipt(): void
+    {
+        $driver = new class implements FlowExecutionDriver {
+            public int $calls = 0;
+            public ?FlowExecutionRequest $request = null;
+
+            public function name(): string
+            {
+                return 'queue';
+            }
+
+            public function dispatch(FlowExecutionRequest $request): FlowExecutionReceipt
+            {
+                $this->calls++;
+                $this->request = $request;
+
+                return new FlowExecutionReceipt(
+                    driver: 'queue',
+                    status: FlowExecutionStatus::DISPATCHED,
+                    executionId: 'job-42',
+                    state: $request->state,
+                );
+            }
+        };
+        $application = $this->application($this->noopExecutor(), drivers: [$driver]);
+        $params = [
+            'flow_key' => 'demo',
+            'run_id' => 'run-1',
+            'subject' => ['type' => 'order', 'id' => '42'],
+            'driver' => 'queue',
+            'context' => ['source' => 'rpc'],
+        ];
+
+        $started = $application->invoke('flow.start', $params);
+
+        self::assertSame(1, $driver->calls);
+        self::assertSame('queue', $driver->request?->driver);
+        self::assertSame(['source' => 'rpc'], $driver->request?->context);
+        self::assertSame('queue', $started['state']['metadata']['execution_driver']);
+        self::assertSame('dispatched', $started['state']['metadata']['execution_status']);
+        self::assertSame('job-42', $started['state']['metadata']['execution_id']);
+        self::assertNull($started['state']['execution_claim']);
+
+        $retry = $params;
+        unset($retry['driver'], $retry['context']);
+        self::assertSame($started, $application->invoke('flow.start', $retry));
+        self::assertSame(1, $driver->calls, 'An idempotent start must not enqueue a second job.');
+    }
+
+    public function test_it_starts_the_registered_temporal_driver_with_a_scoped_execution_identity(): void
+    {
+        $workflowId = null;
+        $payload = null;
+        $driver = new TemporalFlowExecutionDriver(
+            static function (string $id, array $input) use (&$workflowId, &$payload): string {
+                $workflowId = $id;
+                $payload = $input;
+
+                return $id;
+            },
+        );
+        $application = $this->application($this->noopExecutor(), drivers: [$driver]);
+
+        $started = $application->invoke('flow.start', [
+            'flow_key' => 'demo',
+            'run_id' => 'run-1',
+            'subject' => ['type' => 'order', 'id' => '42'],
+            'driver' => 'temporal',
+            'context' => ['source' => 'rpc'],
+        ]);
+
+        self::assertIsString($workflowId);
+        self::assertStringStartsWith('workflow-rpc:', $workflowId);
+        self::assertNotSame('run-1', $workflowId);
+        self::assertSame($workflowId, $started['state']['metadata']['execution_id']);
+        self::assertIsArray($payload);
+        self::assertSame('temporal', $payload['state']['metadata']['execution_driver']);
+        self::assertSame(['source' => 'rpc'], $payload['context']);
+
+        $firstWorkflowId = $workflowId;
+        $application->invoke('flow.start', [
+            'flow_key' => 'demo',
+            'run_id' => 'run-1',
+            'subject' => ['type' => 'order', 'id' => '43'],
+            'driver' => 'temporal',
+        ]);
+        self::assertNotSame($firstWorkflowId, $workflowId);
     }
 
     public function test_runs_pin_the_definition_and_context_and_resume_explicitly(): void
@@ -241,7 +335,8 @@ final class FlowRpcApplicationTest extends TestCase
         self::assertSame(1, $executor->calls);
     }
 
-    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null, bool $ows = false, bool $operations = false): FlowRpcApplication
+    /** @param list<FlowExecutionDriver> $drivers */
+    private function application(FlowStepExecutor $executor, ?FlowDefinitionProvider $definitions = null, ?FlowStateStoreFactory $stores = null, bool $ows = false, bool $operations = false, array $drivers = []): FlowRpcApplication
     {
         $definitions ??= new class implements FlowDefinitionProvider {
             public function definition(string $flowKey): FlowDefinition
@@ -269,7 +364,7 @@ final class FlowRpcApplicationTest extends TestCase
         return new FlowRpcApplication(
             $definitions,
             $stores,
-            new FlowExecutionDispatcher([new InlineFlowExecutionDriver(new FlowRunner(), [$executor])]),
+            new FlowExecutionDispatcher([new InlineFlowExecutionDriver(new FlowRunner(), [$executor]), ...$drivers]),
             ows: $ows ? new OpenWorkflow() : null,
             operationProviders: $operations ? [$executor] : [],
         );

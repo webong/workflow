@@ -52,4 +52,15 @@ final class FlowExecutionDispatcher
 
         return $receipt;
     }
+
+    public function has(string $driver): bool
+    {
+        return isset($this->drivers[$driver]);
+    }
+
+    /** @return list<string> */
+    public function names(): array
+    {
+        return array_keys($this->drivers);
+    }
 }

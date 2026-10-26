@@ -70,6 +70,10 @@ that arrives after the deadline but before the host applies the transition
 is still accepted — the deadline is advisory data, and core does not guess
 about external providers. Reconciliation stays with the host.
 
+ADR 0011 later adds `deadlineReached()` for deferred work that explicitly
+records a successful deadline outcome (notably OWS `wait`). Deadlines without
+that opt-in keep the failure behavior above; the host still owns the wakeup.
+
 ## Consequences
 
 ### Positive
@@ -98,3 +102,4 @@ about external providers. Reconciliation stays with the host.
 - [ADR 0008: First-class outputs and declarative input bindings](0008-first-class-outputs-and-declarative-input-bindings.md)
 - [ADR 0006: Open Workflow Specification adapter](0006-open-workflow-specification-adapter.md)
 - [GraphCompose research: lessons for WorkFlow contracts](../graphcompose.md)
+- [ADR 0011: Ready sets, child runs, and host-owned dispatch](0011-ready-sets-child-runs-and-host-owned-dispatch.md)

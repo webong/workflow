@@ -40,9 +40,10 @@ store may serve API/UI projections, but Temporal's event history owns the
 Temporal execution. Keep HTTP, database, Redis, and other side effects inside
 Activities, not deterministic Workflow code.
 
-The standalone JSON-RPC application in [`app/`](../app/README.md) currently
-accepts only `inline` for `flow.start`; setting Temporal environment variables
-does not enable Temporal there.
+The standalone JSON-RPC application in [`app/`](../app/README.md) can select
+`temporal` only when its trusted bootstrap registers a
+`TemporalFlowExecutionDriver`. Setting Temporal environment variables alone
+does not create a client, worker, or registered driver.
 
 ## Start a distinct run
 
@@ -51,6 +52,9 @@ Create a `FlowRun` before dispatch and pass its `initialState()` in the
 and no explicit Temporal execution ID, `TemporalFlowIdentity` derives the
 Workflow ID from subject, flow key, and logical run ID. An explicit execution
 ID remains host-controlled and must also distinguish repeated runs.
+The standalone RPC host supplies its own deterministic opaque execution ID,
+scoped by the same subject, flow, and logical-run components, and persists the
+ID returned by the Temporal starter.
 
 The logical WorkFlow run ID is separate from Temporal's Workflow ID and its
 server-generated Run ID. Keep all three when the host needs to address an
@@ -69,6 +73,12 @@ step retries only with an eligible bounded `FlowRetryPolicy`, using Temporal
 timers. Explicit non-retriable failures and `idempotent: false` stop retry.
 Return `deferred()` for external waits; a plain `pending()` result ends that
 step's execution pass without installing a signal wait.
+
+An OWS `wait` Activity returns a deferred step whose deadline transition is
+successful. `TemporalFlowWorkflow` uses a durable timer and applies
+`deadlineReached()` when it fires. OWS `listen` and awaited child workflows
+remain signal-driven; the host routes the matching event or child outcome to
+the existing `complete` signal.
 
 Supply the same `FlowStepExecution`/`FlowFailureReporter` configuration to
 `TemporalFlowActivityHandler` as to an inline runner for private diagnostics.

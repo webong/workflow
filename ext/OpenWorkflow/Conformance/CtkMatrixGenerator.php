@@ -27,7 +27,7 @@ final class CtkMatrixGenerator
         $lines[] = '';
         $lines[] = 'Source: ' . self::PINNED . ' (`ctk/features/*.feature`), vendored under `' . $this->relative($sourceDir) . '`.';
         $lines[] = '';
-        $lines[] = 'WorkFlow is a **limited OWS importer**, not a conforming OWS runtime (ADR 0006).';
+        $lines[] = 'WorkFlow is a **limited OWS runtime**; this matrix is implementation evidence, not an external certification claim (ADR 0006).';
         $lines[] = '';
         $rows = [];
         foreach ($results as $r) {
@@ -35,7 +35,7 @@ final class CtkMatrixGenerator
                 'feature' => $r->scenario->feature,
                 'scenario' => $r->scenario->name,
                 'status' => $r->statusLabel(),
-                'runtime' => $r->requiresRuntime ? 'required' : 'static only',
+                'runtime' => CtkRuntimeCoverage::has($r->scenario) ? 'verified' : ($r->requiresRuntime ? 'required' : 'static only'),
                 'detail' => $this->detail($r),
             ];
         }
@@ -69,13 +69,14 @@ final class CtkMatrixGenerator
         $lines[] = '## Reading this matrix';
         $lines[] = '';
         $lines[] = '- **static pass** — the document validates, translates to a `FlowDefinition` with no unsupported constructs, and every statically-checkable assertion (task ordering: *runs first / last / before / after*) holds against the translated execution order. This status alone does **not** prove the workflow produces the CTK\'s expected output; the separate runtime suite exercises the delivered execution behavior.';
-        $lines[] = '- **unsupported feature** — the document uses a construct the adapter explicitly rejects. Current deliberate gaps are durable `wait`/`listen`, sub-workflows (`run: workflow`), and expression forms unsupported by the selected jq backend; the detail column names the blocker.';
+        $lines[] = '- **runtime verified** — a named PHPUnit test translates and executes that exact pinned scenario through the adapter and asserts its runtime outcome. `CtkConformanceTest` prevents missing scenarios or stale test-method links.';
+        $lines[] = '- **unsupported feature** — the document uses a construct the adapter explicitly rejects. Current deliberate gaps are expression forms unsupported by the selected jq backend and host capabilities that were not bound; the detail column names the blocker.';
         $lines[] = '- **validation failure** — our structural validator rejects the document. These are candidates for either a validator fix (if the construct is legal OWS) or a deliberate rejection (if it is in the unsupported set).';
-        $lines[] = '- **runtime required** — the scenario asserts completion, output, faults, or cancellation, which static translation cannot verify. `tests/OpenWorkflow/OwsRuntimeTest.php` separately exercises the shipped in-process executors, including HTTP/OpenAPI through a mock PSR-18 transport.';
+        $lines[] = '- **runtime required** — the scenario asserts completion, output, faults, or cancellation but has no linked runtime test.';
         $lines[] = '';
         $lines[] = '## Path to conformance';
         $lines[] = '';
-        $lines[] = 'The CTK guidance expects **all** scenarios to pass for conformance. This matrix publishes exactly where the adapter stands: every scenario translates and the full executing subset (data flow, routing, iteration, forks, recovery, emit, raise, HTTP/OpenAPI calls) is verified end-to-end against pinned expected outputs. Remaining gaps are documented, not hidden: durable `wait`/`listen` and sub-workflows await the durable runtime (ADR 0006), and a conformance claim would additionally require running the complete CTK suite with its own runner.';
+        $lines[] = 'All 21 scenarios in the complete pinned v1.0.3 CTK are linked to end-to-end runtime tests. WorkFlow still describes itself as a limited importer/runtime rather than claiming certification: the upstream project does not publish a separate executable runner or certification result, and host-bound capabilities remain deployment-specific. WorkFlow extensions for durable `wait`/`listen` and `run: workflow` are tested separately because v1.0.3 has no CTK scenarios for them.';
         $lines[] = '';
 
         return implode("\n", $lines);

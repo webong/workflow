@@ -16,6 +16,7 @@ use Webong\WorkFlow\ValueObjects\FlowStepInput;
 use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
+use Webong\WorkFlow\ValueObjects\FlowState;
 
 /**
  * Framework-neutral activity handler used by the Temporal SDK adapter.
@@ -66,7 +67,15 @@ final class TemporalFlowActivityHandler
         }
 
         $previous = is_array($previousData) ? StepState::fromArray($previousData) : new StepState();
-        $context = new ArrayFlowContext(is_array($contextData) ? $this->stringKeyed($contextData) : []);
+        $contextValues = is_array($contextData) ? $this->stringKeyed($contextData) : [];
+        $stateData = $input['state'] ?? null;
+        $context = is_array($stateData) && isset($definition->metadata['ows_dsl_version'])
+            ? \Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext::resume(
+                $contextValues,
+                $definition,
+                FlowState::fromArray($stateData),
+            )
+            : new ArrayFlowContext($contextValues);
         $executor = $this->executorFor($step);
 
         // The workflow resolves input bindings before dispatching this

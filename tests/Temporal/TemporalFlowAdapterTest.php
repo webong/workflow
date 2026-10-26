@@ -16,6 +16,8 @@ use Webong\WorkFlow\Temporal\TemporalFlowExecutionDriver;
 use Webong\WorkFlow\Temporal\TemporalFlowIdentity;
 use Webong\WorkFlow\Temporal\TemporalFlowInput;
 use Webong\WorkFlow\Temporal\TemporalCompletionInbox;
+use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
+use Webong\WorkFlow\OpenWorkflow\Runtime\OwsWaitExecutor;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
@@ -251,6 +253,38 @@ final class TemporalFlowAdapterTest extends TestCase
 
         self::assertSame(FlowStepStatus::PENDING->value, $result['status']);
         self::assertTrue($result['metadata']['deferred']);
+    }
+
+    public function test_activity_handler_rebuilds_ows_context_for_a_durable_wait(): void
+    {
+        $report = (new OpenWorkflow())->registerOwsDefinition(<<<'YAML'
+document:
+  dsl: "1.0.3"
+  namespace: com.example
+  name: temporal-wait
+  version: "1.0.0"
+do:
+  - pause:
+      wait: PT2S
+YAML);
+        self::assertNotNull($report->flowDefinition);
+        $state = (new FlowRun('run-1', $report->flowDefinition))->initialState();
+
+        $result = (new TemporalFlowActivityHandler([
+            new OwsWaitExecutor(static fn (): int => 100),
+        ]))->execute([
+            'definition' => $report->flowDefinition->toArray(),
+            'state' => $state->toArray(),
+            'step_id' => 'pause',
+            'run_id' => 'run-1',
+            'context' => ['order_id' => '42'],
+            'previous' => (new StepState())->toArray(),
+        ]);
+
+        self::assertSame('pending', $result['status']);
+        self::assertSame(102, $result['deadline_at']);
+        self::assertSame('complete', $result['metadata']['deadline_transition']);
+        self::assertSame(['order_id' => '42'], $result['metadata']['deadline_output']);
     }
 
     public function test_activity_handler_applies_retry_policy_to_failed_results(): void

@@ -217,11 +217,9 @@ YAML;
         $report = $this->openWorkflow->registerOwsDefinition($yaml);
 
         $this->assertTrue($report->valid);
-        $unsupportedFeatures = array_map(
-            fn ($u) => $u->feature,
-            $report->unsupported
-        );
-        $this->assertContains('wait|listen', $unsupportedFeatures);
+        $this->assertSame([], $report->unsupported);
+        $this->assertContains('wait', $report->supported);
+        $this->assertSame('wait', $report->flowDefinition?->step('wait-step')?->metadata['ows_type'] ?? null);
     }
 
     public function testRegisterWithTryCatch(): void
