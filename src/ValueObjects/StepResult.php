@@ -94,4 +94,43 @@ final readonly class StepResult
             'deadlineAt' => $this->deadlineAt,
         ];
     }
+
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
+    {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('StepResult data must be an array.');
+        }
+
+        $status = $data['status'] ?? null;
+        $message = $data['message'] ?? null;
+        $error = $data['error'] ?? null;
+        $retriable = $data['retriable'] ?? null;
+        $attempts = $data['attempts'] ?? 0;
+        $nextRetryAt = $data['nextRetryAt'] ?? null;
+        $metadata = $data['metadata'] ?? [];
+        $deferred = $data['deferred'] ?? false;
+        $outputData = $data['output'] ?? null;
+        $deadlineAt = $data['deadlineAt'] ?? null;
+
+        $output = null;
+        if (is_array($outputData)) {
+            $output = StepOutput::from($outputData);
+        } elseif ($outputData === null) {
+            $output = StepOutput::null();
+        }
+
+        return new self(
+            status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,
+            message: is_string($message) ? $message : null,
+            error: is_string($error) ? $error : null,
+            retriable: is_bool($retriable) ? $retriable : null,
+            attempts: is_int($attempts) ? $attempts : 0,
+            nextRetryAt: is_int($nextRetryAt) ? $nextRetryAt : null,
+            metadata: is_array($metadata) ? $metadata : [],
+            deferred: is_bool($deferred) ? $deferred : false,
+            output: $output,
+            deadlineAt: is_int($deadlineAt) ? $deadlineAt : null,
+        );
+    }
 }

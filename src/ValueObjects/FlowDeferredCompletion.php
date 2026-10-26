@@ -28,4 +28,39 @@ final readonly class FlowDeferredCompletion
             throw new \InvalidArgumentException('A deferred completion cannot start execution.');
         }
     }
+
+    /** @return array<string, mixed> */
+    public function toArray(): array
+    {
+        return [
+            'flow_key' => $this->flowKey,
+            'step_id' => $this->stepId,
+            'idempotency_key' => $this->idempotencyKey,
+            'result' => $this->result->toArray(),
+            'run_id' => $this->runId,
+            'attempt' => $this->attempt,
+        ];
+    }
+
+    /** @param mixed $data */
+    public static function fromArray(mixed $data): self
+    {
+        if (! is_array($data)) {
+            throw new \InvalidArgumentException('FlowDeferredCompletion data must be an array.');
+        }
+
+        $resultData = $data['result'] ?? null;
+        if (! is_array($resultData)) {
+            throw new \InvalidArgumentException('FlowDeferredCompletion result must be an array.');
+        }
+
+        return new self(
+            flowKey: is_string($data['flow_key'] ?? null) ? $data['flow_key'] : '',
+            stepId: is_string($data['step_id'] ?? null) ? $data['step_id'] : '',
+            idempotencyKey: is_string($data['idempotency_key'] ?? null) ? $data['idempotency_key'] : '',
+            result: \Webong\WorkFlow\ValueObjects\StepResult::fromArray($resultData),
+            runId: is_string($data['run_id'] ?? null) ? $data['run_id'] : null,
+            attempt: is_int($data['attempt'] ?? null) ? $data['attempt'] : null,
+        );
+    }
 }

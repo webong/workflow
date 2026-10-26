@@ -13,5 +13,6 @@ parameters:
         - mod/native/php/NativeFlow.php
         - mod/native/php/api.php
         - mod/native/php/main.php
+    excludePaths:
         - examples
     treatPhpDocTypesAsCertain: false
