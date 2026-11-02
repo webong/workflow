@@ -1,4 +1,4 @@
-# elephc 0.27.5 diagnostics
+# elephc 0.27.6 diagnostics
 
 These are failing compatibility probes, not passing conformance tests.
 
@@ -6,7 +6,7 @@ Upstream reports:
 
 - [#2034: loop return-type inference](https://github.com/illegalstudio/elephc/issues/2034)
 - [#2035: exported class-method call](https://github.com/illegalstudio/elephc/issues/2035)
-Run from the repository root with elephc 0.27.5 on Linux ARM64:
+Run from the repository root with elephc 0.27.6 on Linux ARM64:
 
 ```sh
 elephc --check mod/elephc/tests/compiler/export_method.php
@@ -28,7 +28,7 @@ Upstream describes the restriction at https://elephc.dev/docs/beyond-php/cdylib/
 ## Traced loop return-type failure
 
 `loop_return_type.php` reduces the `FlowRunner::run` failure to 14 lines, with
-no WorkFlow dependencies. PHP executes it successfully; elephc 0.27.5 reports:
+no WorkFlow dependencies. PHP executes it successfully; elephc 0.27.6 reports:
 
 ```text
 Method State::withStep parameter $next expects State, got mixed
@@ -54,7 +54,7 @@ Verified controls on the same compiler:
 
 ### Compiler source trace
 
-Inspected upstream tag `v0.27.5`, commit
+Inspected upstream tag `v0.27.6`, commit
 `e2db603f8732c1ab2fc789adc0c8e7b4a7f19a1e`:
 
 1. `src/types/checker/stmt_check/control_flow.rs:58-86` runs

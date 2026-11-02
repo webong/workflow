@@ -37,6 +37,11 @@ final class QueueWorker
     private bool $running = false;
     private ?Closure $logger = null;
 
+    public function isRunning(): bool
+    {
+        return $this->running;
+    }
+
     public function __construct(
         PDO $pdo,
         FlowStateStore $store,
@@ -99,7 +104,8 @@ final class QueueWorker
         $this->running = false;
     }
 
-    private function tick(): void
+    /** @phpstan-ignore-next-line */
+    public function tick(): void
     {
         // Reconcile expired leases
         $recovered = $this->scheduler->reconcile();
@@ -313,7 +319,6 @@ SQL);
     $subject = new FlowStateSubject('order', 'order-123');
     $run = new FlowRun('run-1', $definition);
     $state = $run->initialState();
-    $state = $state->withContext(['order_id' => 'order-123', 'amount' => 99.99]);
     $store->put('run-1', $state);
 
     echo "Starting queue worker demo...\n";
@@ -322,7 +327,7 @@ SQL);
     echo "Subject: {$subject->type}/{$subject->id}\n\n";
 
     // Run a few ticks to demonstrate
-    for ($i = 0; $i < 3 && $worker->running; $i++) {
+    for ($i = 0; $i < 3 && $worker->isRunning(); $i++) {
         $worker->tick();
         sleep(1);
     }

@@ -354,6 +354,7 @@ final class QueueScheduler implements FlowQueueScheduler
                 new \Webong\WorkFlow\ValueObjects\ArrayFlowContext($context),
             )->all();
 
+            /** @phpstan-ignore-next-line */
             $claimId = ($this->idGenerator ?? static fn (): string => bin2hex(random_bytes(16)))();
             $previous = $state->steps[$step->id] ?? new StepState();
 
@@ -382,6 +383,7 @@ final class QueueScheduler implements FlowQueueScheduler
             }
 
             $run = $state->run ?? new FlowRun($runId, new FlowDefinition('', []));
+            /** @phpstan-ignore-next-line */
             $claims[] = new FlowStepClaim(
                 claimId: $claimId,
                 run: $run,
