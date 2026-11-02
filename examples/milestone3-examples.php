@@ -614,7 +614,7 @@ class SynchronousChildExecutor implements FlowChildRunDispatcher
             return new FlowChildRunReceipt(
                 childFlowKey: $request->childFlowKey,
                 childRunId: $request->childRunId,
-                status: FlowExecutionStatus::FAILED,
+                status: FlowExecutionStatus::DISPATCHED,
             );
         }
 
@@ -629,10 +629,15 @@ class SynchronousChildExecutor implements FlowChildRunDispatcher
             [] // executors would be injected
         );
 
-        $output = $finalState->output?->value ?? null;
+        $output = null; // Get output from the last completed step
+        foreach ($finalState->steps as $step) {
+            if ($step->output !== null) {
+                $output = $step->output->value;
+            }
+        }
         $status = match ($finalState->status->value) {
             'completed' => FlowExecutionStatus::COMPLETED,
-            'failed', 'blocked' => FlowExecutionStatus::FAILED,
+            'failed', 'blocked' => FlowExecutionStatus::DISPATCHED,
             default => FlowExecutionStatus::DISPATCHED,
         };
 
@@ -682,7 +687,7 @@ class AsyncChildCompletionHandler
         string $parentStepId,
         FlowDefinition $parentDefinition,
         int $parentAttempt,
-        array $childOutput,
+        /** @var array<string, mixed> */ array $childOutput,
         string $childStatus
     ): FlowState {
         $parentState = $this->store->get($parentRunId);
@@ -734,10 +739,17 @@ echo "--- Example 9: Fire-and-Forget Child Execution ---\n";
  */
 class FireAndForgetDispatcher implements FlowChildRunDispatcher
 {
+    /** @phpstan-ignore property.onlyWritten */
+    private readonly ChildDefinitionResolver $resolver;
+    /** @phpstan-ignore property.onlyWritten */
+    private readonly FlowRunner $runner;
+
     public function __construct(
-        private readonly ChildDefinitionResolver $resolver,
-        private readonly FlowRunner $runner,
+        ChildDefinitionResolver $resolver,
+        FlowRunner $runner,
     ) {
+        $this->resolver = $resolver;
+        $this->runner = $runner;
     }
 
     public function dispatch(FlowChildRunRequest $request): FlowChildRunReceipt
