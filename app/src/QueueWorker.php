@@ -9,6 +9,7 @@ use PDO;
 use Webong\WorkFlow\Contracts\FlowQueueScheduler;
 use Webong\WorkFlow\Contracts\FlowStateStore;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
+use Webong\WorkFlow\Contracts\FlowStepClaim;
 use Webong\WorkFlow\Services\QueueScheduler;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
@@ -30,6 +31,7 @@ use Webong\WorkFlow\ValueObjects\StepState;
 final class QueueWorker
 {
     private FlowQueueScheduler $scheduler;
+    /** @var list<FlowStepExecutor> */
     private array $executors = [];
     private int $maxClaims = 5;
     private int $leaseSeconds = 300;
@@ -47,7 +49,9 @@ final class QueueWorker
         FlowStateStore $store,
         ?Closure $logger = null,
     ) {
-        $this->logger = $logger ?? static fn (string $msg): void => fwrite(STDERR, $msg . PHP_EOL);
+        $this->logger = $logger ?? static function (string $msg): void {
+            fwrite(STDERR, $msg . PHP_EOL);
+        };
         $this->scheduler = new QueueScheduler(
             pdo: $pdo,
             store: $store,
@@ -82,7 +86,7 @@ final class QueueWorker
     public function run(): void
     {
         $this->running = true;
-        ($this->logger)("Queue worker started (pid: " . getmypid() . ")");
+        $this->log("Queue worker started (pid: " . getmypid() . ")");
 
         // Register signal handlers for graceful shutdown
         pcntl_signal(SIGTERM, [$this, 'shutdown']);
@@ -95,22 +99,28 @@ final class QueueWorker
             }
         }
 
-        ($this->logger)("Queue worker stopped");
+        $this->log("Queue worker stopped");
     }
 
     public function shutdown(): void
     {
-        ($this->logger)("Shutdown signal received");
+        $this->log("Shutdown signal received");
         $this->running = false;
     }
 
-    /** @phpstan-ignore-next-line */
+    private function log(string $message): void
+    {
+        $logger = $this->logger;
+        assert($logger !== null);
+        $logger($message);
+    }
+
     public function tick(): void
     {
         // Reconcile expired leases
         $recovered = $this->scheduler->reconcile();
         if ($recovered > 0) {
-            ($this->logger)("Reconciled {$recovered} expired claims");
+            $this->log("Reconciled {$recovered} expired claims");
         }
 
         // Claim ready steps
@@ -120,7 +130,7 @@ final class QueueWorker
             return;
         }
 
-        ($this->logger)("Claimed " . count($claims) . " step(s)");
+        $this->log("Claimed " . count($claims) . " step(s)");
 
         foreach ($claims as $claim) {
             if (! $this->running) {
@@ -130,12 +140,18 @@ final class QueueWorker
         }
     }
 
-    private function executeClaim(\Webong\WorkFlow\ValueObjects\FlowStepClaim $claim): void
+    private function executeClaim(FlowStepClaim $claim): void
     {
         $step = $claim->step;
         $attempt = $claim->metadata['attempt'] ?? 1;
+        if (! is_int($attempt)) {
+            $attempt = 1;
+        }
 
-        ($this->logger)("Executing step {$step->id} (attempt {$attempt}) for run {$claim->run->id}");
+        $runId = $claim->run->id;
+        $flowKey = $claim->run->definition->key;
+
+        $this->log("Executing step {$step->id} (attempt {$attempt}) for run {$runId}");
 
         // Find executor
         $executor = null;
@@ -147,7 +163,7 @@ final class QueueWorker
         }
 
         if ($executor === null) {
-            ($this->logger)("No executor for step {$step->id}, releasing claim");
+            $this->log("No executor for step {$step->id}, releasing claim");
             $this->scheduler->release($claim);
             return;
         }
@@ -165,7 +181,7 @@ final class QueueWorker
 
         try {
             $result = $executor->execute($invocation);
-            ($this->logger)("Step {$step->id} completed with status {$result->status->value}");
+            $this->log("Step {$step->id} completed with status {$result->status->value}");
 
             match ($result->status) {
                 \Webong\WorkFlow\Enums\FlowStepStatus::COMPLETED,
@@ -175,7 +191,7 @@ final class QueueWorker
                 default => $this->scheduler->release($claim),
             };
         } catch (\Throwable $e) {
-            ($this->logger)("Step {$step->id} threw exception: " . $e->getMessage());
+            $this->log("Step {$step->id} threw exception: " . $e->getMessage());
             $this->scheduler->fail($claim, $e);
         }
     }
@@ -193,7 +209,8 @@ class ProcessOrderExecutor implements FlowStepExecutor
 
     public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
     {
-        $orderId = $invocation->input->get('order_id') ?? 'unknown';
+        $orderIdRaw = $invocation->input->get('order_id');
+        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
         // Simulate processing
         usleep(100_000); // 100ms
 
@@ -213,7 +230,8 @@ class VerifyPaymentExecutor implements FlowStepExecutor
 
     public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
     {
-        $orderId = $invocation->input->get('order_id') ?? 'unknown';
+        $orderIdRaw = $invocation->input->get('order_id');
+        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
         // Simulate verification
         usleep(150_000); // 150ms
 
@@ -233,9 +251,12 @@ class ShipOrderExecutor implements FlowStepExecutor
 
     public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
     {
-        $orderId = $invocation->input->get('order_id') ?? 'unknown';
-        $processed = $invocation->input->get('processed') ?? false;
-        $verified = $invocation->input->get('verified') ?? false;
+        $orderIdRaw = $invocation->input->get('order_id');
+        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
+        $processedRaw = $invocation->input->get('processed');
+        $processed = is_bool($processedRaw) ? $processedRaw : false;
+        $verifiedRaw = $invocation->input->get('verified');
+        $verified = is_bool($verifiedRaw) ? $verifiedRaw : false;
 
         if (! $processed || ! $verified) {
             return StepResult::failed("Dependencies not satisfied for {$orderId}");
@@ -334,12 +355,14 @@ SQL);
 
     // Show final state
     $finalState = $store->get('run-1');
-    echo "\nFinal state:\n";
-    echo "  Status: {$finalState->status->value}\n";
-    foreach ($finalState->steps as $id => $step) {
-        echo "  Step {$id}: {$step->status->value} (attempts: {$step->attempts})\n";
-        if ($step->output !== null) {
-            echo "    Output: " . json_encode($step->output->value) . "\n";
+    if ($finalState !== null) {
+        echo "\nFinal state:\n";
+        echo "  Status: {$finalState->status->value}\n";
+        foreach ($finalState->steps as $id => $step) {
+            echo "  Step {$id}: {$step->status->value} (attempts: {$step->attempts})\n";
+            if ($step->output !== null) {
+                echo "    Output: " . json_encode($step->output->value) . "\n";
+            }
         }
     }
 }
