@@ -22,7 +22,7 @@ need **no PHP, PHPX, GMP/MPFR, or `LD_LIBRARY_PATH`**: JSON, hashing, dates, and
 arrays are compiled in. They are still platform-specific, and the Elephc runtime
 library is part of the artifact.
 
-> **Status (2026-10-23).** Blocked on elephc 0.27.6. Shared PHP compatibility
+> **Status (2026-10-23).** Blocked on elephc 0.27.7. Shared PHP compatibility
 > fixes pass the interpreter and TypePHP tests, but elephc has not produced a
 > verified executable or shared library. Do not distribute these artifacts.
 > See [compiler diagnostics](tests/compiler/README.md) for the exact commands,

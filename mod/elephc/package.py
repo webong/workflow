@@ -39,11 +39,11 @@ for source, destination in files.items():
     "platform": f"linux/{architecture}",
     "native_abi": 1,
     "native_protocol": 1,
-    "elephc": os.environ.get("ELEPHC_VERSION", "0.27.6"),
+    "elephc": os.environ.get("ELEPHC_VERSION", "0.27.7"),
     "runtime": "Matching elephc native Docker image (Debian Bookworm/glibc). SDK archive is self-contained for this core.",
     "sources": {
         "workflow": "https://github.com/webong/workflow",
-        "elephc": f"https://github.com/illegalstudio/elephc/releases/tag/v{os.environ.get('ELEPHC_VERSION', '0.27.6')}",
+        "elephc": f"https://github.com/illegalstudio/elephc/releases/tag/v{os.environ.get('ELEPHC_VERSION', '0.27.7')}",
     },
 }, indent=2) + "\n")
 
