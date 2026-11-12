@@ -1,4 +1,5 @@
 /build/
+/php/bundle.php
 /php/main
 /php/entry
 /php/workflow_native.*

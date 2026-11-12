@@ -8,8 +8,13 @@
 ARG MANTICORE_IMAGE=ghcr.io/manticorephp/compiler:latest
 FROM ${MANTICORE_IMAGE} AS toolchain
 
-RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+# The image runs as non-root user 'manticore'; install python3 as root,
+# then add the Manticore compiler to PATH for build.sh.
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends php-cli python3 \
     && rm -rf /var/lib/apt/lists/*
+ENV PATH="/opt/manticore/bin:${PATH}"
+USER manticore
 
 WORKDIR /workspace
 ENTRYPOINT []
@@ -27,10 +32,19 @@ FROM toolchain AS build
 COPY src ./src
 COPY mod/native ./mod/native
 COPY mod/manticore ./mod/manticore
+COPY composer.json composer.lock ./
 COPY LICENSE ./LICENSE
+COPY tools/bundle-native.php ./tools/bundle-native.php
 COPY --from=reference /build/php83-cases.json /build/php83-cases.json
+# bundle.php is gitignored (generated artifact); produce it in-container as root
+# from the WorkFlow core + native protocol before compiling.
+USER root
+RUN php tools/bundle-native.php > mod/manticore/php/bundle.php
+USER manticore
 RUN sh mod/manticore/build.sh
+USER root
 RUN python3 mod/manticore/package.py
+USER manticore
 
 # Runtime stage: minimal image with just the compiled executable
 FROM debian:bookworm-slim AS runtime

@@ -55,8 +55,7 @@ elephc-test: elephc-build
 manticore-build:
 	docker compose -f mod/manticore/compose.yml build build
 	docker compose -f mod/manticore/compose.yml run --rm baseline
-	docker compose -f mod/manticore/compose.yml run --rm build
 
 # Parity checks for the Manticore artifacts, all in Docker.
 manticore-test: manticore-build
-	docker compose -f mod/manticore/compose.yml run --rm verify
+	docker compose -f mod/manticore/compose.yml build verify
