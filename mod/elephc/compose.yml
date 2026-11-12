@@ -1,12 +1,21 @@
 name: workflow-native-elephc
 
 services:
+  baseline:
+    image: php:8.3-cli
+    volumes:
+      - ../..:/workspace:ro
+      - elephc_build:/build
+    working_dir: /workspace
+    command: ["php", "mod/native/tests/export-cases.php"]
+
   elephc:
     build:
       context: ../..
       dockerfile: mod/elephc/Dockerfile
       target: build
     volumes:
+      - ../..:/workspace:ro
       - elephc_build:/build
       - elephc_dist:/dist
     working_dir: /workspace

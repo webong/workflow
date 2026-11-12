@@ -1,0 +1,5 @@
+/build/
+/php/main
+/php/entry
+/php/workflow_native.*
+/include/libworkflow_native.h

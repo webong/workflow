@@ -1,0 +1,133 @@
+# Compile the WorkFlow core to a native binary with Manticore
+
+This is an **experimental build target**, not a replacement for the Composer
+package, the [FrankenPHP JSON-RPC server](../README.md), the
+[TypePHP module](../typephp/README.md), or the
+[elephc module](../elephc/README.md). Start with
+[the PHP, Node, and Python guide](../../docs/languages.md) if you are choosing
+how your application should connect.
+
+[Manticore](https://github.com/manticorephp/compiler) is a self-hosted
+PHP-to-native AOT compiler written in PHP with an LLVM backend. It compiles a
+large subset of PHP 8.5+ to standalone native binaries (arm64 / x86_64) through
+LLVM IR — no PHP runtime, no interpreter, no extension loader. The compiler is
+written in PHP and compiles itself to a byte-identical fixpoint.
+
+This module compiles the same `src/` core and the same JSON protocol as the
+TypePHP and elephc modules into:
+
+- `workflow-native`: an executable that reads one JSON request from standard
+  input and prints one JSON response.
+
+Unlike TypePHP, Manticore does not embed a PHP runtime. Unlike elephc, Manticore
+emits LLVM IR and assembles it with `clang` rather than generating native
+assembly directly.
+
+## Build and test
+
+Everything runs in Docker — nothing is installed on the host:
+
+```sh
+# Build the artifacts (compiler, oracle, conformance tests all in containers)
+docker compose -f mod/manticore/compose.yml build build
+docker compose -f mod/manticore/compose.yml run --rm baseline
+docker compose -f mod/manticore/compose.yml run --rm build
+```
+
+Or through the repository Makefile:
+
+```sh
+make manticore-build
+make manticore-test
+```
+
+`make manticore-test` runs the compiler check, the build, and the conformance +
+Node tests against the PHP 8.3 parity oracle. It needs no PHP, Manticore, Node,
+or Python installation on your host.
+
+Then try a complete approval flow from Node:
+
+```sh
+printf '%s' '{"protocol":1,"operation":"start","run_id":"approval-1","definition":{"key":"approval","steps":[{"id":"approve"}]}}' | \
+  docker compose -f mod/manticore/compose.yml run --rm -T build /build/workflow-native
+```
+
+Check `ok` in the JSON response. Domain errors return `ok: false`, even when
+the executable itself exits successfully.
+
+## What the host must do
+
+Every request contains `protocol: 1` and an `operation`:
+
+| Operation | Input | Result |
+|---|---|---|
+| `start` | `run_id`, `definition` | A new pinned run state; no work is executed |
+| `evaluate` | `state` | Recalculated progress |
+| `advance` | `state` | Updated state and newly issued `work` items |
+| `complete` | `state`, `completion` | State after accepting a deferred result |
+| `cancel` | `state` | Cancelled state; no further work is issued |
+
+Success responses contain `ok`, `state`, and `work`. Each work item contains
+`flow_key`, `run_id`, `step_id`, and `attempt`. A completion uses those four
+fields plus `idempotency_key` and `result`. Result status is `completed`,
+`failed`, or `skipped`; optional fields are `message`, `error`, `retriable`,
+and `metadata`.
+
+For example, a Python application can implement an `email` step using its own
+mailer. WorkFlow only decides when that step becomes eligible:
+
+1. Load the latest state and call `advance`.
+2. Atomically save the returned state **and the work items to deliver** before
+   performing external work. Use your own locking/version checks and outbox.
+3. Perform the work using a stable idempotency key derived from its run and
+   step (and, where appropriate, attempt).
+4. Load the latest state, apply `complete`, and atomically save its result.
+5. Call `advance` again to obtain newly eligible dependent steps.
+
+The library is stateless: it does not remember previous calls, deduplicate
+`start`, save data, queue jobs, schedule retry deadlines, or contact providers.
+Reusing an old state can reissue work. An `advance` on the latest waiting state
+returns no duplicate work; persist the original work items so a host crash
+does not lose them. Cancellation stops future work but does not undo an
+operation the host has already started. See [run lifecycle](../../docs/run-lifecycle.md).
+
+Use only trusted definitions and persisted snapshots. This executable interface
+is not a security sandbox and provides no subject/tenant authorization. Keep
+host credentials out of snapshots and ensure explicit result messages are safe
+for their intended audience. Optional Laravel and Temporal adapters are not
+included in these native artifacts.
+
+## C interface and runtime ownership
+
+Manticore emits a standalone executable (`workflow-native`) that speaks the
+same JSON protocol over stdin/stdout. There is no in-process shared library
+yet: the `--emit-library` flag produces a standalone `.o` object file, and
+wrapping it into a C-ABI `.so` with `cc -shared` is a stretch goal. The
+Node and Python clients below call the executable as a fresh process per
+operation, which avoids thread-affinity and lifetime concerns entirely.
+
+## Why the protocol lives in `mod/native`
+
+`mod/native/php/` holds the compiler-agnostic JSON front end
+(`NativeFlow.php`, `api.php`, the stdin `main.php`, and the interpreter
+oracle wiring) and `mod/native/tests/export-cases.php` holds the shared parity
+fixtures. All three native modules compile that one copy, so the wire
+contract and its tests cannot drift between the compilers. The core flow
+rules stay in `src/`; neither native module reimplements them in C++ or Python.
+
+Only the Manticore-specific parts live here: the `entry.php` compilation
+entry, the `bootstrap.php` require map, the build script, and the clients.
+
+## Known risks
+
+- **PHP version floor:** Manticore targets PHP 8.5+. The WorkFlow core
+  declares `^8.3 || ^8.4 || ^8.5`; native builds via Manticore use the
+  8.5 subset. Run `manticore compile entry.php --check` to see which
+  constructs the front end accepts.
+- **`random_bytes()`:** Manticore may not lower this builtin yet. The
+  `bootstrap.php` declares a PHP-level polyfill so the core can compile;
+  its runtime behavior is verified by the conformance suite.
+- **No shared library:** The C-ABI `.so`/`.dylib` story (like elephc's
+  `libworkflow_native`) is not yet implemented for Manticore.
+
+Upstream references: [Manticore](https://github.com/manticorephp/compiler).

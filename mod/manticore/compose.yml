@@ -1,0 +1,31 @@
+name: workflow-native-manticore
+
+services:
+  baseline:
+    image: php:8.3-cli
+    volumes:
+      - ../..:/workspace:ro
+      - manticore_build:/build
+    working_dir: /workspace
+    command: ["php", "mod/native/tests/export-cases.php"]
+
+  build:
+    build:
+      context: ../..
+      dockerfile: mod/manticore/Dockerfile
+      target: build
+    volumes:
+      - ../..:/workspace:ro
+      - manticore_build:/build
+    working_dir: /workspace
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+
+  verify:
+    build:
+      context: ../..
+      dockerfile: mod/manticore/Dockerfile
+      target: verify
+
+volumes:
+  manticore_build:

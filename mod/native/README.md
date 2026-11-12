@@ -1,8 +1,8 @@
 # Shared native protocol
 
 `mod/native/` holds the compiler-agnostic front end that every native module
-compiles. It is required by [TypePHP](../typephp/README.md) and
-[elephc](../elephc/README.md) alike.
+compiles. It is required by [TypePHP](../typephp/README.md),
+[elephc](../elephc/README.md), and [Manticore](../manticore/README.md) alike.
 
 - `php/NativeFlow.php` — the JSON protocol over the core (`start`, `evaluate`,
   `advance`, `complete`, `cancel`). It is stateless coordination only; the

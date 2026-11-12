@@ -6,7 +6,10 @@ ELEPHC_BUILD := mod/elephc/build
 ELEPHC_LIB_EXT := $(if $(filter Darwin,$(shell uname -s)),dylib,so)
 ELEPHC_ORACLE := $(ELEPHC_BUILD)/php83-cases.json
 
-.PHONY: install test test-filter types analyse lint docker-test docker-down native-test elephc-build elephc-test
+MANTICORE_BUILD := mod/manticore/build
+MANTICORE_ORACLE := $(MANTICORE_BUILD)/php83-cases.json
+
+.PHONY: install test test-filter types analyse lint docker-test docker-down native-test elephc-build elephc-test manticore-build manticore-test
 
 install:
 	$(COMPOSER) install --no-interaction
@@ -38,16 +41,22 @@ native-test:
 	docker compose -f mod/typephp/compose.yml run --rm baseline
 	docker compose -f mod/typephp/compose.yml run --rm native
 
-# Build the elephc artifacts on the host; needs elephc on PATH. See mod/elephc/README.md.
+# Build the elephc artifacts in Docker (nothing installed on the host).
 elephc-build:
-	sh mod/elephc/build.sh
+	docker compose -f mod/elephc/compose.yml build elephc
+	docker compose -f mod/elephc/compose.yml run --rm baseline
+	docker compose -f mod/elephc/compose.yml run --rm elephc
 
-# Parity and ABI checks for the elephc artifacts. Needs a PHP 8.3 interpreter for the oracle.
+# Parity and ABI checks for the elephc artifacts, all in Docker.
 elephc-test: elephc-build
-	$(PHP) mod/native/tests/export-cases.php $(ELEPHC_ORACLE)
-	WORKFLOW_NATIVE_BIN=$(ELEPHC_BUILD)/workflow-native \
-	WORKFLOW_NATIVE_LIB=$(ELEPHC_BUILD)/libworkflow_native.$(ELEPHC_LIB_EXT) \
-	WORKFLOW_ORACLE=$(ELEPHC_ORACLE) \
-		python3 mod/elephc/tests/conformance.py
-	WORKFLOW_NATIVE_BIN=$(ELEPHC_BUILD)/workflow-native \
-		node --test mod/elephc/tests/node_client.test.mjs
+	docker compose -f mod/elephc/compose.yml run --rm elephc sh -c 'WORKFLOW_NATIVE_LIB=/build/libworkflow_native.so python3 mod/elephc/tests/conformance.py && node --test mod/elephc/tests/node_client.test.mjs'
+
+# Build the Manticore artifacts in Docker (nothing installed on the host).
+manticore-build:
+	docker compose -f mod/manticore/compose.yml build build
+	docker compose -f mod/manticore/compose.yml run --rm baseline
+	docker compose -f mod/manticore/compose.yml run --rm build
+
+# Parity checks for the Manticore artifacts, all in Docker.
+manticore-test: manticore-build
+	docker compose -f mod/manticore/compose.yml run --rm verify
