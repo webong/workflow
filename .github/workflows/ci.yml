@@ -186,7 +186,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=rpc-${{ matrix.arch }}
       - name: Test HTTP lifecycle against PostgreSQL
         run: |
-          docker compose -f app/compose.ci.yml up -d --wait --wait-timeout 90 workflowd
+          docker compose -f app/compose.ci.yml up -d --wait --wait-timeout 90 workflowd queue-worker
           docker compose -f app/compose.ci.yml run --rm smoke
       - name: Container diagnostics
         if: failure()

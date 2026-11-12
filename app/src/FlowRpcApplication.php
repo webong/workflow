@@ -46,7 +46,11 @@ final readonly class FlowRpcApplication
         private ?OpenWorkflow $ows = null,
         iterable $operationProviders = [],
         private ?array $grantedCapabilities = null,
+        private ?QueueRpcRuntime $queue = null,
     ) {
+        if ($this->queue !== null && $this->execution->has('queue')) {
+            throw new \InvalidArgumentException('Register either the queue runtime or a legacy queue dispatch driver, not both.');
+        }
         $this->operationProviders = is_array($operationProviders)
             ? array_values($operationProviders)
             : iterator_to_array($operationProviders, false);
@@ -97,7 +101,13 @@ final readonly class FlowRpcApplication
         $subject = $this->subject($params);
         $flowKey = $this->flowKey($params);
 
-        return ['state' => $this->publicState($this->store($subject, $params)->get($flowKey))];
+        $state = $this->store($subject, $params)->get($flowKey);
+        $queue = $this->queueFor($state);
+        if ($queue !== null) {
+            assert($state !== null);
+            $state = $queue->get($subject, $state);
+        }
+        return ['state' => $this->publicState($state)];
     }
 
     /**
@@ -113,12 +123,12 @@ final readonly class FlowRpcApplication
         $driverProvided = array_key_exists('driver', $params);
         $driver = $params['driver'] ?? 'inline';
 
-        if (! is_string($driver) || $driver === '' || ! $this->execution->has($driver)) {
+        if (! is_string($driver) || $driver === '') {
             throw new RpcFailure(-32602, 'Unknown or unavailable execution driver');
         }
 
         $created = false;
-        $state = $store->mutate($flowKey, function (?FlowState $current) use ($flowKey, $context, $driver, $driverProvided, $store, &$created): FlowState {
+        $state = $store->mutate($flowKey, function (?FlowState $current) use ($flowKey, $context, $driver, $driverProvided, $store, $subject, &$created): FlowState {
             if ($current !== null) {
                 $recorded = $current->metadata['execution_driver'] ?? null;
                 if ($driverProvided && is_string($recorded) && $recorded !== $driver) {
@@ -128,14 +138,22 @@ final readonly class FlowRpcApplication
                 return $current;
             }
 
+            if (! ($this->execution->has($driver) || ($driver === 'queue' && $this->queue !== null))) {
+                throw new RpcFailure(-32602, 'Unknown or unavailable execution driver');
+            }
             $created = true;
 
             return (new FlowRun($store->runId, $this->definitions->definition($flowKey)))->initialState()->withMetadata([
                 'execution_driver' => $driver,
                 '_rpc_context' => $context,
+                ...($driver === 'queue' && $this->queue !== null ? ['_rpc_authority' => 'queue-v1', 'execution_id' => RpcRunIdentity::executionId($subject, $flowKey, $store->runId)] : []),
             ]);
         });
 
+        $queue = $this->queueFor($state);
+        if ($queue !== null) {
+            return ['state' => $this->publicState($queue->start($subject, $state))];
+        }
         return $created ? $this->resume($params) : ['state' => $this->publicState($state)];
     }
 
@@ -187,6 +205,12 @@ final readonly class FlowRpcApplication
             runId: $store->runId,
             attempt: $attempt,
         );
+        $route = $store->get($flowKey);
+        $queue = $this->queueFor($route);
+        if ($queue !== null) {
+            assert($route !== null);
+            return ['state' => $this->publicState($queue->complete($subject, $route, $completion))];
+        }
         $state = $store->mutate($flowKey, function (?FlowState $current) use ($completion): FlowState {
             $current = $this->available($current);
 
@@ -206,6 +230,12 @@ final readonly class FlowRpcApplication
         $subject = $this->subject($params);
         $flowKey = $this->flowKey($params);
         $store = $this->store($subject, $params);
+        $route = $store->get($flowKey);
+        $queue = $this->queueFor($route);
+        if ($queue !== null) {
+            assert($route !== null);
+            return ['state' => $this->publicState($queue->resume($subject, $route))];
+        }
         $claim = bin2hex(random_bytes(16));
         $state = $store->mutate($flowKey, function (?FlowState $current) use ($claim): FlowState {
             $current = $this->available($current);
@@ -271,6 +301,13 @@ final readonly class FlowRpcApplication
      */
     private function cancel(array $params): array
     {
+        $subject = $this->subject($params);
+        $route = $this->store($subject, $params)->get($this->flowKey($params));
+        $queue = $this->queueFor($route);
+        if ($queue !== null) {
+            assert($route !== null);
+            return ['state' => $this->publicState($queue->cancel($subject, $route))];
+        }
         $state = $this->store($this->subject($params), $params)->mutate(
             $this->flowKey($params),
             fn (?FlowState $current): FlowState => $this->transitions->cancel($this->available($current)),
@@ -378,8 +415,22 @@ final readonly class FlowRpcApplication
         return $document;
     }
 
+    private function queueFor(?FlowState $route): ?QueueRpcRuntime
+    {
+        if (($route?->metadata['_rpc_authority'] ?? null) === 'queue-v1') {
+            return $this->queue ?? throw new RpcFailure(-32602, 'Queue authority is unavailable on this host');
+        }
+        if ($this->queue !== null && ($route?->metadata['execution_driver'] ?? null) === 'queue') {
+            throw new RpcFailure(-32009, 'Legacy queue runs require explicit migration');
+        }
+        return null;
+    }
+
     private function available(?FlowState $state): FlowState
     {
+        if ($this->queueFor($state) !== null) {
+            throw new RpcFailure(-32009, 'Queue runs must use queue authority; retry request');
+        }
         if ($state?->run === null) {
             throw new RpcFailure(-32004, 'Flow run not found');
         }
@@ -404,7 +455,7 @@ final readonly class FlowRpcApplication
         }
         $data = $state->toArray();
         $metadata = $state->metadata;
-        unset($metadata['_rpc_context'], $metadata['_rpc_claim']);
+        unset($metadata['_rpc_context'], $metadata['_rpc_claim'], $metadata['_rpc_authority'], $metadata['_queue_storage_id']);
         $data['metadata'] = $metadata;
         $data['execution_claim'] = $state->metadata['_rpc_claim'] ?? null;
 
@@ -419,12 +470,7 @@ final readonly class FlowRpcApplication
 
     private function executionId(FlowStateSubject $subject, FlowDefinition $definition, string $runId): string
     {
-        $identity = '';
-        foreach ([$subject->type, $subject->id, $definition->key, $runId] as $component) {
-            $identity .= strlen($component).':'.$component;
-        }
-
-        return 'workflow-rpc:'.hash('sha256', $identity);
+        return RpcRunIdentity::executionId($subject, $definition->key, $runId);
     }
 
     /** @param array<string, mixed> $params */
