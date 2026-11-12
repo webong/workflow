@@ -35,7 +35,11 @@ services:
     image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
     entrypoint: ["php", "/app/app/queue-worker.php"]
     healthcheck:
-      disable: true
+      test: ["CMD", "php", "-r", "(require '/app/app/runtime.example.php')['queue']->nextWakeup();"]
+      interval: 2s
+      timeout: 3s
+      start_period: 3s
+      retries: 30
     environment: *queue_environment
     depends_on:
       queue-init:
