@@ -169,3 +169,5 @@ resume but omits it from responses.
   and history-replay process. A pinned flow definition does not make arbitrary
   PHP workflow code changes replay-compatible. Keep compatible workers for
   existing histories; the package tests do not replace live replay testing.
+
+For the database-backed reference queue runtime, use the [queue guide](queue.md). Queue state, claims, and outbox delivery share one authority; projection stores must not control queue attempts.

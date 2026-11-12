@@ -57,6 +57,8 @@ operator to correct the provider settings. For a shorter example, run
 A deferred step stays waiting when you resume. Completed steps are not
 repeated. Starting the process again uses a new run ID.
 
+For durable queue workers, leases, retries and broker delivery, see the [queue runtime guide](docs/queue.md).
+
 ## Choose your integration
 
 | Your application needs | Guide |

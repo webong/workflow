@@ -1,0 +1,55 @@
+name: workflow-queue-hardening
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    working_dir: /app
+    volumes:
+      - .:/app
+      - queue_vendor:/app/vendor
+    environment:
+      WORK_FLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow_test
+      WORK_FLOW_POSTGRES_USER: workflow
+      WORK_FLOW_POSTGRES_PASSWORD: workflow
+      WORK_FLOW_MYSQL_DSN: mysql:host=mysql;port=3306;dbname=workflow_test
+      WORK_FLOW_MYSQL_USER: workflow
+      WORK_FLOW_MYSQL_PASSWORD: workflow
+      WORK_FLOW_REDIS_HOST: redis
+      WORK_FLOW_REDIS_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+  postgres:
+    image: postgres:18.2
+    environment:
+      POSTGRES_DB: workflow_test
+      POSTGRES_USER: workflow
+      POSTGRES_PASSWORD: workflow
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U workflow -d workflow_test']
+      interval: 2s
+      retries: 30
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: workflow_test
+      MYSQL_USER: workflow
+      MYSQL_PASSWORD: workflow
+      MYSQL_ROOT_PASSWORD: workflow
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uworkflow -pworkflow']
+      interval: 2s
+      retries: 30
+  redis:
+    image: redis:alpine
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      retries: 30
+volumes:
+  queue_vendor:

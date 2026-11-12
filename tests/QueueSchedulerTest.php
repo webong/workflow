@@ -5,414 +5,524 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Tests;
 
 use PDO;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Webong\WorkFlow\Contracts\FlowQueueScheduler;
-use Webong\WorkFlow\Contracts\FlowStateStore;
+use RuntimeException;
+use Webong\WorkFlow\App\QueueOutboxDispatcher;
+use Webong\WorkFlow\App\QueueScheduler;
+use Webong\WorkFlow\App\QueueWorker;
+use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
-use Webong\WorkFlow\Services\QueueScheduler;
-use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
-use Webong\WorkFlow\Services\InMemoryFlowStateStore;
+use Webong\WorkFlow\Enums\FlowInputSource;
+use Webong\WorkFlow\ValueObjects\FlowDeferredCompletion;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
-use Webong\WorkFlow\ValueObjects\FlowDefinitionSerializer;
+use Webong\WorkFlow\ValueObjects\FlowInputBinding;
+use Webong\WorkFlow\ValueObjects\FlowRetryPolicy;
 use Webong\WorkFlow\ValueObjects\FlowRun;
-use Webong\WorkFlow\ValueObjects\FlowState;
-use Webong\WorkFlow\ValueObjects\FlowStateSubject;
-use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
-use Webong\WorkFlow\ValueObjects\StepResult;
-use Webong\WorkFlow\ValueObjects\StepState;
 use Webong\WorkFlow\ValueObjects\FlowStepClaim;
+use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepOutput;
+use Webong\WorkFlow\ValueObjects\StepResult;
 
-/**
- * Tests for the reference QueueScheduler implementation.
- */
-class QueueSchedulerTest extends TestCase
+final class QueueSchedulerTest extends TestCase
 {
     private PDO $pdo;
-    private FlowStateStore $store;
-    private FlowQueueScheduler $scheduler;
+    private QueueScheduler $queue;
+    private int $now;
+    private string $dsn;
+    private string $user = '';
+    private string $password = '';
+    private string $directory;
 
-    protected function setUp(): void
+    public static function backends(): array
     {
-        $this->pdo = new PDO('sqlite::memory:');
-        $this->pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-        // Create schema
-        $this->pdo->exec(<<<'SQL'
-CREATE TABLE workflow_runs (
-    id TEXT PRIMARY KEY,
-    flow_key TEXT NOT NULL,
-    version INTEGER NOT NULL,
-    subject_type TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    definition_snapshot TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE workflow_step_claims (
-    claim_id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
-    claimant TEXT NOT NULL,
-    claimed_at INTEGER NOT NULL,
-    lease_expires_at INTEGER NOT NULL,
-    payload TEXT NOT NULL,
-    status TEXT NOT NULL,
-    error TEXT,
-    next_retry_at INTEGER,
-    output TEXT
-);
-
-CREATE INDEX idx_claims_run_step_status ON workflow_step_claims(run_id, step_id, status);
-
-CREATE TABLE workflow_outbox (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT NOT NULL,
-    payload TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    processed_at TEXT
-);
-SQL);
-
-        $this->store = new InMemoryFlowStateStore();
-        $serializer = new DefaultFlowStateSerializer();
-
-        $this->scheduler = new QueueScheduler(
-            pdo: $this->pdo,
-            store: $this->store,
-            maxConcurrency: 10,
-            runIdProvider: static fn (): array => ['run-1'],
-            contextProvider: static fn (string $runId): array => ['order_id' => '123'],
-        );
+        return [['sqlite'], ['postgres'], ['mysql']];
     }
 
-    private function createTestDefinition(): FlowDefinition
+    private function open(string $backend, int $capacity = 2): void
     {
-        return new FlowDefinition('test-flow', [
-            new FlowStepDefinition('step1', 'Step 1', input: [
-                'order_id' => new \Webong\WorkFlow\ValueObjects\FlowInputBinding(
-                    source: \Webong\WorkFlow\Enums\FlowInputSource::CONTEXT,
-                    pointer: '/order_id',
-                    required: true,
-                ),
-            ]),
-            new FlowStepDefinition('step2', 'Step 2', dependsOn: ['step1']),
-            new FlowStepDefinition('step3', 'Step 3', dependsOn: ['step1']),
-            new FlowStepDefinition('step4', 'Step 4', dependsOn: ['step2', 'step3']),
-        ], version: 1);
-    }
-
-    private function createTestState(FlowDefinition $definition): FlowState
-    {
-        $subject = new FlowStateSubject('test', 'queue-test');
-        $run = new FlowRun('run-1', $definition);
-        $state = $run->initialState();
-        $this->store->put('run-1', $state);
-        return $state;
-    }
-
-    public function testClaimReturnsEmptyForCompletedRun(): void
-    {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        // Mark all steps completed
-        foreach (['step1', 'step2', 'step3', 'step4'] as $id) {
-            $state = $state->withStep($id, new StepState(
-                FlowStepStatus::COMPLETED,
-                output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['done' => true]),
-                attempts: 1,
-            ));
+        $this->directory = sys_get_temp_dir() . '/queue-' . bin2hex(random_bytes(8));
+        mkdir($this->directory);
+        $this->now = time();
+        if ($backend === 'sqlite') {
+            $this->dsn = 'sqlite:' . $this->directory . '/state.sqlite';
+        } else {
+            $key = $backend === 'postgres' ? 'POSTGRES' : 'MYSQL';
+            $this->dsn = getenv('WORK_FLOW_' . $key . '_DSN') ?: '';
+            if ($this->dsn === '') {
+                $this->markTestSkipped($backend . ' DSN not configured');
+            }
+            $this->user = getenv('WORK_FLOW_' . $key . '_USER') ?: '';
+            $this->password = getenv('WORK_FLOW_' . $key . '_PASSWORD') ?: '';
         }
-        $state = (new \Webong\WorkFlow\Services\FlowEvaluator())->evaluate($definition, $state);
-        $this->store->put('run-1', $state);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertEmpty($claims);
+        $this->pdo = new PDO($this->dsn, $this->user, $this->password, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+        $this->drop();
+        QueueScheduler::install($this->pdo, $capacity);
+        $this->queue = new QueueScheduler($this->pdo, fn (): int => $this->now);
     }
 
-    public function testClaimReturnsReadySteps(): void
+    private function drop(): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-
-        // Only step1 should be ready (no dependencies)
-        $this->assertCount(1, $claims);
-        $this->assertSame('step1', $claims[0]->step->id);
-        $this->assertSame('run-1', $claims[0]->run->id);
-        $this->assertSame('test-flow', $claims[0]->run->definition->key);
-        $this->assertArrayHasKey('input', $claims[0]->toArray());
-        $this->assertArrayHasKey('context', $claims[0]->toArray());
+        foreach (['workflow_queue_outbox', 'workflow_queue_claims', 'workflow_queue_runs', 'workflow_queue_lock', 'queue_effects'] as $table) {
+            $this->pdo->exec('DROP TABLE IF EXISTS ' . $table);
+        }
     }
 
-    public function testCompleteUpdatesStateAndWritesOutbox(): void
+    protected function tearDown(): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
+        if (isset($this->pdo)) { $this->drop(); }
+        if (isset($this->directory)) {
+            foreach (glob($this->directory . '/*') ?: [] as $path) { unlink($path); }
+            rmdir($this->directory);
+        }
+    }
 
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
+    private function start(array $steps, array $context = [], string $id = 'run'): void
+    {
+        $this->queue->start(new FlowRun($id, new FlowDefinition('orders', $steps)), $context);
+    }
 
-        $claim = $claims[0];
-        $result = StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['processed' => true]));
+    private function step(string $id = 'a', bool $retry = false): FlowStepDefinition
+    {
+        return new FlowStepDefinition($id, $id, retryPolicy: $retry ? new FlowRetryPolicy(maxAttempts: 3, backoffSeconds: 10) : null);
+    }
 
-        $this->scheduler->complete($claim, $result);
+    private function events(): array
+    {
+        $events = $this->queue->reserveEvents();
+        foreach ($events as $event) { $this->queue->acknowledgeEvent($event['id'], $event['token']); }
+        return $events;
+    }
 
-        // Verify state updated
-        $updatedState = $this->store->get('run-1');
-        $this->assertSame('completed', $updatedState->steps['step1']->status->value);
-        $this->assertSame(['processed' => true], $updatedState->steps['step1']->output->value);
+    #[DataProvider('backends')]
+    public function testFanOutJoinsLatestStateAndPreservesOutputPresence(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step('a'), $this->step('b'), new FlowStepDefinition('c', 'c', dependsOn: ['a', 'b'], input: [
+            'total' => new FlowInputBinding(FlowInputSource::OUTPUT, '/total', 'b'),
+        ])], ['customer' => 42]);
+        [$a, $b] = $this->queue->claim(10, 60);
+        $this->assertSame(['customer' => 42], $a->context);
+        $this->assertSame([], $this->queue->claim(10, 60));
+        $this->queue->complete($b, StepResult::completed(output: StepOutput::from(['total' => 100])));
+        $this->assertSame([], $this->queue->claim(10, 60));
+        $this->queue->complete($a, StepResult::completed());
+        $this->assertNull($this->queue->get('run')->steps['a']->output);
+        $this->assertSame(['total' => 100], $this->queue->get('run')->steps['b']->output->value);
+        [$c] = $this->queue->claim(1, 60);
+        $this->assertSame(['total' => 100], $c->input);
+        $this->queue->complete($c, StepResult::completed(output: StepOutput::null()));
+        $this->assertNotNull($this->queue->get('run')->steps['c']->output);
+        $this->assertSame(FlowStatus::COMPLETED, $this->queue->get('run')->status);
+        $this->assertSame([], $this->queue->claim(10, 60));
+    }
 
-        // Verify outbox has event
-        $stmt = $this->pdo->query("SELECT COUNT(*) FROM workflow_outbox WHERE event_type = 'step.completed'");
+    #[DataProvider('backends')]
+    public function testCapacityIsSharedAcrossConnectionsAndRuns(string $backend): void
+    {
+        $this->open($backend, 1);
+        $this->start([$this->step()], id: 'one');
+        $this->start([$this->step()], id: 'two');
+        $other = new QueueScheduler(new PDO($this->dsn, $this->user, $this->password));
+        [$first] = $this->queue->claim(10, 60);
+        $this->assertSame([], $other->claim(10, 60));
+        $this->queue->complete($first, StepResult::completed());
+        $this->assertCount(1, $other->claim(10, 60));
+    }
+
+    #[DataProvider('backends')]
+    public function testBoundedRetriesRespectBackoffAndAttemptIdentity(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(retry: true)]);
+        for ($attempt = 1; $attempt <= 3; ++$attempt) {
+            [$claim] = $this->queue->claim(1, 60);
+            $this->assertSame($attempt, $claim->metadata['attempt']);
+            $this->queue->fail($claim, new RuntimeException('private token=secret'));
+            $state = $this->queue->get('run');
+            $this->assertStringNotContainsString('secret', json_encode($state->toArray()));
+            $this->assertSame($attempt, $state->steps['a']->attempts);
+            $this->assertSame([], $this->queue->claim(1, 60));
+            if ($attempt < 3) {
+                $this->assertSame($this->now + 10, $this->queue->nextWakeup());
+                $this->now += 10;
+            }
+        }
+        $this->assertSame(FlowStatus::BLOCKED, $this->queue->get('run')->status);
+        $this->assertNull($this->queue->nextWakeup());
+    }
+
+    #[DataProvider('backends')]
+    public function testExpiredAttemptCannotCompleteAfterRecovery(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(retry: true)]);
+        [$old] = $this->queue->claim(1, 5);
+        $this->now += 5;
+        $this->assertNull($this->queue->beginExecution($old->claimId));
+        $this->assertSame(1, $this->queue->reconcile());
+        $this->now += 10;
+        [$new] = $this->queue->claim(1, 60);
+        $this->assertSame(2, $new->metadata['attempt']);
+        $this->assertSame($old->metadata['idempotency_key'], $new->metadata['idempotency_key']);
+        try { $this->queue->complete($old, StepResult::completed()); $this->fail('Stale claim accepted'); }
+        catch (RuntimeException $e) { $this->assertStringContainsString('lease lost', $e->getMessage()); }
+        $this->queue->complete($new, StepResult::completed());
+        $this->assertSame(FlowStatus::COMPLETED, $this->queue->get('run')->status);
+    }
+
+    #[DataProvider('backends')]
+    public function testUnknownNonIdempotentOutcomeRequiresReconciliation(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([new FlowStepDefinition('a', 'a', retryPolicy: new FlowRetryPolicy(idempotent: false))]);
+        $this->queue->claim(1, 1);
+        ++$this->now;
+        $this->assertSame(1, $this->queue->reconcile());
+        $this->assertSame([], $this->queue->claim(1, 60));
+        $this->assertSame('claim_lost', $this->queue->get('run')->steps['a']->metadata['error_code']);
+        $this->assertSame(FlowStatus::BLOCKED, $this->queue->get('run')->status);
+    }
+
+    #[DataProvider('backends')]
+    public function testRenewalAndReleaseAreFenced(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(retry: true)]);
+        [$claim] = $this->queue->claim(1, 5);
+        $this->now += 4;
+        $this->queue->renew($claim->claimId, 30);
+        $this->now += 2;
+        $this->assertSame(0, $this->queue->reconcile());
+        $this->queue->release($claim);
+        $this->assertSame([], $this->queue->claim(1, 60));
+        $this->now += 10;
+        $this->assertCount(1, $this->queue->claim(1, 60));
+        $this->expectException(RuntimeException::class);
+        $this->queue->renew($claim, 10);
+    }
+
+    #[DataProvider('backends')]
+    public function testDuplicateResultsAreIdempotentAndConflictsRejected(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        $result = StepResult::completed(output: StepOutput::from(100));
+        $this->queue->complete($claim, $result);
+        $this->queue->complete($claim, $result);
+        $this->assertSame(1, count(array_filter($this->events(), fn ($e) => $e['type'] === 'step.completed')));
+        $this->expectException(RuntimeException::class);
+        $this->queue->complete($claim, StepResult::completed(output: StepOutput::from(200)));
+    }
+
+    #[DataProvider('backends')]
+    public function testCancellationFencesInflightEffectsAndIsIdempotent(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(), $this->step('b')]);
+        [$claim] = $this->queue->claim(2, 60);
+        $this->queue->cancelRun('run');
+        $this->queue->cancelRun('run');
+        $this->assertNull($this->queue->beginExecution($claim->claimId));
+        $this->assertSame([], $this->queue->claim(2, 60));
+        $this->assertSame(FlowStatus::CANCELLED, $this->queue->get('run')->status);
+        $this->expectException(RuntimeException::class);
+        $this->queue->complete($claim, StepResult::completed());
+    }
+
+    #[DataProvider('backends')]
+    public function testDeferredCallbacksAndDeadlinesAreDurable(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(), new FlowStepDefinition('b', 'b', dependsOn: ['a'])]);
+        [$claim] = $this->queue->claim(1, 60);
+        $this->queue->complete($claim, StepResult::deferred(deadlineAt: $this->now + 10));
+        $this->assertSame([], $this->queue->claim(1, 60));
+        $callback = new FlowDeferredCompletion('orders', 'a', 'event1', StepResult::completed(), 'run', 1);
+        $this->queue->completeDeferred($callback);
+        $this->queue->completeDeferred($callback);
+        [$b] = $this->queue->claim(1, 60);
+        $this->queue->complete($b, StepResult::deferred(deadlineAt: $this->now + 10));
+        $this->now += 10;
+        $this->queue->reconcile();
+        $this->assertSame(FlowStatus::BLOCKED, $this->queue->get('run')->status);
+    }
+
+    #[DataProvider('backends')]
+    public function testOutboxSurvivesPublisherCrashAndRejectsOldAcknowledgement(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step()]);
+        $this->events();
+        [$claim] = $this->queue->claim(1, 60);
+        [$first] = $this->queue->reserveEvents(1, 5);
+        $this->assertSame('work.ready', $first['type']);
+        $this->assertSame($claim->claimId, $first['payload']['claim_id']);
+        // Publish succeeds, process dies before acknowledgement. Replay keeps the event ID.
+        $this->now += 5;
+        [$replay] = $this->queue->reserveEvents(1, 5);
+        $this->assertSame($first['id'], $replay['id']);
+        $this->assertNotSame($first['token'], $replay['token']);
+        try { $this->queue->acknowledgeEvent($first['id'], $first['token']); $this->fail('Old token accepted'); }
+        catch (RuntimeException) { $this->assertTrue(true); }
+        $this->queue->acknowledgeEvent($replay['id'], $replay['token']);
+        $this->assertSame([], $this->queue->reserveEvents());
+    }
+
+    #[DataProvider('backends')]
+    public function testPublisherRunsOutsideLockAndFailureBacksOff(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step()]);
+        $calls = 0;
+        $publisher = new QueueOutboxDispatcher($this->queue, function () use (&$calls): void {
+            $this->assertFalse($this->pdo->inTransaction());
+            ++$calls;
+            throw new RuntimeException('broker offline');
+        });
+        try { $publisher->dispatch(); $this->fail('Publish should fail'); } catch (RuntimeException) {}
+        $this->assertSame(1, $calls);
+        $this->assertSame([], $this->queue->reserveEvents());
+        $this->now += 5;
+        $this->assertCount(1, $this->queue->reserveEvents());
+    }
+
+    #[DataProvider('backends')]
+    public function testWorkerUsesSharedExecutionAndDeduplicatesBrokerDelivery(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        $executor = new class($this->pdo) implements FlowStepExecutor {
+            public int $calls = 0;
+            public function __construct(private PDO $pdo) {}
+            public function supports(FlowStepDefinition $step): bool { return true; }
+            public function execute(FlowStepInvocation $invocation): StepResult {
+                TestCase::assertFalse($this->pdo->inTransaction());
+                TestCase::assertSame(1, $invocation->attempt);
+                TestCase::assertNotEmpty($invocation->context->all()['_queue']['idempotency_key']);
+                ++$this->calls;
+                return StepResult::deferred('approval');
+            }
+        };
+        $worker = new QueueWorker($this->queue, [$executor]);
+        $this->assertTrue($worker->handle($claim->claimId));
+        $this->assertFalse($worker->handle($claim->claimId));
+        $this->assertSame(1, $executor->calls);
+        $this->assertSame(true, $this->queue->get('run')->steps['a']->metadata['deferred']);
+        $this->assertSame([], $this->queue->claim(1, 60));
+    }
+
+    public function testClaimStateAndPublicationRollBackTogether(): void
+    {
+        $this->open('sqlite');
+        $this->start([$this->step()]);
+        $this->events();
+        $this->pdo->exec("CREATE TRIGGER reject_outbox BEFORE INSERT ON workflow_queue_outbox BEGIN SELECT RAISE(ABORT, 'disk failure'); END");
+        try { $this->queue->claim(1, 60); $this->fail('Expected storage failure'); } catch (\PDOException) {}
+        $this->assertSame(0, $this->queue->get('run')->steps['a']->attempts);
+        $this->assertSame([], $this->queue->reserveEvents());
+        $this->pdo->exec('DROP TRIGGER reject_outbox');
+        $this->assertCount(1, $this->queue->claim(1, 60));
+    }
+
+    public function testCompletionStateAndOutboxRollBackTogether(): void
+    {
+        $this->open('sqlite');
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        $this->events();
+        $this->pdo->exec("CREATE TRIGGER reject_outbox BEFORE INSERT ON workflow_queue_outbox BEGIN SELECT RAISE(ABORT, 'disk failure'); END");
+        try { $this->queue->complete($claim, StepResult::completed()); $this->fail('Expected storage failure'); } catch (\PDOException) {}
+        $this->assertSame(FlowStepStatus::RUNNING, $this->queue->get('run')->steps['a']->status);
+        $this->pdo->exec('DROP TRIGGER reject_outbox');
+        $this->queue->complete($claim, StepResult::completed());
+        $this->assertSame(FlowStatus::COMPLETED, $this->queue->get('run')->status);
+    }
+
+    #[DataProvider('backends')]
+    public function testCompetingProcessesClaimOneStepOnlyOnce(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step()]);
+        $children = [$this->process('claim', 'one'), $this->process('claim', 'two')];
+        touch($this->directory . '/go');
+        $results = array_map(fn ($child) => $this->finishProcess($child), $children);
+        $this->assertSame(1, count(array_filter($results, fn ($value) => $value !== 'none')));
+    }
+
+    #[DataProvider('backends')]
+    public function testSeparateWorkersExecuteIndependentStepsConcurrentlyBeforeJoin(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(), $this->step('b'), new FlowStepDefinition('c', 'c', dependsOn: ['a', 'b'])]);
+        $children = [$this->process('work', 'one'), $this->process('work', 'two')];
+        touch($this->directory . '/go');
+        foreach ($children as $child) { $this->assertSame('done', $this->finishProcess($child)); }
+        $state = $this->queue->get('run');
+        $this->assertSame(FlowStepStatus::COMPLETED, $state->steps['a']->status);
+        $this->assertSame(FlowStepStatus::COMPLETED, $state->steps['b']->status);
+        [$join] = $this->queue->claim(1, 60);
+        $this->assertSame('c', $join->step->id);
+        $this->queue->complete($join, StepResult::completed());
+        $this->assertSame(FlowStatus::COMPLETED, $this->queue->get('run')->status);
+    }
+
+    #[DataProvider('backends')]
+    public function testRestartAfterEffectUsesStableProviderIdempotencyKey(string $backend): void
+    {
+        $this->open($backend);
+        $this->start([$this->step(retry: true)]);
+        $this->pdo->exec('CREATE TABLE queue_effects (effect_key VARCHAR(64) PRIMARY KEY)');
+        $child = $this->process('crash', 'one');
+        touch($this->directory . '/go');
+        $first = FlowStepClaim::fromArray(json_decode($this->finishProcess($child), true, flags: JSON_THROW_ON_ERROR));
+        $key = $first->metadata['idempotency_key'];
+        // Worker dies after provider acceptance but before recording its result.
+        $this->now = (int) $first->metadata['lease_expires_at'];
+        $restarted = new QueueScheduler(new PDO($this->dsn, $this->user, $this->password), fn (): int => $this->now);
+        $restarted->reconcile();
+        $this->now += 10;
+        [$second] = $restarted->claim(1, 60);
+        $this->assertSame($key, $second->metadata['idempotency_key']);
+        // Provider reports that the stable key already exists, so no second effect is performed.
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM queue_effects WHERE effect_key = ?');
+        $stmt->execute([$second->metadata['idempotency_key']]);
         $this->assertSame(1, (int) $stmt->fetchColumn());
+        $stmt->closeCursor();
+        $restarted->complete($second, StepResult::completed());
+        $this->assertSame(FlowStatus::COMPLETED, $restarted->get('run')->status);
     }
 
-    public function testDependentStepsBecomeReadyAfterDependencyCompletes(): void
+    #[DataProvider('backends')]
+    public function testFailureDoesNotOverwriteSiblingCompletion(string $backend): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        // Complete step1
-        $claims = $this->scheduler->claim(5, 300);
-        $this->scheduler->complete($claims[0], StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['processed' => true])));
-
-        // Now step2 and step3 should be ready (both depend on step1)
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(2, $claims);
-        $stepIds = array_map(fn ($c) => $c->step->id, $claims);
-        $this->assertContains('step2', $stepIds);
-        $this->assertContains('step3', $stepIds);
+        $this->open($backend);
+        $this->start([$this->step(), $this->step('b')]);
+        [$a, $b] = $this->queue->claim(2, 60);
+        $this->queue->complete($b, StepResult::completed(output: StepOutput::from('saved')));
+        $this->queue->fail($a, new RuntimeException('private'));
+        $this->assertSame('saved', $this->queue->get('run')->steps['b']->output->value);
     }
 
-    public function testFanOutConcurrentClaims(): void
+    #[DataProvider('backends')]
+    public function testStartIsImmutableAndIdempotent(string $backend): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
+        $this->open($backend);
+        $this->start([$this->step()], ['customer' => 1]);
+        [$claim] = $this->queue->claim(1, 60);
+        $this->start([$this->step()], ['customer' => 1]);
+        $this->assertSame(1, $this->queue->get('run')->steps['a']->attempts);
+        $this->expectException(\InvalidArgumentException::class);
+        $this->start([$this->step()], ['customer' => 2]);
+    }
 
-        // Complete step1 first
-        $claims = $this->scheduler->claim(5, 300);
-        $this->scheduler->complete($claims[0], StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['processed' => true])));
-
-        // Claim both step2 and step3 concurrently (max 2)
-        $claims = $this->scheduler->claim(2, 300);
-        $this->assertCount(2, $claims);
-
-        // Complete both
-        foreach ($claims as $claim) {
-            $this->scheduler->complete($claim, StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['done' => true])));
+    public function testResultSerializationPreservesScalarsAndAbsence(): void
+    {
+        foreach ([false, 1, 'hello', null, ['one' => 1]] as $value) {
+            $result = StepResult::fromArray(StepResult::completed(output: StepOutput::from($value))->toArray());
+            $this->assertNotNull($result->output);
+            $this->assertSame($value, $result->output->value);
         }
-
-        // Now step4 should be ready
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-        $this->assertSame('step4', $claims[0]->step->id);
+        $this->assertNull(StepResult::fromArray(StepResult::completed()->toArray())->output);
+        $this->assertNotSame(StepResult::completed()->toArray(), StepResult::completed(output: StepOutput::null())->toArray());
     }
 
-    public function testCompleteThenDependentBecomesReady(): void
+    public function testMissingBindingsFailBeforeExecutionWithoutBlockingOtherRuns(): void
     {
-        $definition = new FlowDefinition('fanout', [
-            new FlowStepDefinition('a', 'A'),
-            new FlowStepDefinition('b', 'B'),
-            new FlowStepDefinition('c', 'C', dependsOn: ['a', 'b']),
-        ], version: 1);
-
-        $state = $this->createTestState($definition);
-
-        // Claim and complete a and b concurrently
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(2, $claims);
-        foreach ($claims as $claim) {
-            $this->scheduler->complete($claim, StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['done' => true])));
-        }
-
-        // c should now be ready
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-        $this->assertSame('c', $claims[0]->step->id);
+        $this->open('sqlite');
+        $this->start([new FlowStepDefinition('a', 'a', input: ['required' => FlowInputBinding::context('/missing')])]);
+        $this->start([$this->step()], id: 'other');
+        [$claim] = $this->queue->claim(2, 60);
+        $this->assertSame('other', $claim->run->id);
+        $this->assertSame('input_resolution_failed', $this->queue->get('run')->steps['a']->metadata['error_code']);
     }
 
-    public function testReleaseReturnsClaimToQueue(): void
+    #[DataProvider('backends')]
+    public function testCompetingBrokerConsumersExecuteOneAttemptOnce(string $backend): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $this->scheduler->release($claims[0]);
-
-        // Claim should be available again
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
+        $this->open($backend);
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        file_put_contents($this->directory . '/claim-id', $claim->claimId);
+        $children = [$this->process('deliver', 'one'), $this->process('deliver', 'two')];
+        touch($this->directory . '/go');
+        $results = array_map(fn ($child) => $this->finishProcess($child), $children);
+        sort($results);
+        $this->assertSame(['done', 'none'], $results);
+        $this->assertSame("effect\n", file_get_contents($this->directory . '/effects'));
     }
 
-    public function testFailWithRetryReleasesClaim(): void
+    public function testWorkerSchemaHookFailsBeforeEffects(): void
     {
-        $definition = new FlowDefinition('retry-test', [
-            new FlowStepDefinition('flaky', 'Flaky Step', retryPolicy: new \Webong\WorkFlow\ValueObjects\FlowRetryPolicy(maxAttempts: 3, backoffSeconds: 1)),
-        ], version: 1);
-
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $claim = $claims[0];
-        $this->scheduler->fail($claim, new \RuntimeException('Temporary failure'));
-
-        // Claim should be released (not failed) since it can retry
-        // Note: the claim is released, so next reconcile should make it available
-        // But with current implementation, it's marked as 'released' in DB
-        // and won't be re-claimed until next run. This is by design.
-        $claims = $this->scheduler->claim(5, 300);
-        // The released claim won't be re-claimed in the same run without reconciliation
-        // but the state should be updated to allow retry
+        $this->open('sqlite');
+        $this->start([$this->step()]);
+        $schemas = new class implements \Webong\WorkFlow\Contracts\FlowStepSchemaValidator {
+            public function validateInput(FlowStepDefinition $step, \Webong\WorkFlow\ValueObjects\FlowStepInput $input): array { return ['missing required field']; }
+            public function validateOutput(FlowStepDefinition $step, StepOutput $output): array { return []; }
+        };
+        $executor = new class implements FlowStepExecutor {
+            public int $calls = 0;
+            public function supports(FlowStepDefinition $step): bool { return true; }
+            public function execute(FlowStepInvocation $invocation): StepResult { ++$this->calls; return StepResult::completed(); }
+        };
+        $worker = new QueueWorker($this->queue, [$executor], new \Webong\WorkFlow\Services\FlowStepExecution(schemas: $schemas));
+        $worker->tick();
+        $this->assertSame(0, $executor->calls);
+        $this->assertSame('input_schema_violation', $this->queue->get('run')->steps['a']->metadata['error_code']);
     }
 
-    public function testFailWithoutRetryFailsStep(): void
+    public function testDeferredFailureWithoutPolicyCannotRetryForever(): void
     {
-        $definition = new FlowDefinition('fail-test', [
-            new FlowStepDefinition('failing', 'Failing Step'),
-        ], version: 1);
-
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $claim = $claims[0];
-        $this->scheduler->fail($claim, new \RuntimeException('Permanent failure'));
-
-        $updatedState = $this->store->get('run-1');
-        $this->assertSame('failed', $updatedState->steps['failing']->status->value);
+        $this->open('sqlite');
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        $this->queue->complete($claim, StepResult::deferred());
+        $this->queue->completeDeferred(new FlowDeferredCompletion('orders', 'a', 'event', StepResult::failed('failed', retriable: true), 'run', 1));
+        $this->assertSame([], $this->queue->claim(1, 60));
+        $this->assertSame(FlowStatus::BLOCKED, $this->queue->get('run')->status);
     }
 
-    public function testCancelRunReleasesAllClaims(): void
+    public function testPlainPendingPausesUntilExplicitResume(): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $this->scheduler->cancelRun('run-1');
-
-        // After cancellation, no more claims should be possible (workflow is cancelled)
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(0, $claims);
-
-        // State should be cancelled
-        $updatedState = $this->store->get('run-1');
-        $this->assertSame('cancelled', $updatedState->status->value);
+        $this->open('sqlite');
+        $this->start([$this->step()]);
+        [$claim] = $this->queue->claim(1, 60);
+        $this->queue->complete($claim, StepResult::pending());
+        $this->assertSame([], $this->queue->claim(1, 60));
+        $this->assertNull($this->queue->nextWakeup());
+        $this->queue->resumeRun('run');
+        [$next] = $this->queue->claim(1, 60);
+        $this->assertSame(2, $next->metadata['attempt']);
     }
 
-    public function testReconcileRecoversExpiredClaims(): void
+    public function testInvalidContextIsRejectedBeforePersistingARun(): void
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        // Claim with very short lease
-        $claims = $this->scheduler->claim(5, 1);
-        $this->assertCount(1, $claims);
-
-        // Wait for lease to expire
-        sleep(2);
-
-        // Reconcile should recover it
-        $recovered = $this->scheduler->reconcile();
-        $this->assertSame(1, $recovered);
-
-        // Claim should be available again
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
+        $this->open('sqlite');
+        try { $this->start([$this->step()], ['unnamed']); $this->fail('Invalid context accepted'); }
+        catch (\InvalidArgumentException) { $this->assertNull($this->queue->get('run')); }
+        $this->assertSame([], $this->queue->reserveEvents());
     }
 
-    public function testMaxConcurrencyRespected(): void
+    private function process(string $mode, string $name): array
     {
-        $definition = new FlowDefinition('concurrency', [
-            new FlowStepDefinition('a', 'A'),
-            new FlowStepDefinition('b', 'B'),
-            new FlowStepDefinition('c', 'C'),
-            new FlowStepDefinition('d', 'D'),
-        ], version: 1);
-
-        $state = $this->createTestState($definition);
-
-        $scheduler = new QueueScheduler(
-            pdo: $this->pdo,
-            store: $this->store,
-            maxConcurrency: 2,
-            runIdProvider: static fn (): array => ['run-1'],
-            contextProvider: static fn (string $runId): array => ['order_id' => '123'],
-        );
-
-        // Should only claim 2 at a time
-        $claims = $scheduler->claim(10, 300);
-        $this->assertCount(2, $claims);
+        $pipes = [];
+        $process = proc_open([PHP_BINARY, __DIR__ . '/fixtures/queue-process.php', $this->dsn, $this->user, $this->password, $this->directory, $mode, $name], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        return [$process, $pipes];
     }
 
-    public function testIdempotentClaimPreventsDuplicate(): void
+    private function finishProcess(array $child): string
     {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        // Claim step1
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        // Try to claim again - should not get duplicate
-        $claims2 = $this->scheduler->claim(5, 300);
-        $this->assertEmpty($claims2);
-    }
-
-    public function testClaimPayloadContainsRequiredData(): void
-    {
-        $definition = $this->createTestDefinition();
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $claim = $claims[0];
-        $payload = $claim->toArray();
-
-        $this->assertArrayHasKey('claim_id', $payload);
-        $this->assertArrayHasKey('run', $payload);
-        $this->assertArrayHasKey('step', $payload);
-        $this->assertArrayHasKey('state', $payload);
-        $this->assertArrayHasKey('input', $payload);
-        $this->assertArrayHasKey('context', $payload);
-        $this->assertArrayHasKey('previous_state', $payload);
-        $this->assertArrayHasKey('metadata', $payload);
-
-        // Verify input binding structure is present (context resolution happens at execution time)
-        $this->assertArrayHasKey('order_id', $payload['input']);
-        $this->assertArrayHasKey('order_id', $payload['input']);
-    }
-
-    public function testOutboxWrittenOnWorkflowCompletion(): void
-    {
-        $definition = new FlowDefinition('complete-test', [
-            new FlowStepDefinition('final', 'Final Step'),
-        ], version: 1);
-
-        $state = $this->createTestState($definition);
-
-        $claims = $this->scheduler->claim(5, 300);
-        $this->assertCount(1, $claims);
-
-        $result = StepResult::completed('Done', output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['final' => true]));
-        $this->scheduler->complete($claims[0], $result);
-
-        // Check for both step.completed and workflow.completed
-        $stmt = $this->pdo->query("SELECT event_type FROM workflow_outbox ORDER BY id");
-        $events = $stmt->fetchAll(PDO::FETCH_COLUMN);
-        $this->assertContains('step.completed', $events);
-        $this->assertContains('workflow.completed', $events);
+        [$process, $pipes] = $child;
+        $output = stream_get_contents($pipes[1]);
+        $error = stream_get_contents($pipes[2]);
+        fclose($pipes[1]); fclose($pipes[2]);
+        $this->assertSame(0, proc_close($process), $error);
+        return trim($output);
     }
 }

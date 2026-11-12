@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Hardened the reference queue runtime: atomic run state/claims/outbox,
+  database-wide concurrency limits, fenced leases and execution, bounded
+  idempotent recovery, persisted retry backoff, deferred callbacks/deadlines,
+  cancellation and at-least-once outbox publication with delivery leases.
+- Moved the PDO scheduler to `App\QueueScheduler`, removed the external state
+  store argument, and moved `FlowStepClaim` to its PSR-4 value-object file.
+  See `docs/queue.md` for the explicit migration and operational guarantees.
+- Added real multi-process SQL integration tests and a two-worker example.
+- Fixed `StepResult` serialization to preserve scalar/null output and distinguish
+  absent output, including deferred callback payloads and duplicate checks.
+
+
 ## 0.1.0-rc.1 - 2026-10-26
 
 - Added server-side definition authoring: `FlowDefinitionValidator` checks a

@@ -4,365 +4,80 @@ declare(strict_types=1);
 
 namespace Webong\WorkFlow\App;
 
-use Closure;
-use PDO;
-use Webong\WorkFlow\Contracts\FlowQueueScheduler;
-use Webong\WorkFlow\Contracts\FlowStateStore;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
-use Webong\WorkFlow\Contracts\FlowStepClaim;
-use Webong\WorkFlow\Services\QueueScheduler;
-use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
-use Webong\WorkFlow\ValueObjects\FlowDefinition;
-use Webong\WorkFlow\ValueObjects\FlowRun;
-use Webong\WorkFlow\ValueObjects\FlowState;
-use Webong\WorkFlow\ValueObjects\FlowStateSubject;
-use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\Services\FlowStepExecutorResolver;
+use Webong\WorkFlow\Services\FlowStepExecution;
+use Webong\WorkFlow\ValueObjects\ArrayFlowContext;
+use Webong\WorkFlow\ValueObjects\FlowStepInput;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
 use Webong\WorkFlow\ValueObjects\StepResult;
 use Webong\WorkFlow\ValueObjects\StepState;
 
-/**
- * Reference queue worker implementation.
- *
- * Demonstrates how to consume FlowReadySet via FlowQueueScheduler,
- * execute steps with proper claim lifecycle, and handle concurrency.
- *
- * Run with: php app/src/QueueWorker.php
- */
+/** One synchronous executor per process; multiple processes provide bounded fan-out. */
 final class QueueWorker
 {
-    private FlowQueueScheduler $scheduler;
-    /** @var list<FlowStepExecutor> */
-    private array $executors = [];
-    private int $maxClaims = 5;
-    private int $leaseSeconds = 300;
-    private int $pollInterval = 5;
-    private bool $running = false;
-    private ?Closure $logger = null;
-
-    public function isRunning(): bool
-    {
-        return $this->running;
-    }
-
+    /** @param list<FlowStepExecutor> $executors */
     public function __construct(
-        PDO $pdo,
-        FlowStateStore $store,
-        ?Closure $logger = null,
+        private QueueScheduler $scheduler,
+        private array $executors,
+        private FlowStepExecution $execution = new FlowStepExecution(),
     ) {
-        $this->logger = $logger ?? static function (string $msg): void {
-            fwrite(STDERR, $msg . PHP_EOL);
-        };
-        $this->scheduler = new QueueScheduler(
-            pdo: $pdo,
-            store: $store,
-            maxConcurrency: 10,
-        );
     }
 
-    public function addExecutor(FlowStepExecutor $executor): self
+    /** Direct polling mode. The host waits until nextWakeup() or a notification between calls. */
+    public function tick(int $leaseSeconds = 300): bool
     {
-        $this->executors[] = $executor;
-        return $this;
-    }
-
-    public function setMaxClaims(int $maxClaims): self
-    {
-        $this->maxClaims = max(1, $maxClaims);
-        return $this;
-    }
-
-    public function setLeaseSeconds(int $seconds): self
-    {
-        $this->leaseSeconds = max(10, $seconds);
-        return $this;
-    }
-
-    public function setPollInterval(int $seconds): self
-    {
-        $this->pollInterval = max(1, $seconds);
-        return $this;
-    }
-
-    public function run(): void
-    {
-        $this->running = true;
-        $this->log("Queue worker started (pid: " . getmypid() . ")");
-
-        // Register signal handlers for graceful shutdown
-        pcntl_signal(SIGTERM, [$this, 'shutdown']);
-        pcntl_signal(SIGINT, [$this, 'shutdown']);
-
-        while ($this->running) {
-            $this->tick();
-            if ($this->running) {
-                sleep($this->pollInterval);
-            }
-        }
-
-        $this->log("Queue worker stopped");
-    }
-
-    public function shutdown(): void
-    {
-        $this->log("Shutdown signal received");
-        $this->running = false;
-    }
-
-    private function log(string $message): void
-    {
-        $logger = $this->logger;
-        assert($logger !== null);
-        $logger($message);
-    }
-
-    public function tick(): void
-    {
-        // Reconcile expired leases
-        $recovered = $this->scheduler->reconcile();
-        if ($recovered > 0) {
-            $this->log("Reconciled {$recovered} expired claims");
-        }
-
-        // Claim ready steps
-        $claims = $this->scheduler->claim($this->maxClaims, $this->leaseSeconds);
-
+        $claims = $this->scheduler->claim(1, $leaseSeconds);
         if ($claims === []) {
-            return;
+            return false;
         }
-
-        $this->log("Claimed " . count($claims) . " step(s)");
-
-        foreach ($claims as $claim) {
-            if (! $this->running) {
-                break;
-            }
-            $this->executeClaim($claim);
-        }
+        return $this->handle($claims[0]->claimId);
     }
 
-    private function executeClaim(FlowStepClaim $claim): void
+    /** Broker mode. Only the opaque claim ID is accepted; payload and executors are host-owned. */
+    public function handle(string $claimId): bool
     {
-        $step = $claim->step;
-        $attempt = $claim->metadata['attempt'] ?? 1;
-        if (! is_int($attempt)) {
-            $attempt = 1;
+        $claim = $this->scheduler->beginExecution($claimId);
+        if ($claim === null) {
+            return false;
         }
-
-        $runId = $claim->run->id;
-        $flowKey = $claim->run->definition->key;
-
-        $this->log("Executing step {$step->id} (attempt {$attempt}) for run {$runId}");
-
-        // Find executor
-        $executor = null;
-        foreach ($this->executors as $candidate) {
-            if ($candidate->supports($step)) {
-                $executor = $candidate;
-                break;
-            }
-        }
-
+        $executor = (new FlowStepExecutorResolver())->resolve($claim->step, $this->executors);
         if ($executor === null) {
-            $this->log("No executor for step {$step->id}, releasing claim");
-            $this->scheduler->release($claim);
-            return;
+            $this->scheduler->complete($claim, StepResult::failed('No registered executor supports this step.', metadata: ['error_code' => 'executor_unavailable']));
+            return true;
         }
-
-        // Create invocation
-        $invocation = new \Webong\WorkFlow\ValueObjects\FlowStepInvocation(
-            step: $step,
-            input: new \Webong\WorkFlow\ValueObjects\FlowStepInput($claim->input),
-            context: new \Webong\WorkFlow\ValueObjects\ArrayFlowContext($claim->context),
+        $attempt = $claim->metadata['attempt'];
+        assert(is_int($attempt));
+        $invocation = new FlowStepInvocation(
+            step: $claim->step,
+            input: new FlowStepInput($claim->input),
+            context: new ArrayFlowContext([...$claim->context, '_queue' => [
+                'claim_id' => $claim->claimId,
+                'idempotency_key' => $claim->metadata['idempotency_key'],
+            ]]),
             previous: StepState::fromArray($claim->previousState),
             flowKey: $claim->run->definition->key,
             runId: $claim->run->id,
             attempt: $attempt,
         );
-
         try {
-            $result = $executor->execute($invocation);
-            $this->log("Step {$step->id} completed with status {$result->status->value}");
-
-            match ($result->status) {
-                \Webong\WorkFlow\Enums\FlowStepStatus::COMPLETED,
-                \Webong\WorkFlow\Enums\FlowStepStatus::SKIPPED => $this->scheduler->complete($claim, $result),
-                \Webong\WorkFlow\Enums\FlowStepStatus::FAILED => $this->scheduler->fail($claim, new \RuntimeException($result->message ?? 'Step failed')),
-                \Webong\WorkFlow\Enums\FlowStepStatus::PENDING => $this->scheduler->release($claim),
-                default => $this->scheduler->release($claim),
-            };
-        } catch (\Throwable $e) {
-            $this->log("Step {$step->id} threw exception: " . $e->getMessage());
-            $this->scheduler->fail($claim, $e);
+            $outcome = $this->execution->execute($executor, $invocation);
+        } catch (\InvalidArgumentException) {
+            // Schema violations gate external effects; do not retry invalid inputs.
+            $this->scheduler->complete($claim, StepResult::failed('Step input violated its schema.', metadata: ['error_code' => 'input_schema_violation']));
+            return true;
         }
-    }
-}
-
-/**
- * Example executors demonstrating concurrent execution.
- */
-class ProcessOrderExecutor implements FlowStepExecutor
-{
-    public function supports(FlowStepDefinition $step): bool
-    {
-        return $step->id === 'process_order';
-    }
-
-    public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
-    {
-        $orderIdRaw = $invocation->input->get('order_id');
-        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
-        // Simulate processing
-        usleep(100_000); // 100ms
-
-        return StepResult::completed(
-            "Order {$orderId} processed",
-            output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['processed' => true, 'order_id' => $orderId])
-        );
-    }
-}
-
-class VerifyPaymentExecutor implements FlowStepExecutor
-{
-    public function supports(FlowStepDefinition $step): bool
-    {
-        return $step->id === 'verify_payment';
-    }
-
-    public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
-    {
-        $orderIdRaw = $invocation->input->get('order_id');
-        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
-        // Simulate verification
-        usleep(150_000); // 150ms
-
-        return StepResult::completed(
-            "Payment for {$orderId} verified",
-            output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['verified' => true, 'order_id' => $orderId])
-        );
-    }
-}
-
-class ShipOrderExecutor implements FlowStepExecutor
-{
-    public function supports(FlowStepDefinition $step): bool
-    {
-        return $step->id === 'ship_order';
-    }
-
-    public function execute(\Webong\WorkFlow\ValueObjects\FlowStepInvocation $invocation): StepResult
-    {
-        $orderIdRaw = $invocation->input->get('order_id');
-        $orderId = is_string($orderIdRaw) ? $orderIdRaw : 'unknown';
-        $processedRaw = $invocation->input->get('processed');
-        $processed = is_bool($processedRaw) ? $processedRaw : false;
-        $verifiedRaw = $invocation->input->get('verified');
-        $verified = is_bool($verifiedRaw) ? $verifiedRaw : false;
-
-        if (! $processed || ! $verified) {
-            return StepResult::failed("Dependencies not satisfied for {$orderId}");
-        }
-
-        // Simulate shipping
-        usleep(50_000); // 50ms
-
-        return StepResult::completed(
-            "Order {$orderId} shipped",
-            output: \Webong\WorkFlow\ValueObjects\StepOutput::from(['shipped' => true, 'order_id' => $orderId])
-        );
-    }
-}
-
-/**
- * Entry point for running the worker.
- */
-if (PHP_SAPI === 'cli' && ! isset($argv[0])) {
-    // Running as included file
-} elseif (PHP_SAPI === 'cli' && basename($argv[0]) === 'QueueWorker.php') {
-    // Create a demo run
-    $pdo = new PDO('sqlite::memory:');
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
-
-    // Create schema
-    $pdo->exec(<<<'SQL'
-CREATE TABLE workflow_runs (
-    id TEXT PRIMARY KEY,
-    flow_key TEXT NOT NULL,
-    version INTEGER NOT NULL,
-    subject_type TEXT NOT NULL,
-    subject_id TEXT NOT NULL,
-    definition_snapshot TEXT NOT NULL,
-    status TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-
-CREATE TABLE workflow_step_claims (
-    claim_id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL,
-    step_id TEXT NOT NULL,
-    claimant TEXT NOT NULL,
-    claimed_at INTEGER NOT NULL,
-    lease_expires_at INTEGER NOT NULL,
-    payload TEXT NOT NULL,
-    status TEXT NOT NULL,
-    error TEXT,
-    next_retry_at INTEGER,
-    UNIQUE(run_id, step_id, status) WHERE status = 'claimed'
-);
-
-CREATE TABLE workflow_outbox (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_type TEXT NOT NULL,
-    payload TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    processed_at TEXT
-);
-SQL);
-
-    $store = new \Webong\WorkFlow\Services\InMemoryFlowStateStore();
-    $serializer = new \Webong\WorkFlow\Services\DefaultFlowStateSerializer();
-
-    $worker = new QueueWorker($pdo, $store)
-        ->addExecutor(new ProcessOrderExecutor())
-        ->addExecutor(new VerifyPaymentExecutor())
-        ->addExecutor(new ShipOrderExecutor())
-        ->setMaxClaims(5)
-        ->setLeaseSeconds(300)
-        ->setPollInterval(2);
-
-    // Create a demo flow definition
-    $definition = new FlowDefinition('order-processing', [
-        new FlowStepDefinition('process_order', 'Process Order'),
-        new FlowStepDefinition('verify_payment', 'Verify Payment'),
-        new FlowStepDefinition('ship_order', 'Ship Order', dependsOn: ['process_order', 'verify_payment']),
-    ], version: 1);
-
-    $subject = new FlowStateSubject('order', 'order-123');
-    $run = new FlowRun('run-1', $definition);
-    $state = $run->initialState();
-    $store->put('run-1', $state);
-
-    echo "Starting queue worker demo...\n";
-    echo "Flow: {$definition->key} v{$definition->version}\n";
-    echo "Run: {$run->id}\n";
-    echo "Subject: {$subject->type}/{$subject->id}\n\n";
-
-    // Run a few ticks to demonstrate
-    for ($i = 0; $i < 3 && $worker->isRunning(); $i++) {
-        $worker->tick();
-        sleep(1);
-    }
-
-    // Show final state
-    $finalState = $store->get('run-1');
-    if ($finalState !== null) {
-        echo "\nFinal state:\n";
-        echo "  Status: {$finalState->status->value}\n";
-        foreach ($finalState->steps as $id => $step) {
-            echo "  Step {$id}: {$step->status->value} (attempts: {$step->attempts})\n";
-            if ($step->output !== null) {
-                echo "    Output: " . json_encode($step->output->value) . "\n";
-            }
-        }
+        $this->scheduler->complete($claim, new StepResult(
+            status: $outcome->status,
+            message: $outcome->message,
+            error: $outcome->error,
+            retriable: $outcome->retriable,
+            nextRetryAt: $outcome->nextRetryAt,
+            metadata: $outcome->metadata,
+            deferred: ($outcome->metadata['deferred'] ?? false) === true,
+            output: $outcome->output,
+            deadlineAt: $outcome->deadlineAt,
+        ));
+        return true;
     }
 }

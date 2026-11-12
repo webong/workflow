@@ -33,3 +33,6 @@ An external outcome for a waiting Step Attempt, identified by its Flow Run, Step
 
 **Cancellation**:
 A decision to stop future progress in a Flow Run without undoing outcomes already produced.
+
+**Step Claim**:
+Exclusive, temporary permission to execute one Step Attempt. A replacement claim does not give an expired worker permission to finish or renew its old attempt.

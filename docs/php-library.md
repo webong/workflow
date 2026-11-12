@@ -260,3 +260,5 @@ errors; do not pass exception messages or credentials into it.
 
 See [run lifecycle](run-lifecycle.md) for retries, cancellation, retention,
 version changes, and the guarantees your host must supply.
+
+For the database-backed reference queue runtime, use the [queue guide](queue.md). Queue state, claims, and outbox delivery share one authority; projection stores must not control queue attempts.

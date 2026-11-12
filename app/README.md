@@ -227,3 +227,5 @@ If a call returns `401`, check the bearer token. A JSON-RPC `-32601` means
 the method is unknown; `-32602` means parameters are invalid. An "Internal
 error" response hides details from the caller; inspect `workflowd` logs with
 `docker compose -f app/compose.yml logs workflowd`.
+
+For the database-backed reference queue runtime, use the [queue guide](../docs/queue.md). Queue state, claims, and outbox delivery share one authority; projection stores must not control queue attempts.

@@ -81,7 +81,7 @@ final readonly class StepResult
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        return [
+        $data = [
             'status' => $this->status->value,
             'message' => $this->message,
             'error' => $this->error,
@@ -90,9 +90,12 @@ final readonly class StepResult
             'nextRetryAt' => $this->nextRetryAt,
             'metadata' => $this->metadata,
             'deferred' => $this->deferred,
-            'output' => $this->output?->value,
             'deadlineAt' => $this->deadlineAt,
         ];
+        if ($this->output !== null) {
+            $data['output'] = $this->output->value;
+        }
+        return $data;
     }
 
     /** @param mixed $data */
@@ -110,15 +113,8 @@ final readonly class StepResult
         $nextRetryAt = $data['nextRetryAt'] ?? null;
         $metadata = $data['metadata'] ?? [];
         $deferred = $data['deferred'] ?? false;
-        $outputData = $data['output'] ?? null;
         $deadlineAt = $data['deadlineAt'] ?? null;
-
-        $output = null;
-        if (is_array($outputData)) {
-            $output = StepOutput::from($outputData);
-        } elseif ($outputData === null) {
-            $output = StepOutput::null();
-        }
+        $output = array_key_exists('output', $data) ? StepOutput::from($data['output']) : null;
 
         return new self(
             status: is_string($status) ? FlowStepStatus::tryFrom($status) ?? FlowStepStatus::PENDING : FlowStepStatus::PENDING,

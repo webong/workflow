@@ -59,3 +59,8 @@ manticore-build:
 # Parity checks for the Manticore artifacts, all in Docker.
 manticore-test: manticore-build
 	docker compose -f mod/manticore/compose.yml build verify
+
+# Isolated queue concurrency and failure tests on PHP 8.3 with three SQL backends.
+.PHONY: queue-test
+queue-test:
+	docker compose -f compose.queue-test.yml run --rm php sh -lc 'php -v && composer install --no-interaction --prefer-dist && composer test && composer analyse && composer types && git diff --exit-code -- types/'
