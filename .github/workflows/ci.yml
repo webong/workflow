@@ -100,6 +100,21 @@ jobs:
       - run: composer types
       - run: git diff --exit-code -- types/work-flow.generated.ts types/work-flow.d.ts types/work_flow.py types/work_flow.go
 
+  projections:
+    name: Composer installation surfaces
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, zip, mbstring
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer test:projections
+
   native:
     name: Native (${{ matrix.arch }})
     needs: validate

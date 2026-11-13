@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Declared self-contained Composer Source Plugin surfaces for core, Laravel,
+  Temporal, Open Workflow and App, preserving namespaces, the installed authoring
+  CLI and the existing Laravel discovery name. Full installations stay unchanged.
+- Made Laravel discovery inert when its payload is pruned and its OWS binding
+  conditional on the selected adapter. Added real Composer consumer/projection
+  checks, authoritative autoloading and Laravel discovery/store regressions.
+
 - Fixed queue worker readiness on Compose 2.x with an explicit read-only queue
   database health check instead of disabling the inherited HTTP probe.
 

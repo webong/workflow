@@ -19,6 +19,11 @@ final class WorkFlowServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        // This advertised provider remains in every Composer projection. An
+        // unselected Laravel payload must be a valid, inert discovery target.
+        if (! is_file(__DIR__ . '/LaravelFlowStateStoreFactory.php')) {
+            return;
+        }
         $this->mergeConfigFrom(__DIR__ . '/config/work-flow.php', 'work-flow');
 
         $this->app->singleton(FlowStateSerializer::class, DefaultFlowStateSerializer::class);
@@ -27,7 +32,9 @@ final class WorkFlowServiceProvider extends ServiceProvider
         // binding their own OpenWorkflow instance (e.g. with a custom
         // validator) or by using this default; the RPC layer only exposes
         // OWS document registration when the binding exists (ADR 0006).
-        $this->app->singleton(OpenWorkflow::class, fn (): OpenWorkflow => new OpenWorkflow());
+        if (class_exists(OpenWorkflow::class)) {
+            $this->app->singleton(OpenWorkflow::class, fn (): OpenWorkflow => new OpenWorkflow());
+        }
         $this->app->singleton(FlowStateStoreFactory::class, function (): LaravelFlowStateStoreFactory {
             $configuration = (array) $this->app->make(ConfigRepository::class)->get('work-flow');
             $driver = is_string($configuration['driver'] ?? null) ? $configuration['driver'] : 'database';
@@ -72,6 +79,9 @@ final class WorkFlowServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        if (! is_file(__DIR__ . '/LaravelFlowStateStoreFactory.php')) {
+            return;
+        }
         $configPath = $this->app->make('path.config');
         $databasePath = $this->app->make('path.database');
 
