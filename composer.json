@@ -21,7 +21,8 @@
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
         "spatie/eloquent-sortable": "^4.2",
-        "symfony/yaml": "^7.0"
+        "symfony/yaml": "^7.0",
+        "webong/composer-source-plugin": "^0.4"
     },
     "suggest": {
         "illuminate/cache": "Required to use the optional Laravel Redis WorkFlow store.",
@@ -55,6 +56,110 @@
             "providers": [
                 "Webong\\WorkFlow\\Laravel\\WorkFlowServiceProvider"
             ]
+        },
+        "source-plugin": {
+            "surfaces": {
+                "core": {
+                    "include": [
+                        "composer.json",
+                        "LICENSE",
+                        "README.md",
+                        "CHANGELOG.md",
+                        "CONTEXT.md",
+                        "src/**",
+                        "bin/workflow",
+                        "app/src/FlowAuthoringCli.php",
+                        "ext/Laravel/WorkFlowServiceProvider.php",
+                        "types/**",
+                        "docs/php-library.md",
+                        "docs/run-lifecycle.md",
+                        "docs/authoring.md",
+                        "docs/composer-surfaces.md"
+                    ]
+                },
+                "laravel": {
+                    "include": [
+                        "composer.json",
+                        "LICENSE",
+                        "README.md",
+                        "CHANGELOG.md",
+                        "CONTEXT.md",
+                        "src/**",
+                        "bin/workflow",
+                        "app/src/FlowAuthoringCli.php",
+                        "ext/Laravel/WorkFlowServiceProvider.php",
+                        "types/**",
+                        "docs/php-library.md",
+                        "docs/run-lifecycle.md",
+                        "docs/authoring.md",
+                        "docs/composer-surfaces.md",
+                        "ext/Laravel/**",
+                        "resources/boost/**",
+                        "docs/laravel.md"
+                    ]
+                },
+                "temporal": {
+                    "include": [
+                        "composer.json",
+                        "LICENSE",
+                        "README.md",
+                        "CHANGELOG.md",
+                        "CONTEXT.md",
+                        "src/**",
+                        "bin/workflow",
+                        "app/src/FlowAuthoringCli.php",
+                        "ext/Laravel/WorkFlowServiceProvider.php",
+                        "types/**",
+                        "docs/php-library.md",
+                        "docs/run-lifecycle.md",
+                        "docs/authoring.md",
+                        "docs/composer-surfaces.md",
+                        "ext/Temporal/**",
+                        "docs/temporal.md"
+                    ]
+                },
+                "open-workflow": {
+                    "include": [
+                        "composer.json",
+                        "LICENSE",
+                        "README.md",
+                        "CHANGELOG.md",
+                        "CONTEXT.md",
+                        "src/**",
+                        "bin/workflow",
+                        "app/src/FlowAuthoringCli.php",
+                        "ext/Laravel/WorkFlowServiceProvider.php",
+                        "types/**",
+                        "docs/php-library.md",
+                        "docs/run-lifecycle.md",
+                        "docs/authoring.md",
+                        "docs/composer-surfaces.md",
+                        "ext/OpenWorkflow/**",
+                        "docs/open-workflow-specification.md",
+                        "docs/open-workflow-ctk-matrix.md"
+                    ]
+                },
+                "app": {
+                    "include": [
+                        "composer.json",
+                        "LICENSE",
+                        "README.md",
+                        "CHANGELOG.md",
+                        "CONTEXT.md",
+                        "src/**",
+                        "bin/workflow",
+                        "app/src/FlowAuthoringCli.php",
+                        "ext/Laravel/WorkFlowServiceProvider.php",
+                        "types/**",
+                        "docs/php-library.md",
+                        "docs/run-lifecycle.md",
+                        "docs/authoring.md",
+                        "docs/composer-surfaces.md",
+                        "app/**",
+                        "docs/queue.md"
+                    ]
+                }
+            }
         }
     },
     "scripts": {
@@ -63,16 +168,20 @@
             "php tools/generate-types.php",
             "php tools/generate-clients.php"
         ],
-        "analyse": "vendor/bin/phpstan analyse --no-progress --memory-limit=512M"
+        "analyse": "vendor/bin/phpstan analyse --no-progress --memory-limit=512M",
+        "test:projections": "bash tests/integration/composer-surfaces.sh"
     },
     "config": {
         "sort-packages": true,
         "allow-plugins": {
-            "pestphp/pest-plugin": true
+            "pestphp/pest-plugin": true,
+            "webong/composer-source-plugin": true
         },
         "policy": {
             "advisories": {
-                "ignore-id": ["PKSA-tcfz-w4fm-hhk9 PKSA-xbp4-qwr2-cbjj"]
+                "ignore-id": [
+                    "PKSA-tcfz-w4fm-hhk9 PKSA-xbp4-qwr2-cbjj"
+                ]
             }
         }
     }

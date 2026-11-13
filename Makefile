@@ -64,3 +64,7 @@ manticore-test: manticore-build
 .PHONY: queue-test
 queue-test:
 	docker compose -f compose.queue-test.yml run --rm php sh -lc 'php -v && composer install --no-interaction --prefer-dist && composer test && composer analyse && composer types && git diff --exit-code -- types/'
+
+.PHONY: projection-test
+projection-test:
+	docker compose -f compose.queue-test.yml run --rm --no-deps php sh -lc 'composer install --no-interaction --prefer-dist && composer test:projections'

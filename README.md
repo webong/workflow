@@ -59,6 +59,8 @@ repeated. Starting the process again uses a new run ID.
 
 For durable queue workers, leases, retries and broker delivery, see the [queue runtime guide](docs/queue.md).
 
+Optional [Composer file projections](docs/composer-surfaces.md) retain selected PHP surfaces without changing package identity or dependencies. Normal installs remain complete.
+
 ## Choose your integration
 
 | Your application needs | Guide |
