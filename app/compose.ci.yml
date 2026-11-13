@@ -4,6 +4,7 @@ services:
   workflowd:
     image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
     environment:
+      WORKFLOW_QUEUE_ENABLED: "true"
       WORKFLOW_RPC_LISTEN: 0.0.0.0:8080
       WORKFLOW_RPC_TOKEN: ci-only-workflow-token
       WORKFLOW_BOOTSTRAP: /app/app/bootstrap.example.php
@@ -13,6 +14,36 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      queue-init:
+        condition: service_completed_successfully
+
+  queue-init:
+    image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
+    entrypoint: ["php", "/app/app/queue-worker.php", "--install"]
+    healthcheck:
+      disable: true
+    environment: &queue_environment
+      WORKFLOW_QUEUE_ENABLED: "true"
+      WORKFLOW_POSTGRES_DSN: pgsql:host=postgres;port=5432;dbname=workflow
+      WORKFLOW_POSTGRES_USER: workflow
+      WORKFLOW_POSTGRES_PASSWORD: workflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  queue-worker:
+    image: ${WORKFLOW_RPC_IMAGE:?Set WORKFLOW_RPC_IMAGE to the image under test}
+    entrypoint: ["php", "/app/app/queue-worker.php"]
+    healthcheck:
+      test: ["CMD", "php", "-r", "(require '/app/app/runtime.example.php')['queue']->nextWakeup();"]
+      interval: 2s
+      timeout: 3s
+      start_period: 3s
+      retries: 30
+    environment: *queue_environment
+    depends_on:
+      queue-init:
+        condition: service_completed_successfully
 
   postgres:
     image: postgres:16-alpine

@@ -111,8 +111,8 @@ errors. Initial context is saved for resume and omitted from responses.
 ## Replace the demo with your flows
 
 The Compose file points `WORKFLOW_BOOTSTRAP` at
-[`bootstrap.example.php`](bootstrap.example.php), which defines the demo
-flow and executor. The Compose PostgreSQL service applies
+[`bootstrap.example.php`](bootstrap.example.php), which loads the demo
+flow and executor from [`runtime.example.php`](runtime.example.php). The Compose PostgreSQL service applies
 [`postgres.sql`](schema/postgres.sql) when it first creates its data
 volume.
 
@@ -128,53 +128,53 @@ registration or execution; `flow.validate` may inspect an unregistered
 definition but cannot run or save it. `WORKFLOW_PHP_PUBLIC` selects the
 bundled PHP bridge document root.
 
-For example, a standalone host can register its queue publisher without a
-Laravel dependency:
+For the complete database-backed queue runtime, bind the authority adapter
+alongside the inline dispatcher:
 
 ```php
+use Webong\WorkFlow\App\QueueRpcRuntime;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\InlineFlowExecutionDriver;
-use Webong\WorkFlow\Services\QueuedFlowExecutionDriver;
 
-$execution = new FlowExecutionDispatcher([
-    new InlineFlowExecutionDriver($runner, $executors),
-    new QueuedFlowExecutionDriver(
-        dispatch: fn ($request): string => $queue->publish($request->toArray()),
-    ),
-    // new TemporalFlowExecutionDriver($startTemporalWorkflow),
-]);
+$app = new FlowRpcApplication(
+    definitions: $definitions,
+    stores: $routingStores,
+    execution: new FlowExecutionDispatcher([
+        new InlineFlowExecutionDriver($runner, $executors),
+    ]),
+    queue: new QueueRpcRuntime($queueScheduler),
+);
 ```
 
-The queue callback returns its stable job/execution ID. The consumer loads the
-saved run, performs the claimed work, and persists through the same store.
+`flow.start` with `driver: "queue"` reserves the pinned definition/context and
+runtime in the RPC registry, then initializes the queue outside the registry
+lock. Queue start/get/complete/resume/cancel all use that queue authority.
+A separate supervised worker runs `php app/queue-worker.php`; HTTP requests
+never execute queue steps inline. The example shared runtime bootstrap enables
+this binding when `WORKFLOW_QUEUE_ENABLED=true`. Install the queue schema once
+with `php app/queue-worker.php --install` before accepting traffic. See the
+[queue RPC setup and migration guide](../docs/queue.md#queue-backed-json-rpc).
 
-Register `QueuedFlowExecutionDriver` or `TemporalFlowExecutionDriver` in the
-bootstrap's `FlowExecutionDispatcher` to expose `queue` or `temporal`.
-Merely installing an adapter or setting environment variables enables
-nothing. The RPC service persists the selected driver before dispatch,
-commits the transaction, dispatches outside the store lock, and saves the
-result or receipt under that claim. An async receipt never overwrites state a
-fast worker already advanced.
+Repeated starts preserve the pinned version/context and do not resume plain
+pending results. Explicit `flow.resume` unpauses those results; external waits
+still need attempt-scoped callbacks. Missing queue authority fails closed.
+Interrupted initialization can retry the same routing reservation. Public
+logical run IDs remain unchanged; storage and effect-idempotency keys are
+privately scoped to subject, flow and logical run.
 
-Repeating `flow.start` for the same run never dispatches twice. Explicit
-`flow.resume` dispatches the run again with its stored driver and execution
-ID; async drivers must make that operation idempotent. Queue workers use the
-ordinary store as authority. Temporal history remains authoritative, so
-deferred completions and cancellation must reach the Temporal signal/client,
-not `flow.complete` on a stale database projection.
+A custom host may instead register `QueuedFlowExecutionDriver` or
+`TemporalFlowExecutionDriver` in its dispatcher, but those dispatch adapters
+alone do not supply remote reads/callback/cancellation authority. Do not bind a
+legacy `queue` driver and `QueueRpcRuntime` together. Existing legacy queue
+runs need explicit migration; the new binding never converts a stale snapshot
+into current queue state. Temporal history remains authoritative and its
+callbacks/cancellation must reach Temporal rather than a database projection.
 
-On first dispatch, RPC derives a deterministic opaque execution ID from the
-subject type/id, flow key, and logical run ID. This prevents equal `run_id`
-values in different subjects or flows from colliding in Temporal or a queue.
-The driver's returned execution ID is then persisted and reused on resume.
-Keep inline work short; return `deferred()` for an external wait and complete
-it through `flow.complete`. External operations still need their own stable
-idempotency keys.
-
-If a process stops or result persistence fails, `flow.get` exposes a non-null
-`execution_claim`. Other mutations receive `-32009`. The host must reconcile
-the provider's outcome before clearing the claim or replacing the run; there
-is no automatic lease expiry or blind replay. See [run lifecycle](../docs/run-lifecycle.md).
+Inline/custom-dispatch execution still runs outside the registry mutation lock
+under an RPC execution claim. If it is interrupted, `flow.get` exposes that
+claim and mutations fail with `-32009` until host reconciliation. Queue-runtime
+runs use their own bounded claims/leases instead. Keep inline work short;
+external effects require their own stable idempotency keys.
 
 ## Security and operations
 
@@ -229,3 +229,9 @@ error" response hides details from the caller; inspect `workflowd` logs with
 `docker compose -f app/compose.yml logs workflowd`.
 
 For the database-backed reference queue runtime, use the [queue guide](../docs/queue.md). Queue state, claims, and outbox delivery share one authority; projection stores must not control queue attempts.
+
+For complete queue-backed RPC, bind `QueueRpcRuntime` (or enable
+`WORKFLOW_QUEUE_ENABLED=true` in the example bootstrap), install the queue
+schema once, and run `php app/queue-worker.php` in a separate supervised
+process. See [queue RPC setup and migration](../docs/queue.md#queue-backed-json-rpc).
+The RPC registry pins routing; queue progress is read only from the queue authority.

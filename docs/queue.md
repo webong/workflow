@@ -147,9 +147,9 @@ Cancellation fences live claims and prevents future claims; it cannot undo
 an external effect already started.
 
 The generic `QueuedFlowExecutionDriver` still accepts a host dispatch closure.
-It does not automatically bind this runtime into RPC. A host integrating RPC
-must route reads, callbacks and cancellation to this authority as well as
-start requests; merely registering a queue starter is insufficient.
+For the complete reference runtime, bind `QueueRpcRuntime` instead; the
+[queue-backed RPC integration](#queue-backed-json-rpc) below routes every control
+operation to the same authority.
 
 ## Upgrade from the first reference scheduler
 
@@ -177,3 +177,74 @@ complete suite, PHPStan, and generated-contract checks. Tests cover rollback,
 lease loss/renewal, retry limits/backoff, sibling-state merging, cancellation,
 deferred outcomes, duplicate delivery, outbox replay and provider idempotency.
 Stop its services with `docker compose -f compose.queue-test.yml down`.
+
+## Queue-backed JSON-RPC
+
+Bind `QueueRpcRuntime` explicitly alongside the existing inline dispatcher:
+
+```php
+use Webong\WorkFlow\App\QueueRpcRuntime;
+
+$app = new FlowRpcApplication(
+    definitions: $definitions,
+    stores: $routingStores,
+    execution: $inlineDispatcher,
+    queue: new QueueRpcRuntime($queue),
+);
+```
+
+Do not also register a generic `queue` dispatch driver. `flow.start` with
+`driver: "queue"` now reserves the pinned definition/context and selected
+runtime in the RPC registry, then initializes the queue database outside that
+registry lock. The registry remains a routing reservation, not a progress
+projection. All five run-control methods (`start`, `get`, `complete`, `resume`,
+`cancel`) use the queue authority after that selection; a caller cannot switch
+it by providing a different driver on later requests.
+
+The queue storage ID hashes subject type, subject ID, flow key and logical run
+ID. The logical ID remains unchanged in public state, callbacks and executor
+invocations. Workers carry the private storage ID in claims and event payloads;
+effect idempotency keys use that storage identity. A registry scope mismatch
+fails closed. The subject access check remains the trusted host's responsibility.
+
+If initialization fails after reserving the route, `flow.get` reports a conflict
+instead of returning the stale reservation. Repeat `flow.start` or `flow.resume`
+to initialize the same pinned run/context idempotently. A repeated `flow.start`
+does not unpause a plain pending result; `flow.resume` does. Neither RPC method
+executes queue steps inline. A separate worker schedules and executes ready
+steps. An unavailable queue binding never falls back to the registry state.
+
+For the bundled example, set `WORKFLOW_QUEUE_ENABLED=true` in the HTTP service
+and worker. Both load the same trusted `WORKFLOW_RUNTIME_BOOTSTRAP` file
+(default `app/runtime.example.php`). Deploy the ordinary RPC registry schema,
+then install queue tables once and run workers:
+
+```sh
+php app/queue-worker.php --install
+php app/queue-worker.php --work
+# Or execute at most one eligible step:
+php app/queue-worker.php --once
+```
+
+Use PHP 8.3 plus the matching PDO driver. Set `WORKFLOW_QUEUE_CONCURRENCY` during
+installation and `WORKFLOW_QUEUE_LEASE_SECONDS` for worker claims. The worker
+handles SIGTERM/SIGINT when `pcntl` is available and finishes the active attempt
+before stopping. The shared bootstrap can supply a configured `FlowStepExecution`
+under `execution` for schema hooks and private failure reporting. These commands
+do not start a broker or automatically deliver audit outbox events.
+
+New MySQL RPC registries use `utf8mb4_bin` so case-distinct subject IDs remain
+separate. For an existing registry, audit/back up identities and apply
+`app/schema/mysql-queue-rpc-upgrade.sql` in a maintenance window before enabling
+queue RPC. The routing scope check rejects a collision on an old schema, but
+cannot recover records already merged by a case-insensitive collation.
+
+Legacy RPC runs started through a generic queue dispatch closure have no new
+queue-authority marker. They require explicit migration/reconciliation and are
+rejected when the new runtime is bound. Do not change the marker or copy a stale
+registry snapshot into queue state to bypass that gate. Inline and custom legacy
+driver behavior remains available when no queue runtime is bound.
+
+The application-layer extraction into a Gateway Extension is planned in
+[Gateway issue #18](https://github.com/webong/gateway/issues/18). This does not
+change the framework-neutral core or move application code in this phase.

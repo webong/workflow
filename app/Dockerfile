@@ -3,7 +3,8 @@ FROM dunglas/frankenphp:1.12.7-builder-php8.3-bookworm AS go-builder
 WORKDIR /src/app
 COPY app/go.mod app/go.sum ./
 RUN go mod download
-COPY app/ ./
+COPY app/internal ./internal
+COPY app/cmd ./cmd
 RUN CGO_ENABLED=0 go test ./internal/rpc && \
     CGO_ENABLED=0 go vet ./internal/rpc
 RUN CGO_ENABLED=1 \
@@ -13,7 +14,7 @@ RUN CGO_ENABLED=1 \
 
 FROM dunglas/frankenphp:1.12.7-php8.3-bookworm
 
-RUN install-php-extensions pdo_pgsql pdo_mysql pdo_sqlite zip
+RUN install-php-extensions pdo_pgsql pdo_mysql pdo_sqlite zip pcntl
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
@@ -22,7 +23,7 @@ COPY src ./src
 COPY ext ./ext
 COPY app/src ./app/src
 COPY app/public ./app/public
-COPY app/bootstrap.example.php ./app/bootstrap.example.php
+COPY app/bootstrap.example.php app/runtime.example.php app/queue-worker.php ./app/
 RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --optimize-autoloader
 
 COPY --from=go-builder /usr/local/bin/workflowd /usr/local/bin/workflowd

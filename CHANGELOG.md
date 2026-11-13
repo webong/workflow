@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Fixed queue worker readiness on Compose 2.x with an explicit read-only queue
+  database health check instead of disabling the inherited HTTP probe.
+
+- Completed queue-backed JSON-RPC authority routing for start/get/complete/resume/
+  cancel, preserving pinned definitions/context and logical run IDs with private
+  subject/flow/run storage IDs. Interrupted initialization is recoverable; stale
+  registry records and unavailable/legacy queue runtimes fail closed.
+- Added shared trusted RPC/worker bootstrap configuration, a supervised CLI worker
+  entrypoint, and real HTTP/worker smoke coverage in both RPC CI architectures.
+- Made new MySQL RPC subject keys case-sensitive and supplied an explicit upgrade
+  script; queue routing also verifies its stored scope before touching authority.
+
+
 - Hardened the reference queue runtime: atomic run state/claims/outbox,
   database-wide concurrency limits, fenced leases and execution, bounded
   idempotent recovery, persisted retry backoff, deferred callbacks/deadlines,

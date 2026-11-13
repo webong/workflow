@@ -63,18 +63,25 @@ final class QueueScheduler implements FlowQueueScheduler
     }
 
     /** @param array<string, mixed> $context */
-    public function start(FlowRun $run, array $context = []): FlowState
+    public function start(FlowRun $run, array $context = [], ?string $storageId = null): FlowState
     {
         foreach (array_keys($context) as $key) {
             if (! is_string($key)) {
                 throw new InvalidArgumentException('Queue context must use named keys.');
             }
         }
-        return $this->transaction(function () use ($run, $context): FlowState {
-            $existing = $this->get($run->id);
+        $storageId ??= $run->id;
+        if ($storageId === '' || strlen($storageId) > 191) {
+            throw new InvalidArgumentException('Invalid queue storage ID.');
+        }
+        return $this->transaction(function () use ($run, $context, $storageId): FlowState {
+            $existing = $this->get($storageId);
             if ($existing !== null) {
-                $existing->run?->assertDefinition($run->definition);
-                $row = $this->row('SELECT context FROM workflow_queue_runs WHERE id = ?', [$run->id]);
+                if ($existing->run?->id !== $run->id) {
+                    throw new InvalidArgumentException('Queue storage ID belongs to another logical run.');
+                }
+                $existing->run->assertDefinition($run->definition);
+                $row = $this->row('SELECT context FROM workflow_queue_runs WHERE id = ?', [$storageId]);
                 assert($row !== null);
                 if (CanonicalFlowPayload::fingerprint($context) !== CanonicalFlowPayload::fingerprint($this->decode((string) $row['context']))) {
                     throw new InvalidArgumentException('A run ID cannot be reused with different context.');
@@ -89,11 +96,11 @@ final class QueueScheduler implements FlowQueueScheduler
                     throw new InvalidArgumentException('Step ID is too long.');
                 }
             }
-            $state = (new FlowEvaluator())->evaluate($run->definition, $run->initialState());
+            $state = (new FlowEvaluator())->evaluate($run->definition, $run->initialState()->withMetadata(['_queue_storage_id' => $storageId]));
             $this->pdo->prepare('INSERT INTO workflow_queue_runs VALUES (?, ?, ?)')->execute([
-                $run->id, $this->encode($state->toArray()), $this->encode($context),
+                $storageId, $this->encode($state->toArray()), $this->encode($context),
             ]);
-            $this->event('run.started', ['run_id' => $run->id]);
+            $this->event('run.started', ['run_id' => $run->id, 'storage_id' => $storageId]);
             return $state;
         });
     }
@@ -137,18 +144,19 @@ final class QueueScheduler implements FlowQueueScheduler
                     } catch (InvalidArgumentException) {
                         $state = $state->withStep($step->id, new StepState(FlowStepStatus::FAILED, error: 'Step input could not be resolved.', retriable: false, attempts: $previous->attempts, metadata: ['error_code' => 'input_resolution_failed']));
                         $this->save($state);
-                        $this->event('step.failed', ['run_id' => $run->id, 'step_id' => $step->id]);
+                        $this->event('step.failed', ['run_id' => $run->id, 'storage_id' => $this->storageId($state), 'step_id' => $step->id]);
                         continue;
                     }
                     $id = bin2hex(random_bytes(16));
                     $claim = new FlowStepClaim($id, $run, $step, $state, $input, $context, $previous->toArray(), [
+                        'storage_id' => (string) $row['id'],
                         'attempt' => $previous->attempts + 1,
                         'lease_expires_at' => $this->now() + $leaseSeconds,
                         // Stable across attempts: the host must deduplicate external effects on this key.
-                        'idempotency_key' => hash('sha256', $this->encode([$run->id, $step->id])),
+                        'idempotency_key' => hash('sha256', $this->encode([(string) $row['id'], $step->id])),
                     ]);
                     $this->pdo->prepare('INSERT INTO workflow_queue_claims VALUES (?, ?, ?, ?, ?, ?, NULL)')->execute([
-                        $id, $run->id, $step->id, 'claimed', $this->now() + $leaseSeconds, $this->encode($claim->toArray()),
+                        $id, (string) $row['id'], $step->id, 'claimed', $this->now() + $leaseSeconds, $this->encode($claim->toArray()),
                     ]);
                     $state = $state->withStep($step->id, new StepState(FlowStepStatus::RUNNING, attempts: $previous->attempts + 1));
                     $this->save($state);
@@ -170,7 +178,7 @@ final class QueueScheduler implements FlowQueueScheduler
                 return null;
             }
             $claim = FlowStepClaim::fromArray($this->decode((string) $row['payload']));
-            $state = $this->get($claim->run->id);
+            $state = $this->get($this->claimStorageId($claim));
             if ($state === null || $state->status === FlowStatus::CANCELLED) {
                 return null;
             }
@@ -261,17 +269,17 @@ final class QueueScheduler implements FlowQueueScheduler
                 return;
             }
             $this->save($state);
-            $this->event('run.resumed', ['run_id' => $runId]);
+            $this->event('run.resumed', ['run_id' => $state->run?->id, 'storage_id' => $runId]);
         });
     }
 
-    public function completeDeferred(FlowDeferredCompletion $completion): FlowState
+    public function completeDeferred(FlowDeferredCompletion $completion, ?string $storageId = null): FlowState
     {
-        return $this->transaction(function () use ($completion): FlowState {
+        return $this->transaction(function () use ($completion, $storageId): FlowState {
             if ($completion->runId === null) {
                 throw new InvalidArgumentException('Queue callbacks require a run ID.');
             }
-            $state = $this->required($completion->runId);
+            $state = $this->required($storageId ?? $completion->runId);
             $step = $state->run?->definition->step($completion->stepId);
             if ($completion->result->status === FlowStepStatus::FAILED && $step?->retryPolicy === null) {
                 $result = $completion->result;
@@ -279,10 +287,10 @@ final class QueueScheduler implements FlowQueueScheduler
                     new StepResult($result->status, $result->message, $result->error, false, metadata: $result->metadata, output: $result->output),
                     $completion->runId, $completion->attempt);
             }
-            $next = (new FlowStateTransition(clock: $this->clock))->completeDeferred($state, $completion);
+            $next = (new FlowStateTransition(clock: fn (): int => $this->now()))->completeDeferred($state, $completion);
             if ($next !== $state) {
                 $this->save($next);
-                $this->event('step.' . $completion->result->status->value, ['run_id' => $completion->runId, 'step_id' => $completion->stepId, 'attempt' => $completion->attempt]);
+                $this->event('step.' . $completion->result->status->value, ['run_id' => $completion->runId, 'storage_id' => $storageId ?? $completion->runId, 'step_id' => $completion->stepId, 'attempt' => $completion->attempt]);
             }
             return $next;
         });
@@ -390,9 +398,9 @@ final class QueueScheduler implements FlowQueueScheduler
                 if (($step->metadata['deferred'] ?? false) === true && $step->deadlineAt !== null && $step->deadlineAt <= $this->now()) {
                     $run = $state->run;
                     assert($run !== null);
-                    $state = (new FlowStateTransition(clock: $this->clock))->deadlineReached($run->definition, $state, $id);
+                    $state = (new FlowStateTransition(clock: fn (): int => $this->now()))->deadlineReached($run->definition, $state, $id);
                     $this->save($state);
-                    $this->event('step.deadline', ['run_id' => $run->id, 'step_id' => $id]);
+                    $this->event('step.deadline', ['run_id' => $run->id, 'storage_id' => $this->storageId($state), 'step_id' => $id]);
                 }
             }
         }
@@ -411,7 +419,7 @@ final class QueueScheduler implements FlowQueueScheduler
             throw new RuntimeException('Step claim lease lost.');
         }
         $actual = FlowStepClaim::fromArray($this->decode((string) $row['payload']));
-        if ($actual->run->id !== $claim->run->id || $actual->step->id !== $claim->step->id || $actual->metadata['attempt'] !== ($claim->metadata['attempt'] ?? null)) {
+        if ($actual->run->id !== $claim->run->id || $actual->step->id !== $claim->step->id || $actual->metadata['attempt'] !== ($claim->metadata['attempt'] ?? null) || $this->claimStorageId($actual) !== $this->claimStorageId($claim)) {
             throw new RuntimeException('Step claim identity mismatch.');
         }
         return $actual;
@@ -419,7 +427,7 @@ final class QueueScheduler implements FlowQueueScheduler
 
     private function finish(FlowStepClaim $claim, StepResult $result, string $status, ?string $fingerprint = null): void
     {
-        $state = $this->required($claim->run->id);
+        $state = $this->required($this->claimStorageId($claim));
         $current = $state->steps[$claim->step->id];
         if ($state->status === FlowStatus::CANCELLED || $current->status !== FlowStepStatus::RUNNING || $current->attempts !== $claim->metadata['attempt']) {
             throw new RuntimeException('Step attempt no longer owns this run.');
@@ -440,18 +448,19 @@ final class QueueScheduler implements FlowQueueScheduler
         $next = new StepState($result->status, $result->message, $result->error, date(DATE_ATOM, $this->now()), $retriable, $current->attempts, $retryAt, $metadata, $result->output, $result->deferred ? $result->deadlineAt : null);
         $this->pdo->prepare('UPDATE workflow_queue_claims SET status = ?, result = ? WHERE id = ?')->execute([$status, $fingerprint, $claim->claimId]);
         $this->save($state->withStep($claim->step->id, $next));
-        $this->event('step.' . $result->status->value, ['run_id' => $claim->run->id, 'step_id' => $claim->step->id, 'attempt' => $current->attempts]);
+        $this->event('step.' . $result->status->value, ['run_id' => $claim->run->id, 'storage_id' => $this->claimStorageId($claim), 'step_id' => $claim->step->id, 'attempt' => $current->attempts]);
     }
 
     private function save(FlowState $state): void
     {
         $run = $state->run;
         assert($run !== null);
-        $old = $this->required($run->id);
+        $storageId = $this->storageId($state);
+        $old = $this->required($storageId);
         $next = (new FlowEvaluator())->evaluate($run->definition, $state);
-        $this->pdo->prepare('UPDATE workflow_queue_runs SET state = ? WHERE id = ?')->execute([$this->encode($next->toArray()), $run->id]);
+        $this->pdo->prepare('UPDATE workflow_queue_runs SET state = ? WHERE id = ?')->execute([$this->encode($next->toArray()), $storageId]);
         if ($old->status !== $next->status && in_array($next->status, [FlowStatus::COMPLETED, FlowStatus::CANCELLED, FlowStatus::BLOCKED], true)) {
-            $this->event('run.' . $next->status->value, ['run_id' => $run->id]);
+            $this->event('run.' . $next->status->value, ['run_id' => $run->id, 'storage_id' => $storageId]);
         }
     }
 
@@ -459,6 +468,24 @@ final class QueueScheduler implements FlowQueueScheduler
     private function event(string $type, array $payload): void
     {
         $this->pdo->prepare("INSERT INTO workflow_queue_outbox VALUES (?, ?, ?, 'pending', NULL, ?, 0)")->execute([bin2hex(random_bytes(16)), $type, $this->encode($payload), $this->now()]);
+    }
+
+    private function storageId(FlowState $state): string
+    {
+        $id = $state->metadata['_queue_storage_id'] ?? $state->run?->id;
+        if (! is_string($id) || $id === '') {
+            throw new RuntimeException('Queue snapshot has no storage identity.');
+        }
+        return $id;
+    }
+
+    private function claimStorageId(FlowStepClaim $claim): string
+    {
+        $id = $claim->metadata['storage_id'] ?? $claim->run->id;
+        if (! is_string($id) || $id === '') {
+            throw new RuntimeException('Queue claim has no storage identity.');
+        }
+        return $id;
     }
 
     private function required(string $runId): FlowState
