@@ -1,0 +1,20 @@
+{
+    "name": "webong/workflow-open-workflow",
+    "description": "OpenWorkflow adapter for the independent WorkFlow engine.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.1",
+        "psr/http-message": "^2.0",
+        "symfony/yaml": "^7.0",
+        "webong/workflow": "^0.1.0-rc.3",
+        "wikimedia/zest-jq": "^1.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webong\\WorkFlow\\OpenWorkflow\\": "./"
+        }
+    }
+}
