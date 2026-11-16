@@ -5,8 +5,8 @@ declare(strict_types=1);
 // A runnable, two-process example. Only host-registered executors run here.
 require dirname(__DIR__) . '/vendor/autoload.php';
 
-use Webong\WorkFlow\App\QueueScheduler;
-use Webong\WorkFlow\App\QueueWorker;
+use Webong\WorkFlow\Examples\Standalone\QueueScheduler;
+use Webong\WorkFlow\Examples\Standalone\QueueWorker;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;

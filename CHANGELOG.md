@@ -2,9 +2,15 @@
 
 ## Unreleased
 
+- Moved the standalone testing/reference host to `examples/standalone` with the
+  `Webong\\WorkFlow\\Examples\\Standalone` namespace. Removed the old `app/`
+  paths, App namespace and Composer `app` surface without compatibility shims.
+  Moved the authoring CLI to `src/Authoring`. This is an unreleased source change;
+  existing tags and deployments are unchanged.
+
 - Declared self-contained Composer Source Plugin surfaces for core, Laravel,
-  Temporal, Open Workflow and App, preserving namespaces, the installed authoring
-  CLI and the existing Laravel discovery name. Full installations stay unchanged.
+  Temporal and Open Workflow, retaining the installed authoring CLI and the
+  existing Laravel discovery name. Full installations stay unchanged.
 - Made Laravel discovery inert when its payload is pruned and its OWS binding
   conditional on the selected adapter. Added real Composer consumer/projection
   checks, authoritative autoloading and Laravel discovery/store regressions.

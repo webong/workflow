@@ -41,7 +41,7 @@ background for you.
 disappears when the PHP process exits. For durable state, use a
 `FlowStateStoreFactory` implementation. Laravel database and Redis adapters
 are described in [the Laravel guide](laravel.md); the standalone service has
-a PDO PostgreSQL store in [`app/`](../app/README.md).
+a PDO PostgreSQL store in [`examples/standalone/`](../examples/standalone/README.md).
 
 ## Structured output and input bindings
 

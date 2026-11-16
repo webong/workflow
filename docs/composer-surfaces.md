@@ -9,7 +9,9 @@ with the supported `^0.4` release line (tested with **0.4.0**).
 Projection downloads the full archive, then prunes the installed copy. It does
 not reduce network transfer, remove Composer requirements, merge nested
 manifests, or turn the selected directories into separately versioned packages.
-All existing PHP namespaces remain unchanged.
+The engine and optional-adapter namespaces remain unchanged. The unreleased
+standalone source move removes the old `app` surface and namespace; released
+`v0.1.0-rc.2` remains unchanged and has its own [versioned guide](https://github.com/webong/workflow/blob/v0.1.0-rc.2/docs/composer-surfaces.md).
 
 ## Available selections
 
@@ -18,15 +20,14 @@ can be selected alone. Multiple surfaces retain the union of their files.
 
 | Surface | Retained functionality and additional files |
 |---|---|
-| `core` | All `src/`, generated language types, `bin/workflow`, its `App\FlowAuthoringCli` implementation, legal/readme files, core guides and the guarded Laravel discovery provider |
+| `core` | All `src/`, generated language types, `bin/workflow`, its `Authoring\FlowAuthoringCli` implementation, legal/readme files, core guides and the guarded Laravel discovery provider |
 | `laravel` | Core baseline plus **all** `ext/Laravel/`, configuration, migrations, models/concerns, Boost resources and Laravel guide |
 | `temporal` | Core baseline plus **all** `ext/Temporal/` and its guide |
 | `open-workflow` | Core baseline plus **all** `ext/OpenWorkflow/`, including the pinned schema and CTK fixtures, and OWS guides |
-| `app` | Core baseline plus **all** `app/`: RPC/CLI/PDO/queue classes, trusted bootstrap files, worker, SQL schemas, Go HTTP host and Docker/Compose source; queue guide |
 
-The baseline deliberately keeps the advertised CLI even without `app`.
-`core` therefore contains one App authoring class, but not the RPC server,
-queue runtime or PDO application stores. It also contains one Laravel provider
+The CLI implementation lives in `src/Authoring`, independently of the standalone
+example. Core excludes the RPC server, queue implementation and PDO example
+stores. The baseline also retains one Laravel provider
 file because Composer advertises that exact discovery class unconditionally.
 That provider is inert when the rest of Laravel is absent: no bindings,
 configuration or publish targets point at pruned files. Its public namespace
@@ -117,22 +118,20 @@ host dependencies still need to be required by the consumer:
   SDK-neutral activity handler, not live Temporal server/replay behavior.
 - `open-workflow`: JSON definitions work without YAML support; require
   `symfony/yaml` for YAML input. HTTP/OpenAPI tasks need a host PSR-18 client.
-- `app`: PHP PDO and the selected SQL driver are runtime extensions. Building
-  the Go/FrankenPHP host still needs its documented Docker/toolchain setup.
 
 Supported combinations include each surface alone and arbitrary unions of the
-five named surfaces. For Laravel OWS binding, select **both** `laravel` and
+four named surfaces. For Laravel OWS binding, select **both** `laravel` and
 `open-workflow`; Laravel without OWS does not register a missing OWS singleton.
 For OWS-bearing Temporal definitions, select **both** `temporal` and
 `open-workflow`; the Temporal handler's OWS context-restoration path needs that
-adapter. App can operate without OWS; its OWS methods remain host opt-in.
+adapter.
 Selecting a surface does not enable a runtime, executor, broker or database.
 
 The full installation remains the path for authoring/release tooling and
 native builds. Projected PHP surfaces do not retain `mod/`, repository tests,
-CI workflows or the complete build/release toolchain. The App source is retained
-for hosts that need it; projection tests verify PHP RPC/queue operation, not a
-new projected-source Go/native build certification.
+CI workflows, `examples/standalone` or the complete build/release toolchain.
+Use an unprojected checkout/full installation for the standalone testing host;
+it has no Composer surface. See [standalone example](standalone-example.md).
 
 ## Author configuration and development
 
@@ -157,6 +156,6 @@ It builds a ZIP from the actual worktree (the only fixture metadata change is
 a synthetic version), installs real consumer roots with plugin 0.4.0, checks
 all named surfaces and a combined selection, then tests lock replay and
 `--no-plugins`. It uses authoritative autoloading, executes the installed CLI,
-runs core/OWS/App/SDK-neutral Temporal behavior, and boots real Laravel package
+runs core/OWS/SDK-neutral Temporal behavior and the full-install standalone example, and boots real Laravel package
 discovery with and without its retained integration resources. Development
 checkouts are never pruned.

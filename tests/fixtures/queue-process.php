@@ -2,8 +2,8 @@
 
 declare(strict_types=1);
 require dirname(__DIR__, 2) . '/vendor/autoload.php';
-use Webong\WorkFlow\App\QueueScheduler;
-use Webong\WorkFlow\App\QueueWorker;
+use Webong\WorkFlow\Examples\Standalone\QueueScheduler;
+use Webong\WorkFlow\Examples\Standalone\QueueWorker;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepInvocation;

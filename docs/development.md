@@ -33,7 +33,7 @@ Compose, set `WORK_FLOW_POSTGRES_DSN`,
 the matching integration tests. The default Docker test command configures
 all of them for you.
 
-For standalone JSON-RPC development, [`app/README.md`](../app/README.md)
+For standalone JSON-RPC development, [`examples/standalone/README.md`](../examples/standalone/README.md)
 shows how to build the separate Go/FrankenPHP image and exercise its API.
 The image build runs the Go RPC unit tests and vet checks in its builder.
 

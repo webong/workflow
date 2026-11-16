@@ -175,7 +175,7 @@ for all operations, result fields, and restrictions.
 ## Any language: use the JSON-RPC server instead
 
 Node, Python, PHP, Go, or another backend can use an HTTP client to call the
-[JSON-RPC application](../app/README.md). That guide includes Docker startup,
+[JSON-RPC application](../examples/standalone/README.md). That guide includes Docker startup,
 authentication, and complete `curl` requests you can translate to your client.
 
 If you are authoring a definition rather than running one, call

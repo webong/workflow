@@ -39,8 +39,8 @@
             "Webong\\WorkFlow\\": "src/",
             "Webong\\WorkFlow\\Laravel\\": "ext/Laravel/",
             "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/",
-            "Webong\\WorkFlow\\App\\": "app/src/",
-            "Webong\\WorkFlow\\OpenWorkflow\\": "ext/OpenWorkflow/"
+            "Webong\\WorkFlow\\OpenWorkflow\\": "ext/OpenWorkflow/",
+            "Webong\\WorkFlow\\Examples\\Standalone\\": "examples/standalone/src/"
         }
     },
     "autoload-dev": {
@@ -68,13 +68,13 @@
                         "CONTEXT.md",
                         "src/**",
                         "bin/workflow",
-                        "app/src/FlowAuthoringCli.php",
                         "ext/Laravel/WorkFlowServiceProvider.php",
                         "types/**",
                         "docs/php-library.md",
                         "docs/run-lifecycle.md",
                         "docs/authoring.md",
-                        "docs/composer-surfaces.md"
+                        "docs/composer-surfaces.md",
+                        "docs/standalone-example.md"
                     ]
                 },
                 "laravel": {
@@ -86,7 +86,6 @@
                         "CONTEXT.md",
                         "src/**",
                         "bin/workflow",
-                        "app/src/FlowAuthoringCli.php",
                         "ext/Laravel/WorkFlowServiceProvider.php",
                         "types/**",
                         "docs/php-library.md",
@@ -95,7 +94,8 @@
                         "docs/composer-surfaces.md",
                         "ext/Laravel/**",
                         "resources/boost/**",
-                        "docs/laravel.md"
+                        "docs/laravel.md",
+                        "docs/standalone-example.md"
                     ]
                 },
                 "temporal": {
@@ -107,7 +107,6 @@
                         "CONTEXT.md",
                         "src/**",
                         "bin/workflow",
-                        "app/src/FlowAuthoringCli.php",
                         "ext/Laravel/WorkFlowServiceProvider.php",
                         "types/**",
                         "docs/php-library.md",
@@ -115,7 +114,8 @@
                         "docs/authoring.md",
                         "docs/composer-surfaces.md",
                         "ext/Temporal/**",
-                        "docs/temporal.md"
+                        "docs/temporal.md",
+                        "docs/standalone-example.md"
                     ]
                 },
                 "open-workflow": {
@@ -127,7 +127,6 @@
                         "CONTEXT.md",
                         "src/**",
                         "bin/workflow",
-                        "app/src/FlowAuthoringCli.php",
                         "ext/Laravel/WorkFlowServiceProvider.php",
                         "types/**",
                         "docs/php-library.md",
@@ -136,27 +135,8 @@
                         "docs/composer-surfaces.md",
                         "ext/OpenWorkflow/**",
                         "docs/open-workflow-specification.md",
-                        "docs/open-workflow-ctk-matrix.md"
-                    ]
-                },
-                "app": {
-                    "include": [
-                        "composer.json",
-                        "LICENSE",
-                        "README.md",
-                        "CHANGELOG.md",
-                        "CONTEXT.md",
-                        "src/**",
-                        "bin/workflow",
-                        "app/src/FlowAuthoringCli.php",
-                        "ext/Laravel/WorkFlowServiceProvider.php",
-                        "types/**",
-                        "docs/php-library.md",
-                        "docs/run-lifecycle.md",
-                        "docs/authoring.md",
-                        "docs/composer-surfaces.md",
-                        "app/**",
-                        "docs/queue.md"
+                        "docs/open-workflow-ctk-matrix.md",
+                        "docs/standalone-example.md"
                     ]
                 }
             }

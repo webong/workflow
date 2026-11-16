@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\App\FlowRpcApplication;
+use Webong\WorkFlow\Examples\Standalone\FlowRpcApplication;
 use Webong\WorkFlow\Contracts\FlowDefinitionProvider;
 use Webong\WorkFlow\Contracts\FlowOperationDirectory;
 use Webong\WorkFlow\Contracts\FlowOperationProvider;

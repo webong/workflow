@@ -1,12 +1,12 @@
 # Run workflows with the reference queue runtime
 
-Use `Webong\WorkFlow\App\QueueScheduler` when a trusted host needs durable
+Use `Webong\WorkFlow\Examples\Standalone\QueueScheduler` when a trusted host needs durable
 queue execution without Laravel or Temporal. Its database owns queue runs;
 RPC database/Redis projections do not control these runs.
 
 ```php
-use Webong\WorkFlow\App\QueueScheduler;
-use Webong\WorkFlow\App\QueueWorker;
+use Webong\WorkFlow\Examples\Standalone\QueueScheduler;
+use Webong\WorkFlow\Examples\Standalone\QueueWorker;
 use Webong\WorkFlow\ValueObjects\FlowRun;
 
 $pdo = new PDO($dsn, $user, $password);
@@ -59,7 +59,7 @@ transaction persists RUNNING attempts, their opaque claim IDs, and
 `work.ready` outbox events. A dispatcher publishes committed events:
 
 ```php
-use Webong\WorkFlow\App\QueueOutboxDispatcher;
+use Webong\WorkFlow\Examples\Standalone\QueueOutboxDispatcher;
 
 $dispatcher = new QueueOutboxDispatcher($queue,
     function (string $eventId, string $type, array $payload) use ($broker): void {
@@ -183,7 +183,7 @@ Stop its services with `docker compose -f compose.queue-test.yml down`.
 Bind `QueueRpcRuntime` explicitly alongside the existing inline dispatcher:
 
 ```php
-use Webong\WorkFlow\App\QueueRpcRuntime;
+use Webong\WorkFlow\Examples\Standalone\QueueRpcRuntime;
 
 $app = new FlowRpcApplication(
     definitions: $definitions,
@@ -216,14 +216,14 @@ steps. An unavailable queue binding never falls back to the registry state.
 
 For the bundled example, set `WORKFLOW_QUEUE_ENABLED=true` in the HTTP service
 and worker. Both load the same trusted `WORKFLOW_RUNTIME_BOOTSTRAP` file
-(default `app/runtime.example.php`). Deploy the ordinary RPC registry schema,
+(default `examples/standalone/runtime.example.php`). Deploy the ordinary RPC registry schema,
 then install queue tables once and run workers:
 
 ```sh
-php app/queue-worker.php --install
-php app/queue-worker.php --work
+php examples/standalone/queue-worker.php --install
+php examples/standalone/queue-worker.php --work
 # Or execute at most one eligible step:
-php app/queue-worker.php --once
+php examples/standalone/queue-worker.php --once
 ```
 
 Use PHP 8.3 plus the matching PDO driver. Set `WORKFLOW_QUEUE_CONCURRENCY` during
@@ -235,7 +235,7 @@ do not start a broker or automatically deliver audit outbox events.
 
 New MySQL RPC registries use `utf8mb4_bin` so case-distinct subject IDs remain
 separate. For an existing registry, audit/back up identities and apply
-`app/schema/mysql-queue-rpc-upgrade.sql` in a maintenance window before enabling
+`examples/standalone/schema/mysql-queue-rpc-upgrade.sql` in a maintenance window before enabling
 queue RPC. The routing scope check rejects a collision on an old schema, but
 cannot recover records already merged by a case-insensitive collation.
 

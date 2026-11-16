@@ -23,20 +23,23 @@ function ensure(bool $condition, string $message): void
 }
 $package = $consumer . '/vendor/webong/workflow';
 $full = $case === 'full';
+ensure(! is_dir($package . '/app'), 'Removed app directory is still shipped');
+ensure(! class_exists('Webong\\WorkFlow\\App\\FlowRpcApplication'), 'Removed App namespace is still available');
+ensure(! class_exists('Webong\\WorkFlow\\App\\FlowAuthoringCli'), 'Removed CLI namespace alias is still available');
 $laravel = $full || in_array($case, ['laravel', 'combined'], true);
 $temporal = $full || in_array($case, ['temporal', 'combined'], true);
 $ows = $full || in_array($case, ['open-workflow', 'combined'], true);
-$appSurface = $full || in_array($case, ['app', 'combined'], true);
-foreach (['LICENSE', 'README.md', 'bin/workflow', 'app/src/FlowAuthoringCli.php', 'ext/Laravel/WorkFlowServiceProvider.php'] as $path) {
+$example = $full;
+foreach (['LICENSE', 'README.md', 'bin/workflow', 'src/Authoring/FlowAuthoringCli.php', 'ext/Laravel/WorkFlowServiceProvider.php'] as $path) {
     ensure(is_file($package . '/' . $path), "$case: missing advertised/core file $path");
 }
-foreach (['ext/Laravel/LaravelFlowStateStoreFactory.php' => $laravel, 'ext/Temporal/TemporalFlowInput.php' => $temporal, 'ext/OpenWorkflow/OpenWorkflow.php' => $ows, 'app/src/FlowRpcApplication.php' => $appSurface, 'mod/typephp/composer.json' => $full] as $path => $expected) {
+foreach (['ext/Laravel/LaravelFlowStateStoreFactory.php' => $laravel, 'ext/Temporal/TemporalFlowInput.php' => $temporal, 'ext/OpenWorkflow/OpenWorkflow.php' => $ows, 'examples/standalone/src/FlowRpcApplication.php' => $example, 'mod/typephp/composer.json' => $full] as $path => $expected) {
     ensure(is_file($package . '/' . $path) === $expected, "$case: incorrect projected presence for $path");
 }
-ensure(class_exists(Webong\WorkFlow\App\FlowAuthoringCli::class), 'Advertised CLI class unavailable');
+ensure(class_exists(Webong\WorkFlow\Authoring\FlowAuthoringCli::class), 'Advertised CLI class unavailable');
 ensure(class_exists(Webong\WorkFlow\Temporal\TemporalFlowInput::class) === $temporal, 'Temporal autoload mismatch');
 ensure(class_exists(Webong\WorkFlow\OpenWorkflow\OpenWorkflow::class) === $ows, 'OWS autoload mismatch');
-ensure(class_exists(Webong\WorkFlow\App\FlowRpcApplication::class) === $appSurface, 'App autoload mismatch');
+ensure(class_exists(Webong\WorkFlow\Examples\Standalone\FlowRpcApplication::class) === $example, 'Standalone example autoload mismatch');
 
 $executor = new class implements FlowStepExecutor {
     public function supports(FlowStepDefinition $step): bool { return true; }
@@ -70,20 +73,35 @@ if ($ows) {
     ensure(is_file($package . '/ext/OpenWorkflow/Validation/workflow-1.0.3.json'), 'OWS schema pruned');
     ensure(is_file($package . '/ext/OpenWorkflow/Conformance/features/set.feature'), 'OWS conformance resources pruned');
 }
-if ($appSurface) {
+if ($example) {
+    // Test an installed dependency, where the example has no nested vendor/.
+    $location = 'examples/standalone';
+    $environment = array_merge(getenv(), ['WORKFLOW_DB_DRIVER' => 'sqlite', 'WORKFLOW_SQLITE_PATH' => $consumer . '/entrypoint.sqlite', 'WORKFLOW_QUEUE_ENABLED' => 'true']);
+    foreach ([
+        [PHP_BINARY, $package . '/' . $location . '/queue-worker.php', '--install'],
+        [PHP_BINARY, $package . '/' . $location . '/queue-worker.php', '--once'],
+        [PHP_BINARY, '-r', '$app = require $argv[1]; if (! $app instanceof Webong\\WorkFlow\\Examples\\Standalone\\FlowRpcApplication) { exit(1); }', $package . '/' . $location . '/bootstrap.example.php'],
+    ] as $args) {
+        $pipes = [];
+        $process = proc_open($args, [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes, $consumer, $environment);
+        ensure(is_resource($process), 'Cannot start installed standalone entrypoint');
+        $stdout = stream_get_contents($pipes[1]); fclose($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]); fclose($pipes[2]);
+        ensure(proc_close($process) === 0, 'Installed standalone entrypoint failed: ' . $stdout . $stderr);
+    }
     $pdo = new PDO('sqlite::memory:');
-    $pdo->exec(file_get_contents($package . '/app/schema/sqlite.sql'));
-    Webong\WorkFlow\App\QueueScheduler::install($pdo);
-    $queue = new Webong\WorkFlow\App\QueueScheduler($pdo);
-    $queue->start($run); (new Webong\WorkFlow\App\QueueWorker($queue, [$executor]))->tick();
-    ensure($queue->get($run->id)?->status === FlowStatus::COMPLETED, 'Projected App worker closure failed');
+    $pdo->exec(file_get_contents($package . '/examples/standalone/schema/sqlite.sql'));
+    Webong\WorkFlow\Examples\Standalone\QueueScheduler::install($pdo);
+    $queue = new Webong\WorkFlow\Examples\Standalone\QueueScheduler($pdo);
+    $queue->start($run); (new Webong\WorkFlow\Examples\Standalone\QueueWorker($queue, [$executor]))->tick();
+    ensure($queue->get($run->id)?->status === FlowStatus::COMPLETED, 'Standalone example worker closure failed');
     $provider = new class($definition) implements Webong\WorkFlow\Contracts\FlowDefinitionProvider {
         public function __construct(private FlowDefinition $definition) {}
         public function definition(string $flowKey): FlowDefinition { return $this->definition; }
     };
-    $facade = new Webong\WorkFlow\App\FlowRpcApplication($provider, new Webong\WorkFlow\App\PdoSqliteFlowStateStoreFactory($pdo, new Webong\WorkFlow\Services\DefaultFlowStateSerializer()), new Webong\WorkFlow\Services\FlowExecutionDispatcher([]), queue: new Webong\WorkFlow\App\QueueRpcRuntime($queue));
+    $facade = new Webong\WorkFlow\Examples\Standalone\FlowRpcApplication($provider, new Webong\WorkFlow\Examples\Standalone\PdoSqliteFlowStateStoreFactory($pdo, new Webong\WorkFlow\Services\DefaultFlowStateSerializer()), new Webong\WorkFlow\Services\FlowExecutionDispatcher([]), queue: new Webong\WorkFlow\Examples\Standalone\QueueRpcRuntime($queue));
     $state = $facade->invoke('flow.start', ['flow_key' => 'consumer', 'run_id' => 'rpc-run', 'subject' => ['type' => 'test', 'id' => '42'], 'driver' => 'queue']);
-    ensure($state['state']['metadata']['execution_driver'] === 'queue', 'Projected App RPC closure failed without optional OWS');
+    ensure($state['state']['metadata']['execution_driver'] === 'queue', 'Standalone example RPC closure failed without optional OWS');
 }
 
 if (class_exists(Illuminate\Foundation\Application::class)) {

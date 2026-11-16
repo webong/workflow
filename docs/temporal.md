@@ -40,7 +40,7 @@ store may serve API/UI projections, but Temporal's event history owns the
 Temporal execution. Keep HTTP, database, Redis, and other side effects inside
 Activities, not deterministic Workflow code.
 
-The standalone JSON-RPC application in [`app/`](../app/README.md) can select
+The standalone JSON-RPC application in [`examples/standalone/`](../examples/standalone/README.md) can select
 `temporal` only when its trusted bootstrap registers a
 `TemporalFlowExecutionDriver`. Setting Temporal environment variables alone
 does not create a client, worker, or registered driver.

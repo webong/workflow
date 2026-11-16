@@ -53,8 +53,7 @@ $cases = [
     'laravel' => ['laravel'],
     'temporal' => ['temporal'],
     'open-workflow' => ['open-workflow'],
-    'app' => ['app'],
-    'combined' => ['laravel', 'temporal', 'open-workflow', 'app'],
+    'combined' => ['laravel', 'temporal', 'open-workflow'],
 ];
 foreach ($cases as $case => $surfaces) {
     echo "Installing $case consumer...\n";
@@ -108,5 +107,5 @@ foreach ($cases as $case => $surfaces) {
         echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $disabled, 'full'], $disabled);
     }
 }
-echo "PASS: full install, six projections, lock replay, no-plugins, authoritative autoload and installed CLI\n";
+echo "PASS: full install, five projections, lock replay, no-plugins, authoritative autoload and installed CLI\n";
 echo "Consumer artifacts: $lab\n";

@@ -3,7 +3,7 @@
 
 declare(strict_types=1);
 
-use Webong\WorkFlow\App\FlowAuthoringCli;
+use Webong\WorkFlow\Authoring\FlowAuthoringCli;
 
 // Support both this repository (vendor/ next to bin/) and a package installed
 // as a Composer dependency (vendor/autoload.php three levels up from

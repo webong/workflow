@@ -69,7 +69,7 @@ Optional [Composer file projections](docs/composer-surfaces.md) retain selected 
 | Authoring and validating a flow definition without running it | [Authoring guide: CLI, `flow.validate`, and generated contracts](docs/authoring.md) |
 | Laravel models with database or Redis state | [Laravel installation and example](docs/laravel.md) |
 | Choosing between PHP, Node, Python, and other languages | [Language integration guide with runnable examples](docs/languages.md) |
-| Calls from another language or backend | [Go/FrankenPHP JSON-RPC service](app/README.md) |
+| Testing/reference HTTP host | [Go/FrankenPHP JSON-RPC service](examples/standalone/README.md) |
 | Experimental local executable or in-process shared library | [TypePHP native builds](mod/typephp/README.md) |
 | The same native artifacts without an embedded PHP runtime | [elephc native builds](mod/elephc/README.md) |
 | Temporal execution and durable timers | [Optional Temporal adapter](docs/temporal.md) |
@@ -79,7 +79,8 @@ Optional [Composer file projections](docs/composer-surfaces.md) retain selected 
 | CI platforms, downloadable artifacts, and Docker releases | [Distributions and releases](docs/releases.md) |
 
 Laravel and Temporal stay optional under `ext/`. The standalone JSON-RPC
-service lives under `app/` and accepts calls from trusted backends.
+testing/reference service lives under `examples/standalone/` and accepts calls
+from trusted backends.
 Client-facing apps authenticate their users and authorize the subject before
 invoking it. Native builds (TypePHP and elephc) remain under `mod/`; they share
 one protocol front end and one set of parity fixtures in `mod/native/`.

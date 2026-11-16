@@ -9,11 +9,8 @@ parameters:
         - ext/Temporal/TemporalFlowExecutionDriver.php
         - ext/Temporal/TemporalFlowIdentity.php
         - ext/Temporal/TemporalFlowInput.php
-        - app/src
+        - examples/standalone/src
         - mod/native/php/NativeFlow.php
         - mod/native/php/api.php
         - mod/native/php/main.php
-        - examples
-    excludePaths:
-        - examples
     treatPhpDocTypesAsCertain: false
