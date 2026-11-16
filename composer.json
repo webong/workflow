@@ -13,7 +13,7 @@
         "paneon/php-to-typescript": "^2.3",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
-        "webong/composer-source-plugin": "^0.4",
+        "webong/composer-source-plugin": "^0.5",
         "webong/workflow-laravel": "@dev",
         "webong/workflow-open-workflow": "@dev",
         "webong/workflow-temporal": "@dev"
@@ -34,26 +34,12 @@
     ],
     "extra": {
         "source-plugin": {
-            "surfaces": {
-                "core": {
-                    "include": [
-                        "composer.json",
-                        "LICENSE",
-                        "README.md",
-                        "CHANGELOG.md",
-                        "CONTEXT.md",
-                        "src/**",
-                        "bin/workflow",
-                        "types/**",
-                        "docs/php-library.md",
-                        "docs/run-lifecycle.md",
-                        "docs/authoring.md",
-                        "docs/composer-surfaces.md",
-                        "docs/standalone-example.md",
-                        "docs/packages.md"
-                    ]
-                }
-            }
+            "surfaces": [
+                "composer.surface.json",
+                "src/composer.json",
+                "types/composer.json",
+                "docs/composer.json"
+            ]
         },
         "branch-alias": {
             "dev-main": "0.1.x-dev"

@@ -1,0 +1,13 @@
+{
+    "extra": {
+        "source-plugin": {
+            "surface": {
+                "name": "core",
+                "extends": [
+                    "types",
+                    "guides"
+                ]
+            }
+        }
+    }
+}

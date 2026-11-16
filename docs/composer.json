@@ -1,0 +1,10 @@
+{
+    "extra": {
+        "source-plugin": {
+            "surface": {
+                "name": "guides",
+                "extends": "runtime"
+            }
+        }
+    }
+}

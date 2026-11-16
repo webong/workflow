@@ -34,6 +34,15 @@ foreach (['LICENSE', 'README.md', 'bin/workflow', 'src/Authoring/FlowAuthoringCl
     ensure(is_file($package . '/' . $path), "$case: missing advertised/core file $path");
 }
 ensure(! is_dir($package . '/pkg'), 'Core archive contains adapter payloads');
+// Metadata survives every selection, while unselected directory contents do not.
+foreach (['composer.surface.json', 'src/composer.json', 'types/composer.json', 'docs/composer.json'] as $descriptor) {
+    ensure(is_file($package . '/' . $descriptor), 'Projection lost grouping metadata: ' . $descriptor);
+}
+$hasTypes = ! in_array($case, ['runtime', 'guides'], true);
+$hasGuides = ! in_array($case, ['runtime', 'types'], true);
+ensure(is_file($package . '/types/work-flow.d.ts') === $hasTypes, 'Incorrect types group payload');
+ensure(is_file($package . '/docs/php-library.md') === $hasGuides, 'Incorrect guides group payload');
+
 foreach (['workflow-laravel' => $laravel, 'workflow-temporal' => $temporal, 'workflow-open-workflow' => $ows] as $name => $expected) {
     $adapterRoot = $consumer . '/vendor/webong/' . $name;
     ensure(is_dir($adapterRoot) === $expected, 'Incorrect independent package presence: ' . $name);

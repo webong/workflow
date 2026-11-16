@@ -18,6 +18,10 @@ installs another adapter.
 
 ## Development checkout
 
+Core file groups are owned by descriptors under `src/`, `types/` and `docs/`,
+plus a small root runtime baseline. Those are not package manifests;
+`pkg/*/composer.json` owns the real independently installable adapters.
+
 The root uses Composer path repositories and development requirements for the
 three real packages. A fresh `composer install` resolves them without a plugin
 bootstrap or network publication. Root dependencies do not merge nested

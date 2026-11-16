@@ -10,10 +10,11 @@ requirement is PHP only.
 An independent core ZIP retains examples but excludes adapter payloads. A VCS
 install may download the whole monorepo; adapter files there are not autoloaded. A consumer may opt into the `core` file surface to retain only
 `src/`, the installed `bin/workflow` authoring CLI, generated language types,
-legal files and core guides. It does not retain `pkg/`, tests, native build
+legal files and the complete `docs/` tree. Keeping all guides is intentional: it
+includes adapter installation and historical design guidance, without adapter code. It does not retain `pkg/`, tests, native build
 sources or the standalone host. There is no Laravel provider stub.
 
-Using the published `webong/composer-source-plugin` 0.4 line, configure the
+Using the published `webong/composer-source-plugin` 0.5 line, configure the
 consumer root (not a dependency's manifest):
 
 ```json
@@ -21,7 +22,7 @@ consumer root (not a dependency's manifest):
   "require": {
     "webong/workflow": "<version containing this package layout>",
     "webong/workflow-laravel": "<adapter version>",
-    "webong/composer-source-plugin": "^0.4"
+    "webong/composer-source-plugin": "^0.5"
   },
   "config": {"allow-plugins": {"webong/composer-source-plugin": true}},
   "extra": {"source-plugin": {"projections": {
@@ -42,7 +43,7 @@ when consuming that immutable release. New adapter publication is separate.
 
 ## Bootstrap and locked installation
 
-Plugin 0.4 can activate partway through its first installation, before receiving
+Plugin 0.5 can activate partway through its first installation, before receiving
 an update event. Install it with plugins disabled, then reconcile explicitly:
 
 ```sh
@@ -69,14 +70,50 @@ selection is what separates adapter dependencies and downloads.
 Prefer dist/artifact installations. A symlinked development checkout must not
 be pruned. Widening needs archive restoration (`composer reinstall`), as deleted
 files cannot be recreated by autoload generation. See the plugin's
-[projection lifecycle](https://github.com/webong/composer-source-plugin/blob/v0.4.0/docs/projections.md).
+[projection lifecycle](https://github.com/webong/composer-source-plugin/blob/v0.5.0/docs/projections.md).
+
+## Directory-owned author groups
+
+The root discovery list names four marked JSON descriptors; their nested fields
+are grouping metadata, not Composer packages. Require/autoload/bin/discovery
+continue to come from each real package's root manifest.
+
+| Descriptor | Selection | Retains and inherits |
+|---|---|---|
+| `composer.surface.json` | `runtime` | Explicit cross-directory baseline: `src/`, `bin/workflow`, LICENSE, README, CHANGELOG and CONTEXT |
+| `types/composer.json` | `types` | Its complete directory, plus `runtime` |
+| `docs/composer.json` | `guides` | Its complete directory, plus `runtime` |
+| `src/composer.json` | `core` | Its complete directory, plus both `types` and `guides` |
+
+`core` remains the recommended complete selection. The helper selections are
+also usable PHP installs: `runtime` has no generated types/guides, `types` adds
+only generated types, and `guides` adds only documentation. Every selection keeps
+the advertised CLI, engine and legal files. `types` + `guides` has the same
+runtime/file payload as `core`. The short root baseline is deliberate: it pins
+the engine/CLI closure for every helper without inheritance cycles or sibling
+`../` paths. Types and guides use their owning directories automatically, so
+new files need no root inventory edits.
+
+All four descriptors survive pruning, including unselected groups' metadata;
+this does not retain their unselected content. They must remain in distribution
+ZIPs. The archive generator includes git-visible source JSON files, and the
+consumer matrix verifies every descriptor after extraction and projection.
+Changes to any descriptor invalidate recorded projection state, even for an
+unselected group. Restore the descriptor or intentionally update/reinstall to
+advance both locks. Nested grouping files are never merged or executed.
+
+The independent `pkg/*/composer.json` manifests are ordinary packages, not
+marked groups of core. Their own resources/migrations/discovery remain in the
+adapter archives. The root core archive excludes `pkg/`, so this migration does
+not add adapter payloads, provider stubs or dependencies to core.
 
 ## Author validation
 
-The root declares only the `core` surface and uses standard path repositories
-for its three real development packages. No consumer needs the plugin unless
-it requests projection. `composer test:projections` tests independently built
-archives, optional adapter combinations, missing adapters, real Laravel
-package discovery, the installed CLI and authoritative autoloading. The
-minimal core fixture asserts absence of Illuminate, HTTP, jq and Temporal SDK
-dependencies. Live Temporal server/replay remains separate runtime acceptance.
+The plugin stays in author `require-dev`; consumers enforcing projection keep
+it in runtime `require` and explicitly trust it. No consumer needs the plugin
+for an ordinary install. `composer test:projections` uses public plugin 0.5.0
+and real independently built archives, each helper, core and unions, adapter
+combinations, minimal core, authoritative CLI, real Laravel discovery/migrations
+and fresh locked production installs. It checks selected and unselected
+changed-descriptor rejection without modifying locks/runtime files, then proves
+restoration works. Live Temporal server/replay remains separate acceptance.

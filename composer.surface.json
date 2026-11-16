@@ -1,0 +1,17 @@
+{
+    "extra": {
+        "source-plugin": {
+            "surface": {
+                "name": "runtime",
+                "include": [
+                    "src/**",
+                    "bin/workflow",
+                    "LICENSE",
+                    "README.md",
+                    "CHANGELOG.md",
+                    "CONTEXT.md"
+                ]
+            }
+        }
+    }
+}

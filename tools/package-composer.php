@@ -28,6 +28,7 @@ foreach (['' => 'workflow', 'pkg/Laravel/' => 'workflow-laravel', 'pkg/OpenWorkf
         if ($file === '' || ! is_file($root . '/' . $file)) { continue; }
         if ($prefix === '' ? str_starts_with($file, 'pkg/') : ! str_starts_with($file, $prefix)) { continue; }
         $relative = substr($file, strlen($prefix));
+        // Version only the owning manifest; keep discovered group descriptors verbatim.
         if ($relative === 'composer.json') { continue; }
         $entry = $name . '/' . $relative;
         $zip->addFile($root . '/' . $file, $entry);

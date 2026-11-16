@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Adopted Composer Source Plugin ^0.5 directory-owned surface descriptors with
+  inherited runtime/CLI closure, types and guides. Real consumer checks cover
+  helper/union selections, retained descriptors and locked manifest-drift rejection.
+
 - Moved adapters from `ext/` to `pkg/` as independent Laravel, OpenWorkflow and
   Temporal Composer packages. Core no longer owns their dependencies, autoloading
   or Laravel discovery. Added independent ZIP packaging and external install tests.

@@ -11,6 +11,7 @@ function command(array $args, string $directory): string
 {
     global $lab;
     $log = $lab . '/command-stderr.log';
+    clearstatcache(true, $log);
     $offset = is_file($log) ? filesize($log) : 0;
     $pipes = [];
     $process = proc_open($args, [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['file', $log, 'a']], $pipes, $directory);
@@ -39,6 +40,10 @@ $cases = [
     'full' => null,
     'core' => ['core'],
     'core-minimal' => ['core'],
+    'runtime' => ['runtime'],
+    'types' => ['types'],
+    'guides' => ['guides'],
+    'union' => ['types', 'guides'],
     'laravel' => ['core'],
     'temporal' => ['core'],
     'open-workflow' => ['core'],
@@ -59,7 +64,7 @@ foreach ($cases as $case => $surfaces) {
             unset($require['webong/workflow']);
         }
     }
-    if ($surfaces !== null) { $require['webong/composer-source-plugin'] = '0.4.0'; }
+    if ($surfaces !== null) { $require['webong/composer-source-plugin'] = '0.5.0'; }
     $consumer = [
         'name' => 'workflow-test/' . $case,
         'minimum-stability' => 'RC',
@@ -85,19 +90,41 @@ foreach ($cases as $case => $surfaces) {
     file_put_contents($directory . '/definition.json', json_encode(['key' => 'cli-check', 'steps' => [['id' => 'first', 'label' => 'First']]], JSON_THROW_ON_ERROR));
     echo command([$directory . '/vendor/bin/workflow', 'validate', $directory . '/definition.json', '--json'], $directory);
 
-    if ($case === 'core') {
+    if (in_array($case, ['core', 'runtime'], true)) {
         // Replay a committed root and both lock files into an empty vendor tree.
-        $clone = $lab . '/locked-core'; mkdir($clone);
+        $clone = $lab . '/locked-' . $case; mkdir($clone);
         foreach (['composer.json', 'composer.lock', 'composer-source.lock'] as $file) { copy($directory . '/' . $file, $clone . '/' . $file); }
         composer($clone, 'install', '--no-plugins', '--no-dev', '--prefer-dist');
         composer($clone, 'install', '--no-dev', '--prefer-dist');
         composer($clone, 'dump-autoload', '--classmap-authoritative');
-        echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $clone, 'core'], $clone);
-        // A plugin-free installation must stay full, even with selection metadata.
-        $disabled = $lab . '/disabled'; mkdir($disabled);
-        copy($directory . '/composer.json', $disabled . '/composer.json');
-        composer($disabled, 'update', '--no-plugins', '--prefer-dist');
-        echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $disabled, 'full'], $disabled);
+        echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $clone, $case], $clone);
+        // Check both selected and unselected descriptor changes against locked state.
+        $descriptor = $clone . '/vendor/webong/workflow/docs/composer.json';
+        $original = file_get_contents($descriptor);
+        $changed = json_decode($original, true, flags: JSON_THROW_ON_ERROR);
+        $changed['extra']['source-plugin']['surface']['exclude'] = ['not-present.md'];
+        file_put_contents($descriptor, json_encode($changed, JSON_THROW_ON_ERROR));
+        $protected = ['composer.lock', 'composer-source.lock', 'vendor/webong/workflow/bin/workflow', 'vendor/webong/workflow/src/Services/FlowRunner.php'];
+        $hashes = [];
+        foreach ($protected as $file) { $hashes[$file] = hash_file('sha256', $clone . '/' . $file); }
+        foreach (['install', 'dump-autoload'] as $action) {
+            try {
+                composer($clone, $action);
+                throw new RuntimeException('Changed descriptor silently accepted by ' . $action);
+            } catch (RuntimeException $error) {
+                check(str_contains($error->getMessage(), ($case === 'runtime' ? 'definition_digest' : 'patterns_digest') . ' differs'), 'Wrong descriptor failure: ' . $error->getMessage());
+            }
+            foreach ($hashes as $file => $hash) { check(hash_file('sha256', $clone . '/' . $file) === $hash, 'Rejected descriptor mutated ' . $file); }
+        }
+        file_put_contents($descriptor, $original);
+        composer($clone, 'dump-autoload', '--classmap-authoritative');
+        if ($case === 'core') {
+            // A plugin-free installation must stay full, even with selection metadata.
+            $disabled = $lab . '/disabled'; mkdir($disabled);
+            copy($directory . '/composer.json', $disabled . '/composer.json');
+            composer($disabled, 'update', '--no-plugins', '--prefer-dist');
+            echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $disabled, 'full'], $disabled);
+        }
     }
 }
 // The previous monolithic core cannot coexist with split adapter ownership.
@@ -117,5 +144,5 @@ try {
 } catch (RuntimeException $error) {
     check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.3'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
 }
-echo "PASS: independent package archives, core projection, minimal core, adapter combinations, lock replay and installed CLI\n";
+echo "PASS: public plugin 0.5.0, directory groups, unions, descriptor integrity, independent packages, lock replay and CLI\n";
 echo "Consumer artifacts: $lab\n";
