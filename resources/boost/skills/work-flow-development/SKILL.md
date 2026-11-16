@@ -1,0 +1,195 @@
+---
+name: work-flow-development
+description: Build and integrate WorkFlow definitions, executors, state transitions, deferred callbacks, definition validation, and optional Laravel persistence.
+---
+
+# WorkFlow Development
+
+## When to use this skill
+
+Use this skill when adding or changing WorkFlow flows, step executors, state
+transitions, deferred provider callbacks, or the optional Laravel database and
+Redis adapters.
+
+## Architecture
+
+WorkFlow is framework-neutral. Keep the core contracts and value objects free of
+Laravel, Eloquent, Redis, HTTP, queues, and UI concerns. The host runtime owns
+those integrations and injects them at the boundary.
+
+Important contracts and services:
+
+- `FlowDefinition` contains a versioned flow and ordered `FlowStepDefinition`
+  instances.
+- `FlowRun` identifies one occurrence and pins its complete definition snapshot.
+  `RunScopedFlowStateStore` isolates it within any subject-bound store.
+- `FlowEvaluator` derives a `FlowState` from a definition and stored state.
+- `FlowRunner` executes host-provided `FlowStepExecutor` instances and returns
+  a new state.
+- `FlowStateStore` reads and writes state; `AtomicFlowStateStore::mutate()`
+  protects concurrent read-modify-write transitions.
+- `FlowStateTransition` applies deferred completion and cancellation. Replay
+  of a tracked run uses a new run ID; reset is only for legacy states.
+- `FlowStateStoreFactory` returns a subject-bound
+  `ForgettableFlowStateStore`.
+
+## Define and execute steps
+
+Use `FlowStepDefinition`, never the old `StepDefinition` name. Dependencies must
+reference existing step IDs, and definitions must not contain cycles.
+
+<code-snippet name="Flow step executor" lang="php">
+use Webong\WorkFlow\Contracts\FlowStepExecutor;
+use Webong\WorkFlow\ValueObjects\FlowStepDefinition;
+use Webong\WorkFlow\ValueObjects\FlowStepInvocation;
+use Webong\WorkFlow\ValueObjects\StepResult;
+
+$executor = new class implements FlowStepExecutor {
+    public function supports(FlowStepDefinition $step): bool
+    {
+        return $step->id === 'authorize';
+    }
+
+    public function execute(FlowStepInvocation $invocation): StepResult
+    {
+        // Bindings declared on the step definition arrive resolved; read
+        // them from the invocation, never from metadata.
+        $order = $invocation->input->get('order');
+
+        return StepResult::completed('Channel authorized.');
+    }
+};
+</code-snippet>
+
+Executors may return `completed`, `failed`, `skipped`, `pending`, or `deferred`
+results. The host decides whether to run them synchronously or dispatch them to
+a queue.
+
+## Deferred callbacks and concurrency
+
+Return `StepResult::deferred()` for operations completed by a webhook or other
+external callback. Construct a `FlowDeferredCompletion` with the flow key, step
+ID, run ID, original attempt number, stable event ID, and callback result. The
+executor context's `_workflow` entry supplies outbound correlation values.
+Apply it using the saved run definition through
+`FlowStateTransition::complete()` and persist the result inside
+`AtomicFlowStateStore::mutate()`.
+
+An exact duplicate is a no-op; a conflicting payload or stale attempt is
+rejected. Resume explicitly after completion; a waiting deferred step is not
+re-executed. Preserve old run records for the provider's callback retry window.
+
+Never perform a callback transition as an unlocked `get()` followed by `put()`;
+that can lose a concurrent update. The database adapter uses a transaction and
+`lockForUpdate()`. The Redis adapter locks the complete deserialize,
+transition, and serialize/write cycle.
+
+## Laravel adapter
+
+Install `webong/workflow-laravel` to use the adapter under `pkg/Laravel`. Its
+manifest owns provider discovery; core alone registers no Laravel provider.
+Inject `FlowStateStoreFactory` rather than resolving a concrete adapter. Build a
+neutral subject from an Eloquent model only at the Laravel boundary:
+
+<code-snippet name="Create a subject-bound Laravel store" lang="php">
+use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
+use Webong\WorkFlow\Services\RunScopedFlowStateStore;
+use Webong\WorkFlow\ValueObjects\FlowStateSubject;
+
+$store = new RunScopedFlowStateStore($factory->for(new FlowStateSubject(
+    type: $model->getMorphClass(),
+    id: (string) $model->getKey(),
+)), $runId);
+</code-snippet>
+
+Publish the config and migrations before using the Eloquent store. The
+polymorphic subject columns and flow key are jointly unique. Use the Redis
+adapter only with a lock-capable cache store, and leave TTL unset unless state
+expiration is explicitly part of the application's lifecycle.
+
+## Temporal adapter
+
+Install `webong/workflow-temporal` to load the adapter under `pkg/Temporal` and
+its required Temporal SDK. Keep Temporal Workflow code deterministic:
+`TemporalFlowWorkflow` may evaluate definitions and state, await timers, and
+receive Signals, but HTTP, database, Redis, and other side effects must run in
+`TemporalFlowActivity` through host-provided `FlowStepExecutor` instances.
+
+Use `TemporalFlowIdentity` for stable subject/flow/run Workflow IDs,
+`TemporalFlowInput` for serializable workflow arguments, and
+`TemporalFlowCompletion` for deferred callback Signal payloads. Temporal event
+history is the source of truth; do not use the Laravel state stores for
+read-modify-write inside a Temporal Workflow. Project state to those stores only
+from Activities or application listeners. The adapter disables Temporal's
+default Activity retry loop; let `FlowRetryPolicy` own step retries. In Laravel,
+read `config('work-flow.temporal')` for the address, namespace, task queue, and
+feature flag, while the host application owns SDK client and worker bootstrap.
+Use `config('work-flow.execution.default')` to choose the initial driver, then
+keep the recorded `execution_driver` unchanged for the lifetime of the flow.
+Persist driver selection before dispatch under the host's concurrency policy;
+a receipt snapshot must not overwrite state already advanced by a worker.
+
+## Actions and failures
+
+Provide a host `FlowActionAuthorizer` to `FlowActionDispatcher`; action
+visibility is not authorization. Route private exceptions through
+`FlowFailureReporter`, and keep explicit `StepResult` messages safe to show.
+Use idempotent retry policies with bounded attempts. Side effects execute
+outside storage locks under the host's claim/outbox and delivery strategy.
+
+## Authoring and validation
+
+Check a definition before starting it. `FlowDefinitionValidator` accepts the
+canonical document (or a `FlowDefinition`) plus optional executors and optional
+granted capabilities, and returns a `FlowValidationReport` instead of throwing:
+
+```php
+use Webong\WorkFlow\Services\FlowDefinitionValidator;
+
+$report = (new FlowDefinitionValidator($executors, ['approval']))
+    ->validate($definition->toArray());
+
+$report->isValid();      // false when any error-severity diagnostic exists
+$report->diagnostics;    // FlowDiagnostic[] with code, path, severity, details
+```
+
+The same module backs the `workflow` CLI and the `flow.validate` JSON-RPC
+method, so never reimplement the rules in a client or an adapter:
+
+- `bin/workflow validate flow.json --executors=executors.php --capabilities=approval`
+- `bin/workflow inspect flow.json ...` adds bindings and operation descriptors
+- `bin/workflow operations --executors=executors.php` lists the host catalog
+- `--json` emits the same object as `flow.validate`
+- exit codes: `0` valid, `1` invalid/unparseable, `2` usage or input error
+
+`flow.validate` is pure: the definition travels in the request, need not be
+registered, and no store or executor runs. Diagnostics use stable codes and
+RFC 6901 JSON Pointer paths. Missing host context is reported rather than
+hidden: no executors yields `operations_unchecked`; no capabilities yields
+`capabilities_unchecked` when a requirement exists. Both are warnings.
+
+Node, Python, and Go contracts are generated from `tools/contracts.php` with
+`composer types`: `types/work-flow.d.ts`, `types/work_flow.py`, and
+`types/work_flow.go`. They carry types only; validation stays server-side. CI
+fails when the checked-in files drift. See `docs/authoring.md` for the full
+diagnostic table and a catalog-backed example.
+
+## Upgrade checks
+
+For an existing integration, read `docs/run-lifecycle.md` in the installed
+package before adopting run-aware storage. Preserve legacy rows, add callback
+run/attempt correlation, and verify a saved v1 run still completes after the
+host publishes v2. For RPC consumers, use `run_id` on all run operations and
+`attempt` on completion; use request IDs for mutations.
+
+## Validation
+
+Run all package validation in the PHP 8.3 container:
+
+<code-snippet name="Validate WorkFlow" lang="shell">
+make docker-test
+</code-snippet>
+
+This runs PHPUnit, PostgreSQL and Redis integration coverage, PHPStan, and
+generated Node, Python, and Go contract checks. Preserve the package's
+framework-agnostic boundary when adding Laravel conveniences.
