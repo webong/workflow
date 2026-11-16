@@ -1,0 +1,19 @@
+{
+    "name": "webong/workflow-temporal",
+    "description": "Temporal adapter for the independent WorkFlow engine.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "temporal/sdk": "^2.20",
+        "webong/workflow": "^0.1.0-rc.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webong\\WorkFlow\\Temporal\\": "./"
+        }
+    },
+    "suggest": {
+        "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter."
+    }
+}
