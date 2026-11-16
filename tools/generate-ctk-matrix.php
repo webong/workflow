@@ -14,7 +14,7 @@ use Webong\WorkFlow\OpenWorkflow\Conformance\CtkMatrixGenerator;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkParser;
 use Webong\WorkFlow\OpenWorkflow\Conformance\CtkRunner;
 
-$featuresDir = __DIR__ . '/../ext/OpenWorkflow/Conformance/features';
+$featuresDir = __DIR__ . '/../pkg/OpenWorkflow/Conformance/features';
 $matrixPath = __DIR__ . '/../docs/open-workflow-ctk-matrix.md';
 
 $scenarios = (new CtkParser())->parseDirectory($featuresDir);

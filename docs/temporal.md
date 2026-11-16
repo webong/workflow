@@ -2,7 +2,7 @@
 
 Use Temporal when you need its long-running workflow execution model. It is
 an execution runtime, **not** another implementation of `FlowStateStore`.
-The adapter in `ext/Temporal` is optional and does not alter the framework-
+The adapter in `pkg/Temporal` is optional and does not alter the framework-
 neutral core.
 
 ## What the adapter provides
@@ -17,7 +17,9 @@ neutral core.
 - The `snapshot` query exposes current state and a rejected-completion count
   without consulting an external state store.
 
-The host must install `temporal/sdk`, configure its client and worker,
+Install `webong/workflow-temporal` from its independent package archive
+([installation](packages.md)); it requires the Temporal SDK. The host must
+configure its client and worker,
 register the workflow and activity, and supply the SDK-specific start closure.
 This package does not launch a Temporal server, create a worker process, or
 automatically route individual steps there.

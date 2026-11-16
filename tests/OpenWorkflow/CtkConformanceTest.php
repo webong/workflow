@@ -24,7 +24,7 @@ use Webong\WorkFlow\OpenWorkflow\Conformance\CtkScenarioResult;
  */
 class CtkConformanceTest extends TestCase
 {
-    private const FEATURES_DIR = __DIR__ . '/../../ext/OpenWorkflow/Conformance/features';
+    private const FEATURES_DIR = __DIR__ . '/../../pkg/OpenWorkflow/Conformance/features';
     private const MATRIX_PATH = __DIR__ . '/../../docs/open-workflow-ctk-matrix.md';
 
     /** @var list<\Webong\WorkFlow\OpenWorkflow\Conformance\CtkScenario> */

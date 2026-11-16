@@ -59,6 +59,7 @@ repeated. Starting the process again uses a new run ID.
 
 For durable queue workers, leases, retries and broker delivery, see the [queue runtime guide](docs/queue.md).
 
+Independent [adapter packages](docs/packages.md) own their dependencies and discovery.
 Optional [Composer file projections](docs/composer-surfaces.md) retain selected PHP surfaces without changing package identity or dependencies. Normal installs remain complete.
 
 ## Choose your integration
@@ -78,7 +79,7 @@ Optional [Composer file projections](docs/composer-surfaces.md) retain selected 
 | Package development and testing | [Development guide](docs/development.md) |
 | CI platforms, downloadable artifacts, and Docker releases | [Distributions and releases](docs/releases.md) |
 
-Laravel and Temporal stay optional under `ext/`. The standalone JSON-RPC
+Laravel and Temporal stay optional under `pkg/`. The standalone JSON-RPC
 testing/reference service lives under `examples/standalone/` and accepts calls
 from trusted backends.
 Client-facing apps authenticate their users and authorize the subject before

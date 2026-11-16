@@ -1,16 +1,18 @@
 # Use WorkFlow in Laravel
 
-Laravel support is optional and lives in `ext/Laravel`. It adds state storage,
+Laravel support is optional and lives in `pkg/Laravel`. It adds state storage,
 not a ready-made application workflow or queue job. The framework-neutral
 definition, runner, and transition APIs are the same as in the
 [PHP guide](php-library.md).
 
 ## 1. Install and publish
 
-In your Laravel application:
+Install the independent `webong/workflow-laravel` package from a repository
+that provides its archive (see [package installation](packages.md)). In your
+Laravel application:
 
 ```sh
-composer require webong/workflow
+composer require webong/workflow-laravel
 php artisan vendor:publish --tag=work-flow-config
 php artisan vendor:publish --tag=work-flow-migrations
 php artisan migrate
@@ -19,9 +21,8 @@ php artisan migrate
 Laravel package discovery registers `WorkFlowServiceProvider`. The published
 config is `config/work-flow.php`. Publishing migrations creates the
 `workflow_states` polymorphic state table and the optional editable-definition
-tables. You do not need `spatie/eloquent-sortable` just to store flow state;
-install it only if you use `WorkflowStepDefinitionRecord` and its sortable
-step operations.
+tables. The adapter declares its Illuminate and Spatie dependencies. Core alone has
+no provider discovery declaration or Illuminate dependency.
 
 If your application runs PHP and Composer through Sail or another container,
 run these commands through that environment. The package itself requires PHP
@@ -185,7 +186,7 @@ compatible executor code available for old runs.
 ## Laravel Boost
 
 This package ships an optional Boost guideline and on-demand skill under
-`resources/boost/`. In a Laravel app that does not yet have Boost:
+`pkg/Laravel/resources/boost/`. In a Laravel app that does not yet have Boost:
 
 ```sh
 composer require laravel/boost --dev

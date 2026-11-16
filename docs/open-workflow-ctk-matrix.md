@@ -1,6 +1,6 @@
 # OWS Conformance Test Kit — adapter capability matrix
 
-Source: open-workflow-specification/specification@v1.0.3 (`ctk/features/*.feature`), vendored under `ext/OpenWorkflow/Conformance/features`.
+Source: open-workflow-specification/specification@v1.0.3 (`ctk/features/*.feature`), vendored under `pkg/OpenWorkflow/Conformance/features`.
 
 WorkFlow is a **limited OWS runtime**; this matrix is implementation evidence, not an external certification claim (ADR 0006).
 

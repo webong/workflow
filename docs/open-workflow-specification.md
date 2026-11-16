@@ -6,33 +6,20 @@ already have OWS JSON or YAML, while keeping WorkFlow's state stores and
 execution drivers unchanged.
 
 OWS is a definition format. It is not a queue, state store, or hosted workflow
-server. The adapter lives under `ext/OpenWorkflow`, but ships in the same
-`webong/workflow` Composer package.
+server. The adapter lives under `pkg/OpenWorkflow`, and is installed as the independent
+`webong/workflow-open-workflow` package.
 
 ## Install
 
-The core package is enough for JSON definitions:
+Install the independent adapter from a repository providing its archive; see
+[package installation](packages.md).
 
 ```sh
-composer require webong/workflow
+composer require webong/workflow-open-workflow
 ```
 
-For YAML definitions, also install the optional parser:
-
-```sh
-composer require symfony/yaml
-```
-
-The expression engine prefers a system `jq` binary when one is available and
-falls back to the included pure-PHP `wikimedia/zest-jq` backend. Production
-hosts should install `jq` when they need its broader expression support.
-
-For `call: http` or `call: openapi`, provide a PSR-18 client and PSR-17
-request/stream factory. For example:
-
-```sh
-composer require guzzlehttp/guzzle guzzlehttp/psr7
-```
+The adapter declares core, PSR HTTP, YAML and jq dependencies. Install a PSR-18
+HTTP client when using HTTP/OpenAPI operations.
 
 ## Validate and translate a definition
 

@@ -31,46 +31,39 @@ function check(bool $condition, string $message): void
     if (! $condition) { throw new RuntimeException($message); }
 }
 
-// A ZIP of the current worktree's publishable files, not a path symlink and not
-// a stale HEAD archive. A synthetic fixture version is the only metadata change.
-$manifest = json_decode(file_get_contents($root . '/composer.json'), true, flags: JSON_THROW_ON_ERROR);
-$manifest['version'] = '999.0.0';
-$zip = new ZipArchive();
-check($zip->open($lab . '/artifacts/workflow.zip', ZipArchive::CREATE) === true, 'Cannot create archive');
-$files = explode("\0", command(['git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], $root));
-foreach ($files as $file) {
-    if ($file !== '' && is_file($root . '/' . $file) && $file !== 'composer.json') {
-        $zip->addFile($root . '/' . $file, 'workflow/' . $file);
-        $zip->setExternalAttributesName('workflow/' . $file, ZipArchive::OPSYS_UNIX, fileperms($root . '/' . $file) << 16);
-    }
-}
-$zip->addFromString('workflow/composer.json', json_encode($manifest, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
-$zip->close();
+// Test the same archives that an external artifact repository can distribute.
+$version = '0.1.0-rc.999';
+command([PHP_BINARY, $root . '/tools/package-composer.php', $lab . '/artifacts', $version], $root);
 
 $cases = [
     'full' => null,
     'core' => ['core'],
-    'laravel' => ['laravel'],
-    'temporal' => ['temporal'],
-    'open-workflow' => ['open-workflow'],
-    'combined' => ['laravel', 'temporal', 'open-workflow'],
+    'core-minimal' => ['core'],
+    'laravel' => ['core'],
+    'temporal' => ['core'],
+    'open-workflow' => ['core'],
+    'combined' => ['core'],
 ];
 foreach ($cases as $case => $surfaces) {
     echo "Installing $case consumer...\n";
     $directory = $lab . '/' . $case;
     mkdir($directory);
-    $require = ['php' => '^8.3', 'webong/workflow' => '999.0.0'];
-    // Even core is installed into a real Laravel host: its advertised provider
-    // must remain discoverable without registering a deleted integration.
+    $require = ['php' => '^8.3', 'webong/workflow' => $version];
+    // A real Laravel host must discover the adapter only when installed.
     if (in_array($case, ['full', 'core', 'laravel', 'combined'], true)) {
         $require['laravel/framework'] = '^12.0';
     }
-    if (in_array($case, ['full', 'laravel', 'combined'], true)) {
-        $require['spatie/eloquent-sortable'] = '^4.2';
+    foreach (['laravel', 'temporal', 'open-workflow'] as $adapter) {
+        if ($case === $adapter || $case === 'combined') {
+            $require['webong/workflow-' . $adapter] = $version;
+            unset($require['webong/workflow']);
+        }
     }
     if ($surfaces !== null) { $require['webong/composer-source-plugin'] = '0.4.0'; }
     $consumer = [
         'name' => 'workflow-test/' . $case,
+        'minimum-stability' => 'RC',
+        'prefer-stable' => true,
         'require' => $require,
         'repositories' => [['type' => 'artifact', 'url' => $lab . '/artifacts']],
         'config' => ['allow-plugins' => ['webong/composer-source-plugin' => true]],
@@ -107,5 +100,22 @@ foreach ($cases as $case => $surfaces) {
         echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $disabled, 'full'], $disabled);
     }
 }
-echo "PASS: full install, five projections, lock replay, no-plugins, authoritative autoload and installed CLI\n";
+// The previous monolithic core cannot coexist with split adapter ownership.
+$legacy = $lab . '/old-core'; mkdir($legacy);
+$legacyRoot = [
+    'name' => 'workflow-test/old-core',
+    'require' => ['webong/workflow' => '0.1.0-rc.2', 'webong/workflow-laravel' => $version],
+    'repositories' => [
+        ['type' => 'package', 'package' => ['name' => 'webong/workflow', 'version' => '0.1.0-rc.2', 'type' => 'metapackage']],
+        ['type' => 'artifact', 'url' => $lab . '/artifacts'],
+    ],
+];
+file_put_contents($legacy . '/composer.json', json_encode($legacyRoot, JSON_THROW_ON_ERROR));
+try {
+    composer($legacy, 'update', '--dry-run', '--no-plugins');
+    throw new RuntimeException('Split adapter incorrectly accepted the old monolithic core');
+} catch (RuntimeException $error) {
+    check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.3'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
+}
+echo "PASS: independent package archives, core projection, minimal core, adapter combinations, lock replay and installed CLI\n";
 echo "Consumer artifacts: $lab\n";

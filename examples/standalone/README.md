@@ -9,13 +9,17 @@ Use this module when a **trusted backend** needs to start and inspect flows
 over HTTP instead of embedding the PHP library. A Go server embeds FrankenPHP
 and exposes JSON-RPC 2.0; PHP owns definitions, execution, and transitions.
 The included bootstrap can store state in PostgreSQL, MySQL, or SQLite. This
-is a separate deployment under `examples/standalone/`, not an `ext/` adapter.
+is a separate deployment under `examples/standalone/`, not an adapter package.
 
 The single `workflowd` process serves `/rpc` and `/healthz`. Its Docker image
 includes the PHP 8.3 runtime and package code; the binary is not a standalone
 static executable and needs the compatible FrankenPHP/PHP shared libraries.
 CI builds and smoke-tests the image on Linux AMD64 and ARM64; version tags
 publish it to GHCR. See [distributions and releases](../../docs/releases.md).
+
+The image installs core through this example's consumer manifest. Add an
+independent adapter package to that manifest when enabling adapter-specific
+features; see [package installation](../../docs/packages.md).
 
 ## Run the example locally
 

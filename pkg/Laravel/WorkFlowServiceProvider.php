@@ -19,11 +19,6 @@ final class WorkFlowServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // This advertised provider remains in every Composer projection. An
-        // unselected Laravel payload must be a valid, inert discovery target.
-        if (! is_file(__DIR__ . '/LaravelFlowStateStoreFactory.php')) {
-            return;
-        }
         $this->mergeConfigFrom(__DIR__ . '/config/work-flow.php', 'work-flow');
 
         $this->app->singleton(FlowStateSerializer::class, DefaultFlowStateSerializer::class);
@@ -79,9 +74,6 @@ final class WorkFlowServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        if (! is_file(__DIR__ . '/LaravelFlowStateStoreFactory.php')) {
-            return;
-        }
         $configPath = $this->app->make('path.config');
         $databasePath = $this->app->make('path.database');
 

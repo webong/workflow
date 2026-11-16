@@ -80,7 +80,8 @@ and metadata are public-facing values.
 
 ## Optional Laravel integration
 
-The Laravel provider and adapters are optional and live under `ext/Laravel`. In
+Install `webong/workflow-laravel` for the provider and adapters under
+`pkg/Laravel`. The adapter owns discovery; core alone registers no provider. In
 a Laravel host:
 
 1. Publish the WorkFlow config and migrations, then run `php artisan migrate`.
@@ -99,8 +100,8 @@ mutations use row locks; Redis mutations use an atomic distributed lock.
 
 ## Optional Temporal integration
 
-The repository includes an optional adapter under `ext/Temporal`. Install
-`temporal/sdk` only in a host that uses Temporal. `TemporalFlowWorkflow` owns
+Install `webong/workflow-temporal` for the adapter under `pkg/Temporal`; its
+manifest requires the Temporal SDK. `TemporalFlowWorkflow` owns
 deterministic orchestration, while `TemporalFlowActivity` delegates side
 effects to host-provided `FlowStepExecutor` instances. Use
 `TemporalFlowCompletion` as the serialized payload for the workflow's

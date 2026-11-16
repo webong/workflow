@@ -8,7 +8,7 @@ and HTTP smoke tests live in `examples/standalone`. PHP classes use
 The unreleased source layout removes `app/`, `Webong\WorkFlow\App` and the
 Composer `app` surface. There are no aliases, forwarding files or compatibility
 Docker/Compose entrypoints. Use a full installation or repository checkout for
-the example; the four PHP projections intentionally exclude it.
+the example; the core projection intentionally excludes it.
 
 The authoring CLI lives at `src/Authoring/FlowAuthoringCli.php` under
 `Webong\WorkFlow\Authoring`. `bin/workflow` remains available in core.

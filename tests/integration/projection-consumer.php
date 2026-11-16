@@ -26,15 +26,30 @@ $full = $case === 'full';
 ensure(! is_dir($package . '/app'), 'Removed app directory is still shipped');
 ensure(! class_exists('Webong\\WorkFlow\\App\\FlowRpcApplication'), 'Removed App namespace is still available');
 ensure(! class_exists('Webong\\WorkFlow\\App\\FlowAuthoringCli'), 'Removed CLI namespace alias is still available');
-$laravel = $full || in_array($case, ['laravel', 'combined'], true);
-$temporal = $full || in_array($case, ['temporal', 'combined'], true);
-$ows = $full || in_array($case, ['open-workflow', 'combined'], true);
+$laravel = in_array($case, ['laravel', 'combined'], true);
+$temporal = in_array($case, ['temporal', 'combined'], true);
+$ows = in_array($case, ['open-workflow', 'combined'], true);
 $example = $full;
-foreach (['LICENSE', 'README.md', 'bin/workflow', 'src/Authoring/FlowAuthoringCli.php', 'ext/Laravel/WorkFlowServiceProvider.php'] as $path) {
+foreach (['LICENSE', 'README.md', 'bin/workflow', 'src/Authoring/FlowAuthoringCli.php'] as $path) {
     ensure(is_file($package . '/' . $path), "$case: missing advertised/core file $path");
 }
-foreach (['ext/Laravel/LaravelFlowStateStoreFactory.php' => $laravel, 'ext/Temporal/TemporalFlowInput.php' => $temporal, 'ext/OpenWorkflow/OpenWorkflow.php' => $ows, 'examples/standalone/src/FlowRpcApplication.php' => $example, 'mod/typephp/composer.json' => $full] as $path => $expected) {
-    ensure(is_file($package . '/' . $path) === $expected, "$case: incorrect projected presence for $path");
+ensure(! is_dir($package . '/pkg'), 'Core archive contains adapter payloads');
+foreach (['workflow-laravel' => $laravel, 'workflow-temporal' => $temporal, 'workflow-open-workflow' => $ows] as $name => $expected) {
+    $adapterRoot = $consumer . '/vendor/webong/' . $name;
+    ensure(is_dir($adapterRoot) === $expected, 'Incorrect independent package presence: ' . $name);
+    if ($expected) {
+        ensure(! is_link($adapterRoot) && is_file($adapterRoot . '/LICENSE'), 'Adapter is not an independent licensed dist: ' . $name);
+    }
+}
+ensure(is_file($package . '/examples/standalone/src/FlowRpcApplication.php') === $example, 'Incorrect example payload');
+if ($case === 'core-minimal') {
+    foreach (['illuminate/support', 'psr/http-message', 'wikimedia/zest-jq', 'temporal/sdk'] as $dependency) {
+        ensure(! Composer\InstalledVersions::isInstalled($dependency), 'Core pulled adapter dependency: ' . $dependency);
+    }
+}
+ensure(class_exists(Webong\WorkFlow\Laravel\WorkFlowServiceProvider::class) === $laravel, 'Core still exposes a Laravel discovery stub');
+if ($laravel) {
+    ensure(is_file($consumer . '/vendor/webong/workflow-laravel/resources/boost/skills/work-flow-development/SKILL.md'), 'Laravel package lost Boost resources');
 }
 ensure(class_exists(Webong\WorkFlow\Authoring\FlowAuthoringCli::class), 'Advertised CLI class unavailable');
 ensure(class_exists(Webong\WorkFlow\Temporal\TemporalFlowInput::class) === $temporal, 'Temporal autoload mismatch');
@@ -51,11 +66,16 @@ $finished = (new FlowRunner())->run($definition, $run->initialState(), new Array
 ensure($finished->status === FlowStatus::COMPLETED && $finished->steps['first']->output?->value === 42, 'Installed core cannot execute a flow');
 
 if ($temporal) {
+    ensure(interface_exists(Webong\WorkFlow\Temporal\TemporalFlowActivityInterface::class), 'Real Temporal SDK activity interface cannot load');
+    $attributes = (new ReflectionClass(Webong\WorkFlow\Temporal\TemporalFlowWorkflow::class))->getAttributes(Temporal\Workflow\WorkflowInterface::class);
+    ensure(count($attributes) === 1 && $attributes[0]->newInstance() instanceof Temporal\Workflow\WorkflowInterface, 'Temporal SDK workflow metadata cannot load');
     $handler = new Webong\WorkFlow\Temporal\TemporalFlowActivityHandler([$executor]);
     $result = $handler->execute(['definition' => $definition->toArray(), 'step_id' => 'first']);
     ensure($result['status'] === 'completed' && $result['output'] === 42, 'Temporal SDK-neutral activity closure failed');
 }
 if ($ows) {
+    $yaml = Webong\WorkFlow\OpenWorkflow\ValueObjects\OwsDocument::fromYaml("version: '1.0.3'\ndocument: {namespace: com.example, name: yaml, version: '1.0.0'}\ndo: []\n");
+    ensure($yaml->all()['version'] === '1.0.3', 'Declared YAML dependency is unavailable');
     $adapter = new Webong\WorkFlow\OpenWorkflow\OpenWorkflow();
     $report = $adapter->registerOwsDefinition(json_encode([
         'version' => '1.0.3', 'document' => ['namespace' => 'com.example', 'name' => 'projection', 'version' => '1.0.0'],
@@ -70,8 +90,8 @@ if ($ows) {
         $activityResult = $owsActivity->execute(['definition' => $report->flowDefinition->toArray(), 'step_id' => 'first', 'state' => $owsRun->initialState()->toArray()]);
         ensure($activityResult['status'] === 'completed' && $activityResult['output'] === ['answer' => 42], 'Combined Temporal/OWS context restoration failed');
     }
-    ensure(is_file($package . '/ext/OpenWorkflow/Validation/workflow-1.0.3.json'), 'OWS schema pruned');
-    ensure(is_file($package . '/ext/OpenWorkflow/Conformance/features/set.feature'), 'OWS conformance resources pruned');
+    ensure(is_file($consumer . '/vendor/webong/workflow-open-workflow/Validation/workflow-1.0.3.json'), 'OWS schema pruned');
+    ensure(is_file($consumer . '/vendor/webong/workflow-open-workflow/Conformance/features/set.feature'), 'OWS conformance resources pruned');
 }
 if ($example) {
     // Test an installed dependency, where the example has no nested vendor/.
@@ -109,7 +129,7 @@ if (class_exists(Illuminate\Foundation\Application::class)) {
     $manifest = new Illuminate\Foundation\PackageManifest(new Illuminate\Filesystem\Filesystem(), $consumer, $consumer . '/bootstrap/cache/packages.php');
     $manifest->build();
     $provider = Webong\WorkFlow\Laravel\WorkFlowServiceProvider::class;
-    ensure(in_array($provider, $manifest->providers(), true), 'Existing Laravel discovery name changed or disappeared');
+    ensure(in_array($provider, $manifest->providers(), true) === $laravel, 'Laravel discovery is not owned by the adapter');
     $application = new Illuminate\Foundation\Application($consumer);
     $application->instance('config', new Illuminate\Config\Repository([
         'app' => ['providers' => []],
@@ -125,7 +145,7 @@ if (class_exists(Illuminate\Foundation\Application::class)) {
     ensure(($published !== []) === $laravel, 'Discovery exposed pruned resources or lost original publication ownership');
     foreach (array_keys($published) as $path) { ensure(is_file($path), 'Provider publishes a deleted resource'); }
     if ($laravel) {
-        foreach (glob($package . '/ext/Laravel/database/migrations/*.php') as $path) { (require $path)->up(); }
+        foreach (glob($consumer . '/vendor/webong/workflow-laravel/database/migrations/*.php') as $path) { (require $path)->up(); }
         $store = $application->make(FlowStateStoreFactory::class)->for(new FlowStateSubject('projection-order', '42'));
         $store->put('consumer', $finished);
         ensure($store->get('consumer')?->status === FlowStatus::COMPLETED, 'Projected Laravel database store failed');

@@ -2,18 +2,19 @@
 
 ## Unreleased
 
+- Moved adapters from `ext/` to `pkg/` as independent Laravel, OpenWorkflow and
+  Temporal Composer packages. Core no longer owns their dependencies, autoloading
+  or Laravel discovery. Added independent ZIP packaging and external install tests.
+
 - Moved the standalone testing/reference host to `examples/standalone` with the
   `Webong\\WorkFlow\\Examples\\Standalone` namespace. Removed the old `app/`
   paths, App namespace and Composer `app` surface without compatibility shims.
   Moved the authoring CLI to `src/Authoring`. This is an unreleased source change;
   existing tags and deployments are unchanged.
 
-- Declared self-contained Composer Source Plugin surfaces for core, Laravel,
-  Temporal and Open Workflow, retaining the installed authoring CLI and the
-  existing Laravel discovery name. Full installations stay unchanged.
-- Made Laravel discovery inert when its payload is pruned and its OWS binding
-  conditional on the selected adapter. Added real Composer consumer/projection
-  checks, authoritative autoloading and Laravel discovery/store regressions.
+- Kept an optional core Composer file projection with the installed authoring
+  CLI. External package/projection checks cover authoritative autoloading,
+  independent Laravel discovery/store, real SDK metadata and adapter resources.
 
 - Fixed queue worker readiness on Compose 2.x with an explicit read-only queue
   database health check instead of disabling the inherited HTTP probe.

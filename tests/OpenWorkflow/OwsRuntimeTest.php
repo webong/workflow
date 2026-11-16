@@ -27,7 +27,7 @@ use Webong\WorkFlow\ValueObjects\FlowState;
  */
 class OwsRuntimeTest extends TestCase
 {
-    private const FEATURES_DIR = __DIR__ . '/../../ext/OpenWorkflow/Conformance/features';
+    private const FEATURES_DIR = __DIR__ . '/../../pkg/OpenWorkflow/Conformance/features';
 
     private OpenWorkflow $openWorkflow;
 

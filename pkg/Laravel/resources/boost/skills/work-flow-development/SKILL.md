@@ -86,8 +86,8 @@ transition, and serialize/write cycle.
 
 ## Laravel adapter
 
-The Laravel integration is optional, lives under `ext/Laravel`, and is
-registered by package discovery.
+Install `webong/workflow-laravel` to use the adapter under `pkg/Laravel`. Its
+manifest owns provider discovery; core alone registers no Laravel provider.
 Inject `FlowStateStoreFactory` rather than resolving a concrete adapter. Build a
 neutral subject from an Eloquent model only at the Laravel boundary:
 
@@ -109,8 +109,8 @@ expiration is explicitly part of the application's lifecycle.
 
 ## Temporal adapter
 
-The optional Temporal integration lives under `ext/Temporal` and is loaded only
-when the host installs `temporal/sdk`. Keep Temporal Workflow code deterministic:
+Install `webong/workflow-temporal` to load the adapter under `pkg/Temporal` and
+its required Temporal SDK. Keep Temporal Workflow code deterministic:
 `TemporalFlowWorkflow` may evaluate definitions and state, await timers, and
 receive Signals, but HTTP, database, Redis, and other side effects must run in
 `TemporalFlowActivity` through host-provided `FlowStepExecutor` instances.

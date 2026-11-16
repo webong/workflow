@@ -4,42 +4,23 @@
     "type": "library",
     "license": "MIT",
     "require": {
-        "php": "^8.3 || ^8.4 || ^8.5",
-        "psr/http-client": "^1.0",
-        "psr/http-factory": "^1.1",
-        "psr/http-message": "^2.0",
-        "wikimedia/zest-jq": "^1.1"
+        "php": "^8.3 || ^8.4 || ^8.5"
     },
     "require-dev": {
         "guzzlehttp/psr7": "^3.2",
-        "illuminate/cache": "^12.0",
-        "illuminate/database": "^12.0",
-        "illuminate/events": "^12.0",
         "illuminate/redis": "^12.0",
         "justinrainbow/json-schema": "^5.2",
         "paneon/php-to-typescript": "^2.3",
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
-        "spatie/eloquent-sortable": "^4.2",
-        "symfony/yaml": "^7.0",
-        "webong/composer-source-plugin": "^0.4"
-    },
-    "suggest": {
-        "illuminate/cache": "Required to use the optional Laravel Redis WorkFlow store.",
-        "illuminate/database": "Required to use the optional Laravel Eloquent WorkFlow store.",
-        "illuminate/support": "Required to register the optional Laravel WorkFlow service provider.",
-        "spatie/eloquent-sortable": "Required to persist and reorder optional Laravel Eloquent workflow definition steps.",
-        "temporal/sdk": "Required to use the optional Temporal WorkFlow adapter.",
-        "guzzlehttp/guzzle": "PSR-18 client for the optional OWS HTTP/OpenAPI executor.",
-        "php-http/curl-client": "Alternative PSR-18 client for the optional OWS HTTP/OpenAPI executor.",
-        "symfony/yaml": "Required when Open Workflow Specification definitions are supplied as YAML instead of JSON."
+        "webong/composer-source-plugin": "^0.4",
+        "webong/workflow-laravel": "@dev",
+        "webong/workflow-open-workflow": "@dev",
+        "webong/workflow-temporal": "@dev"
     },
     "autoload": {
         "psr-4": {
             "Webong\\WorkFlow\\": "src/",
-            "Webong\\WorkFlow\\Laravel\\": "ext/Laravel/",
-            "Webong\\WorkFlow\\Temporal\\": "ext/Temporal/",
-            "Webong\\WorkFlow\\OpenWorkflow\\": "ext/OpenWorkflow/",
             "Webong\\WorkFlow\\Examples\\Standalone\\": "examples/standalone/src/"
         }
     },
@@ -52,11 +33,6 @@
         "bin/workflow"
     ],
     "extra": {
-        "laravel": {
-            "providers": [
-                "Webong\\WorkFlow\\Laravel\\WorkFlowServiceProvider"
-            ]
-        },
         "source-plugin": {
             "surfaces": {
                 "core": {
@@ -68,78 +44,19 @@
                         "CONTEXT.md",
                         "src/**",
                         "bin/workflow",
-                        "ext/Laravel/WorkFlowServiceProvider.php",
                         "types/**",
                         "docs/php-library.md",
                         "docs/run-lifecycle.md",
                         "docs/authoring.md",
                         "docs/composer-surfaces.md",
-                        "docs/standalone-example.md"
-                    ]
-                },
-                "laravel": {
-                    "include": [
-                        "composer.json",
-                        "LICENSE",
-                        "README.md",
-                        "CHANGELOG.md",
-                        "CONTEXT.md",
-                        "src/**",
-                        "bin/workflow",
-                        "ext/Laravel/WorkFlowServiceProvider.php",
-                        "types/**",
-                        "docs/php-library.md",
-                        "docs/run-lifecycle.md",
-                        "docs/authoring.md",
-                        "docs/composer-surfaces.md",
-                        "ext/Laravel/**",
-                        "resources/boost/**",
-                        "docs/laravel.md",
-                        "docs/standalone-example.md"
-                    ]
-                },
-                "temporal": {
-                    "include": [
-                        "composer.json",
-                        "LICENSE",
-                        "README.md",
-                        "CHANGELOG.md",
-                        "CONTEXT.md",
-                        "src/**",
-                        "bin/workflow",
-                        "ext/Laravel/WorkFlowServiceProvider.php",
-                        "types/**",
-                        "docs/php-library.md",
-                        "docs/run-lifecycle.md",
-                        "docs/authoring.md",
-                        "docs/composer-surfaces.md",
-                        "ext/Temporal/**",
-                        "docs/temporal.md",
-                        "docs/standalone-example.md"
-                    ]
-                },
-                "open-workflow": {
-                    "include": [
-                        "composer.json",
-                        "LICENSE",
-                        "README.md",
-                        "CHANGELOG.md",
-                        "CONTEXT.md",
-                        "src/**",
-                        "bin/workflow",
-                        "ext/Laravel/WorkFlowServiceProvider.php",
-                        "types/**",
-                        "docs/php-library.md",
-                        "docs/run-lifecycle.md",
-                        "docs/authoring.md",
-                        "docs/composer-surfaces.md",
-                        "ext/OpenWorkflow/**",
-                        "docs/open-workflow-specification.md",
-                        "docs/open-workflow-ctk-matrix.md",
-                        "docs/standalone-example.md"
+                        "docs/standalone-example.md",
+                        "docs/packages.md"
                     ]
                 }
             }
+        },
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
         }
     },
     "scripts": {
@@ -149,7 +66,8 @@
             "php tools/generate-clients.php"
         ],
         "analyse": "vendor/bin/phpstan analyse --no-progress --memory-limit=512M",
-        "test:projections": "bash tests/integration/composer-surfaces.sh"
+        "test:projections": "bash tests/integration/composer-surfaces.sh",
+        "package:composer": "php tools/package-composer.php"
     },
     "config": {
         "sort-packages": true,
@@ -164,5 +82,19 @@
                 ]
             }
         }
-    }
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "pkg/*",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "webong/workflow-laravel": "dev-main",
+                    "webong/workflow-open-workflow": "dev-main",
+                    "webong/workflow-temporal": "dev-main"
+                }
+            }
+        }
+    ]
 }

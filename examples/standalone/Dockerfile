@@ -20,9 +20,9 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /app
 COPY composer.json ./
 COPY src ./src
-COPY ext ./ext
+COPY pkg ./pkg
 COPY examples/standalone ./examples/standalone
-RUN composer install --no-dev --no-interaction --prefer-dist --no-scripts --optimize-autoloader
+RUN composer install --working-dir=examples/standalone --no-dev --no-plugins --no-interaction --prefer-dist --no-scripts --classmap-authoritative
 
 COPY --from=go-builder /usr/local/bin/workflowd /usr/local/bin/workflowd
 

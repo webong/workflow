@@ -1,0 +1,21 @@
+{
+    "name": "webong/workflow-standalone-example",
+    "description": "Local standalone reference host for WorkFlow.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "webong/workflow": "@dev"
+    },
+    "repositories": [
+        {
+            "type": "path",
+            "url": "../..",
+            "options": {
+                "symlink": true,
+                "versions": {
+                    "webong/workflow": "dev-main"
+                }
+            }
+        }
+    ]
+}

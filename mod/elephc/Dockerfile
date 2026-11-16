@@ -39,7 +39,8 @@ COPY mod/elephc ./mod/elephc
 COPY composer.json composer.lock ./
 COPY LICENSE ./LICENSE
 COPY --from=reference /build/php83-cases.json /build/php83-cases.json
-RUN composer install --no-interaction --prefer-dist --no-scripts
+# The native entrypoint needs only core autoloading, not adapter development packages.
+RUN composer dump-autoload --no-dev --no-scripts --classmap-authoritative
 RUN sh mod/elephc/build.sh
 RUN python3 mod/elephc/package.py
 

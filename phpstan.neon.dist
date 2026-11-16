@@ -2,13 +2,13 @@ parameters:
     level: 9
     paths:
         - src
-        - ext/Laravel
-        - ext/Temporal/TemporalCompletionInbox.php
-        - ext/Temporal/TemporalFlowActivityHandler.php
-        - ext/Temporal/TemporalFlowCompletion.php
-        - ext/Temporal/TemporalFlowExecutionDriver.php
-        - ext/Temporal/TemporalFlowIdentity.php
-        - ext/Temporal/TemporalFlowInput.php
+        - pkg/Laravel
+        - pkg/Temporal/TemporalCompletionInbox.php
+        - pkg/Temporal/TemporalFlowActivityHandler.php
+        - pkg/Temporal/TemporalFlowCompletion.php
+        - pkg/Temporal/TemporalFlowExecutionDriver.php
+        - pkg/Temporal/TemporalFlowIdentity.php
+        - pkg/Temporal/TemporalFlowInput.php
         - examples/standalone/src
         - mod/native/php/NativeFlow.php
         - mod/native/php/api.php

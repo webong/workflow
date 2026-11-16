@@ -149,7 +149,7 @@ The kernel has extension seams, but is not runtime-neutral in WorkFlow's sense:
 its manifest declares Temporal peer dependencies, its activities are shaped
 around Temporal proxies, and it ships Temporal bindings. WorkFlow should retain
 framework-neutral coordination in `src/` and optional Temporal integration in
-`ext/Temporal`. [Kernel
+`pkg/Temporal`. [Kernel
 manifest](https://github.com/graph-compose/execution-kernel/blob/main/package.json),
 [Temporal bindings](https://github.com/graph-compose/execution-kernel#temporal-bindings).
 
