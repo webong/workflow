@@ -116,6 +116,10 @@ final class CtkMatrixGenerator
     {
         $root = realpath(dirname(__DIR__, 3)) . DIRECTORY_SEPARATOR;
         $real = realpath($path);
+        // Workspace mirrors must produce the same report as a source checkout.
+        if ($real !== false && preg_match('~/(?:pkg/OpenWorkflow|workflow-open-workflow)/Conformance/(.+)$~', str_replace(DIRECTORY_SEPARATOR, '/', $real), $match) === 1) {
+            return 'pkg/OpenWorkflow/Conformance/' . $match[1];
+        }
         if ($real !== false && str_starts_with($real, $root)) {
             return str_replace(DIRECTORY_SEPARATOR, '/', substr($real, strlen($root)));
         }
