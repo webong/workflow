@@ -1,0 +1,440 @@
+{
+    "packages": {
+        "webong/workflow-conditions": {
+            "dev-main": {
+                "name": "webong/workflow-conditions",
+                "description": "Compiled rule/jq conditions, boolean composition and opt-in flow guards.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "illuminate/translation": "^12.0",
+                    "illuminate/validation": "^12.0",
+                    "webong/workflow": "^0.1.0-rc.2",
+                    "webong/workflow-jq": "@dev",
+                    "webong/workflow-rules": "@dev"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Conditions\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "dev-main",
+                "time": "2026-11-19T02:27:36+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "666957dc3c211a9b27bd13f9dfaf49b098eac146"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/666957dc3c211a9b27bd13f9dfaf49b098eac146",
+                    "reference": "666957dc3c211a9b27bd13f9dfaf49b098eac146",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-conditions",
+                "description": "Compiled rule/jq conditions, boolean composition and opt-in flow guards.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "illuminate/translation": "^12.0",
+                    "illuminate/validation": "^12.0",
+                    "webong/workflow": "^0.1.0-rc.2",
+                    "webong/workflow-jq": "^0.1.0-rc.3",
+                    "webong/workflow-rules": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Conditions\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-19T02:27:36+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "666957dc3c211a9b27bd13f9dfaf49b098eac146"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/666957dc3c211a9b27bd13f9dfaf49b098eac146",
+                    "reference": "666957dc3c211a9b27bd13f9dfaf49b098eac146",
+                    "shasum": ""
+                }
+            }
+        },
+        "webong/workflow-jq": {
+            "dev-main": {
+                "name": "webong/workflow-jq",
+                "description": "Standalone JSON query evaluation and backend selection, independent of WorkFlow and OpenWorkflow.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "wikimedia/zest-jq": "^1.1"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Jq\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "dev-main",
+                "time": "2026-11-19T02:09:18+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "8902f6f9a8453527d1d1fd19540672454ee4367f"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/8902f6f9a8453527d1d1fd19540672454ee4367f",
+                    "reference": "8902f6f9a8453527d1d1fd19540672454ee4367f",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-jq",
+                "description": "Standalone JSON query evaluation and backend selection, independent of WorkFlow and OpenWorkflow.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "wikimedia/zest-jq": "^1.1"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Jq\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-19T02:09:18+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "8902f6f9a8453527d1d1fd19540672454ee4367f"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/8902f6f9a8453527d1d1fd19540672454ee4367f",
+                    "reference": "8902f6f9a8453527d1d1fd19540672454ee4367f",
+                    "shasum": ""
+                }
+            }
+        },
+        "webong/workflow-laravel": {
+            "dev-main": {
+                "name": "webong/workflow-laravel",
+                "description": "Laravel adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "illuminate/cache": "^12.0",
+                    "illuminate/contracts": "^12.0",
+                    "illuminate/database": "^12.0",
+                    "illuminate/events": "^12.0",
+                    "illuminate/support": "^12.0",
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "spatie/eloquent-sortable": "^4.2",
+                    "webong/workflow": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Laravel\\": "./"
+                    }
+                },
+                "extra": {
+                    "laravel": {
+                        "providers": [
+                            "Webong\\WorkFlow\\Laravel\\WorkFlowServiceProvider"
+                        ]
+                    }
+                },
+                "suggest": {
+                    "illuminate/redis": "Required for the optional Redis store.",
+                    "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter."
+                },
+                "version": "dev-main",
+                "time": "2026-11-16T03:50:42+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "19c5b589ddbb4199a859aec45b0f57c5d18cbe37"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/19c5b589ddbb4199a859aec45b0f57c5d18cbe37",
+                    "reference": "19c5b589ddbb4199a859aec45b0f57c5d18cbe37",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-laravel",
+                "description": "Laravel adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "illuminate/cache": "^12.0",
+                    "illuminate/contracts": "^12.0",
+                    "illuminate/database": "^12.0",
+                    "illuminate/events": "^12.0",
+                    "illuminate/support": "^12.0",
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "spatie/eloquent-sortable": "^4.2",
+                    "webong/workflow": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Laravel\\": "./"
+                    }
+                },
+                "extra": {
+                    "laravel": {
+                        "providers": [
+                            "Webong\\WorkFlow\\Laravel\\WorkFlowServiceProvider"
+                        ]
+                    }
+                },
+                "suggest": {
+                    "illuminate/redis": "Required for the optional Redis store.",
+                    "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter."
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-16T03:50:42+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "19c5b589ddbb4199a859aec45b0f57c5d18cbe37"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/19c5b589ddbb4199a859aec45b0f57c5d18cbe37",
+                    "reference": "19c5b589ddbb4199a859aec45b0f57c5d18cbe37",
+                    "shasum": ""
+                }
+            }
+        },
+        "webong/workflow-open-workflow": {
+            "dev-main": {
+                "name": "webong/workflow-open-workflow",
+                "description": "OpenWorkflow adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "psr/http-client": "^1.0",
+                    "psr/http-factory": "^1.1",
+                    "psr/http-message": "^2.0",
+                    "symfony/yaml": "^7.0",
+                    "webong/workflow": "^0.1.0-rc.3",
+                    "webong/workflow-jq": "@dev"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\OpenWorkflow\\": "./"
+                    }
+                },
+                "version": "dev-main",
+                "time": "2026-11-19T02:28:45+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "f4925626acd677b0650c2223e526de15bb2b4836"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/f4925626acd677b0650c2223e526de15bb2b4836",
+                    "reference": "f4925626acd677b0650c2223e526de15bb2b4836",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-open-workflow",
+                "description": "OpenWorkflow adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "psr/http-client": "^1.0",
+                    "psr/http-factory": "^1.1",
+                    "psr/http-message": "^2.0",
+                    "symfony/yaml": "^7.0",
+                    "webong/workflow": "^0.1.0-rc.3",
+                    "webong/workflow-jq": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\OpenWorkflow\\": "./"
+                    }
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-19T02:28:45+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "f4925626acd677b0650c2223e526de15bb2b4836"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/f4925626acd677b0650c2223e526de15bb2b4836",
+                    "reference": "f4925626acd677b0650c2223e526de15bb2b4836",
+                    "shasum": ""
+                }
+            }
+        },
+        "webong/workflow-rules": {
+            "dev-main": {
+                "name": "webong/workflow-rules",
+                "description": "Portable bounded Laravel-shaped rule documents, independent of transport and frameworks.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Rules\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "dev-main",
+                "time": "2026-11-19T02:24:31+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "ce210568a31379eaf98333a1648552c19142b7c7"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/ce210568a31379eaf98333a1648552c19142b7c7",
+                    "reference": "ce210568a31379eaf98333a1648552c19142b7c7",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-rules",
+                "description": "Portable bounded Laravel-shaped rule documents, independent of transport and frameworks.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Rules\\": "./"
+                    }
+                },
+                "extra": {
+                    "branch-alias": {
+                        "dev-main": "0.1.x-dev"
+                    }
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-19T02:24:31+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "ce210568a31379eaf98333a1648552c19142b7c7"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/ce210568a31379eaf98333a1648552c19142b7c7",
+                    "reference": "ce210568a31379eaf98333a1648552c19142b7c7",
+                    "shasum": ""
+                }
+            }
+        },
+        "webong/workflow-temporal": {
+            "dev-main": {
+                "name": "webong/workflow-temporal",
+                "description": "Temporal adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "temporal/sdk": "^2.20",
+                    "webong/workflow": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Temporal\\": "./"
+                    }
+                },
+                "suggest": {
+                    "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter."
+                },
+                "version": "dev-main",
+                "time": "2026-11-16T03:50:42+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "58b35273cd491e4bf32bb381362c8a1ab9397e10"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/58b35273cd491e4bf32bb381362c8a1ab9397e10",
+                    "reference": "58b35273cd491e4bf32bb381362c8a1ab9397e10",
+                    "shasum": ""
+                }
+            },
+            "0.1.0-rc.3": {
+                "name": "webong/workflow-temporal",
+                "description": "Temporal adapter for the independent WorkFlow engine.",
+                "type": "library",
+                "license": "MIT",
+                "require": {
+                    "php": "^8.3 || ^8.4 || ^8.5",
+                    "temporal/sdk": "^2.20",
+                    "webong/workflow": "^0.1.0-rc.3"
+                },
+                "autoload": {
+                    "psr-4": {
+                        "Webong\\WorkFlow\\Temporal\\": "./"
+                    }
+                },
+                "suggest": {
+                    "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter."
+                },
+                "version": "0.1.0-rc.3",
+                "time": "2026-11-16T03:50:42+01:00",
+                "source": {
+                    "type": "git",
+                    "url": "https://github.com/webong/workflow.git",
+                    "reference": "58b35273cd491e4bf32bb381362c8a1ab9397e10"
+                },
+                "dist": {
+                    "type": "zip",
+                    "url": "https://api.github.com/repos/webong/workflow/zipball/58b35273cd491e4bf32bb381362c8a1ab9397e10",
+                    "reference": "58b35273cd491e4bf32bb381362c8a1ab9397e10",
+                    "shasum": ""
+                }
+            }
+        }
+    }
+}
