@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
       - name: Verify successful tagged CI provenance
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,7 +62,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
       - uses: docker/setup-buildx-action@v4
       - name: Build and verify native runtime
         uses: docker/build-push-action@v7
@@ -121,7 +121,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
       - uses: docker/setup-buildx-action@v4
       - name: Build RPC image and run Go checks
         uses: docker/build-push-action@v7
@@ -168,7 +168,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.tag }}
+          ref: refs/tags/${{ inputs.tag }}
       - uses: actions/download-artifact@v8
         with:
           pattern: distribution-*
