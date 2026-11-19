@@ -39,6 +39,8 @@ command([PHP_BINARY, $root . '/tools/package-composer.php', $lab . '/artifacts',
 $cases = [
     'full' => null,
     'jq' => null,
+    'rules' => null,
+    'conditions' => null,
     'core' => ['core'],
     'core-minimal' => ['core'],
     'runtime' => ['runtime'],
@@ -55,7 +57,7 @@ foreach ($cases as $case => $surfaces) {
     $directory = $lab . '/' . $case;
     mkdir($directory);
     $require = ['php' => '^8.3', 'webong/workflow' => $version];
-    if ($case === 'jq') { $require = ['php' => '^8.3', 'webong/workflow-jq' => $version]; }
+    if (in_array($case, ['jq', 'rules', 'conditions'], true)) { $require = ['php' => '^8.3', 'webong/workflow-' . $case => $version]; }
     // A real Laravel host must discover the adapter only when installed.
     if (in_array($case, ['full', 'core', 'laravel', 'combined'], true)) {
         $require['laravel/framework'] = '^12.0';
@@ -87,6 +89,10 @@ foreach ($cases as $case => $surfaces) {
         check(is_file($directory . '/vendor/webong/workflow/.source-plugin/projection.json'), 'Projection never ran');
     }
     composer($directory, 'dump-autoload', '--classmap-authoritative');
+    if (in_array($case, ['rules', 'conditions'], true)) {
+        echo command([PHP_BINARY, $root . '/tests/integration/conditions-consumer.php', $directory, $case], $directory);
+        continue;
+    }
     if ($case === 'jq') {
         echo command([PHP_BINARY, $root . '/tests/integration/jq-consumer.php', $directory], $directory);
         continue;

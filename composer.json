@@ -14,9 +14,11 @@
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
         "webong/composer-source-plugin": "^0.5",
+        "webong/workflow-conditions": "@dev",
         "webong/workflow-jq": "@dev",
         "webong/workflow-laravel": "@dev",
         "webong/workflow-open-workflow": "@dev",
+        "webong/workflow-rules": "@dev",
         "webong/workflow-temporal": "@dev"
     },
     "autoload": {
@@ -40,7 +42,13 @@
                 "src/composer.json",
                 "types/composer.json",
                 "docs/composer.json"
-            ]
+            ],
+            "workspaces": {
+                "include": [
+                    "pkg/*"
+                ],
+                "symlink": false
+            }
         },
         "branch-alias": {
             "dev-main": "0.1.x-dev"
@@ -80,7 +88,9 @@
                     "webong/workflow-laravel": "dev-main",
                     "webong/workflow-open-workflow": "dev-main",
                     "webong/workflow-temporal": "dev-main",
-                    "webong/workflow-jq": "dev-main"
+                    "webong/workflow-jq": "dev-main",
+                    "webong/workflow-conditions": "dev-main",
+                    "webong/workflow-rules": "dev-main"
                 }
             }
         }

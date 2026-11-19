@@ -4,6 +4,8 @@
 |---|---|---|
 | repository root | `webong/workflow` | Engine, authoring CLI and core projection |
 | `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie dependencies, config, migrations and Boost resources |
+| `pkg/Rules` | `webong/workflow-rules` | Bounded portable rule definitions; PHP only |
+| `pkg/Conditions` | `webong/workflow-conditions` | Rule/jq predicates, boolean composition and opt-in flow guards |
 | `pkg/Jq` | `webong/workflow-jq` | Raw jq evaluation/backends/parser; PHP and Zest only, no engine dependency |
 | `pkg/OpenWorkflow` | `webong/workflow-open-workflow` | OWS translator/runtime/schema/CTK, PSR HTTP, YAML and the standalone jq package |
 | `pkg/Temporal` | `webong/workflow-temporal` | Temporal workflow/activity classes and Temporal SDK dependency |
@@ -24,7 +26,7 @@ plus a small root runtime baseline. Those are not package manifests;
 `pkg/*/composer.json` owns the real independently installable adapters.
 
 The root uses Composer path repositories and development requirements for the
-four real packages. A fresh `composer install` resolves them without a plugin
+independent packages. A fresh `composer install` resolves them without a plugin
 bootstrap or network publication. Root dependencies do not merge nested
 manifests: Composer installs each package with its own autoload/discovery data.
 The development branch alias identifies the root as `0.1.x-dev`. In an archive
@@ -35,7 +37,7 @@ as a dependency without resolving the monorepo development adapters.
 ## Build and install external artifacts
 
 Adding nested manifests does not make GitHub's root VCS repository serve the
-adapter and jq package identities. Build independent ZIP distributions:
+independent package identities. Build independent ZIP distributions:
 
 ```sh
 php tools/package-composer.php dist/composer 0.1.0-rc.999
@@ -64,28 +66,21 @@ Ordinary installs need no Source Plugin. Production installs use normal
 Core projections remain an optional consumer-root policy (see
 [Composer surfaces](composer-surfaces.md)).
 
-Future publication must host the adapter ZIPs in Composer repository metadata
-(or split repositories) under their own names and actual release versions.
-The minimum excludes rc.2, which embeds adapter classes/discovery and would
-create competing package ownership. A matching clean core release must be
-published before these new adapters can use public version constraints.
-These new adapter packages are not yet published on Packagist or GitHub
-Releases. Existing tags, including `v0.1.0-rc.2`, retain their original layout;
-use that tag's documentation when consuming it. This source preparation does
-not update Gateway's released core pin or publish any registry metadata.
+## Source Plugin publication
 
-## Validation
+Composer Source Plugin owns subpackage splitting, versioning and index generation. Root `extra.source-plugin.workspaces` selects `pkg/*`; each package retains its own Composer identity and dependency graph. The root engine remains the ordinary repository-root package. Local ZIP fixtures above verify package isolation; they are not the production publication mechanism.
 
-`composer test:projections` builds these actual ZIPs and installs clean external
-roots: minimal core, Laravel host without adapter, each adapter alone, combined
-adapters, core projection, locked production replay and disabled plugins. It
-uses authoritative autoloading, the installed CLI, real Laravel discovery and
-migrations, OWS execution/schema resources and real Temporal SDK attributes and
-SDK-neutral execution. Live Temporal server/history replay is outside this
-package-install test; host runtime setup remains required.
+After committing source changes, inspect the selected packages and preview publication:
 
-The standalone jq package can be installed alone; its pure-PHP and native
-backends are documented in [pkg/Jq](../pkg/Jq/README.md). OpenWorkflow owns
-`$workflow`/`$task`/`$context` preprocessing; jq itself owns only raw input and
-query execution. Core and the Laravel/Temporal adapters do not pull jq in unless
-they also install OpenWorkflow or explicitly require jq.
+```sh
+composer source:publish list
+composer source:publish release --release-version=0.1.0-rc.3 --no-metadata-branch --out-dir=composer --dry-run
+```
+
+The publisher reads committed manifests. Its release command splits the selected subpackages and writes the Composer index; publication uses its explicit push flow. Keep the index on the normal branch at `composer/composer-packages.json`. Consumers register that standard Composer index (or discover it through a Source Plugin catalog) and require subpackages normally. Do not hand-maintain package split branches or index records.
+
+A coordinated clean root engine release is required for the Laravel, OpenWorkflow and Temporal adapters' `^0.1.0-rc.3` constraint. Existing `v0.1.0-rc.2` remains immutable. Source configuration and local preview do not publish tags, package refs, releases or index metadata.
+
+## Conditions and rules
+
+[Rules](../pkg/Rules/README.md) can be installed without the engine or Illuminate. [Conditions](../pkg/Conditions/README.md) uses Illuminate Validation without requiring a Laravel application and composes rules with jq. Its optional guard decorator uses existing core contracts compatible with rc.2. The new rules, jq and conditions package identities are distributed through the Source Plugin subpackage index.
