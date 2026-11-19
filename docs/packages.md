@@ -13,7 +13,7 @@
 Core requires PHP only. A VCS install of the monorepo root may still download
 unloaded adapter sources; the independent core ZIP excludes them, and the
 optional core projection prunes them from a VCS/dist installation. Installing it never advertises a Laravel provider or
-loads adapter namespaces. The three workflow adapters require the forthcoming clean core `^0.1.0-rc.3`; their PHP
+loads adapter namespaces. The three workflow adapters require clean core `^0.1.0-rc.3`; their PHP
 namespaces remain `Webong\WorkFlow\Laravel`, `Webong\WorkFlow\OpenWorkflow`
 and `Webong\WorkFlow\Temporal`. Install OpenWorkflow alongside Laravel or
 Temporal when those integrations handle OWS definitions. No adapter implicitly
@@ -84,3 +84,20 @@ A coordinated clean root engine release is required for the Laravel, OpenWorkflo
 ## Conditions and rules
 
 [Rules](../pkg/Rules/README.md) can be installed without the engine or Illuminate. [Conditions](../pkg/Conditions/README.md) uses Illuminate Validation without requiring a Laravel application and composes rules with jq. Its optional guard decorator uses existing core contracts compatible with rc.2. The new rules, jq and conditions package identities are distributed through the Source Plugin subpackage index.
+
+## Install the published rc.3 subpackages
+
+The Source Plugin generated index is committed on main:
+
+```json
+{
+  "repositories": [
+    {"type": "composer", "url": "https://raw.githubusercontent.com/webong/workflow/main/composer/composer-packages.json"},
+    {"type": "vcs", "url": "https://github.com/webong/workflow", "no-api": true, "only": ["webong/workflow"]}
+  ],
+  "require": {"webong/workflow-conditions": "0.1.0-rc.3"},
+  "minimum-stability": "RC"
+}
+```
+
+The VCS entry supplies the repository-root engine; the generated index supplies the six subpackages. Standalone jq and Rules consumers need only the index and can omit the VCS entry. A consumer already configured to resolve the root package can instead run `composer source:catalog webong/workflow:0.1.0-rc.3` to import its catalog's exact package-name filters. Runtime dependency installation then uses ordinary Composer behavior.
