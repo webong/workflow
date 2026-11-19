@@ -244,6 +244,8 @@ final class OpenWorkflow
     private function analyzeValueExpressions(mixed $value, string $path, array &$issues): void
     {
         if (is_string($value)) {
+            // A catch binding names a variable; unlike output.as it is not jq.
+            if (str_ends_with($path, '/catch/as')) { return; }
             $trimmed = trim($value);
 
             // OWS runtime expressions are wrapped in `${ ... }`; analyze the
