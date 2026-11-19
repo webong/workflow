@@ -1,0 +1,24 @@
+{
+    "name": "webong/workflow-conditions",
+    "description": "Compiled rule/jq conditions, boolean composition and opt-in flow guards.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "illuminate/translation": "^12.0",
+        "illuminate/validation": "^12.0",
+        "webong/workflow": "^0.1.0-rc.2",
+        "webong/workflow-jq": "^0.1.0-rc.3",
+        "webong/workflow-rules": "^0.1.0-rc.3"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webong\\WorkFlow\\Conditions\\": "./"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    }
+}
