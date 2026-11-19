@@ -43,7 +43,7 @@ $hasGuides = ! in_array($case, ['runtime', 'types'], true);
 ensure(is_file($package . '/types/work-flow.d.ts') === $hasTypes, 'Incorrect types group payload');
 ensure(is_file($package . '/docs/php-library.md') === $hasGuides, 'Incorrect guides group payload');
 
-foreach (['workflow-laravel' => $laravel, 'workflow-temporal' => $temporal, 'workflow-open-workflow' => $ows] as $name => $expected) {
+foreach (['workflow-laravel' => $laravel, 'workflow-temporal' => $temporal, 'workflow-open-workflow' => $ows, 'workflow-jq' => $ows] as $name => $expected) {
     $adapterRoot = $consumer . '/vendor/webong/' . $name;
     ensure(is_dir($adapterRoot) === $expected, 'Incorrect independent package presence: ' . $name);
     if ($expected) {

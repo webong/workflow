@@ -18,7 +18,9 @@ Install the independent adapter from a repository providing its archive; see
 composer require webong/workflow-open-workflow
 ```
 
-The adapter declares core, PSR HTTP, YAML and jq dependencies. Install a PSR-18
+The adapter declares core, PSR HTTP, YAML and `webong/workflow-jq` dependencies.
+Raw jq evaluation is reusable through the [standalone jq package](../pkg/Jq/README.md);
+only OWS data scopes and variable preprocessing live in this adapter. Install a PSR-18
 HTTP client when using HTTP/OpenAPI operations.
 
 ## Validate and translate a definition

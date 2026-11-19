@@ -4,13 +4,14 @@
 |---|---|---|
 | repository root | `webong/workflow` | Engine, authoring CLI and core projection |
 | `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie dependencies, config, migrations and Boost resources |
-| `pkg/OpenWorkflow` | `webong/workflow-open-workflow` | OWS translator/runtime/schema/CTK, PSR HTTP, YAML and jq dependencies |
+| `pkg/Jq` | `webong/workflow-jq` | Raw jq evaluation/backends/parser; PHP and Zest only, no engine dependency |
+| `pkg/OpenWorkflow` | `webong/workflow-open-workflow` | OWS translator/runtime/schema/CTK, PSR HTTP, YAML and the standalone jq package |
 | `pkg/Temporal` | `webong/workflow-temporal` | Temporal workflow/activity classes and Temporal SDK dependency |
 
 Core requires PHP only. A VCS install of the monorepo root may still download
 unloaded adapter sources; the independent core ZIP excludes them, and the
 optional core projection prunes them from a VCS/dist installation. Installing it never advertises a Laravel provider or
-loads adapter namespaces. Each adapter requires the forthcoming clean core `^0.1.0-rc.3`; their PHP
+loads adapter namespaces. The three workflow adapters require the forthcoming clean core `^0.1.0-rc.3`; their PHP
 namespaces remain `Webong\WorkFlow\Laravel`, `Webong\WorkFlow\OpenWorkflow`
 and `Webong\WorkFlow\Temporal`. Install OpenWorkflow alongside Laravel or
 Temporal when those integrations handle OWS definitions. No adapter implicitly
@@ -23,7 +24,7 @@ plus a small root runtime baseline. Those are not package manifests;
 `pkg/*/composer.json` owns the real independently installable adapters.
 
 The root uses Composer path repositories and development requirements for the
-three real packages. A fresh `composer install` resolves them without a plugin
+four real packages. A fresh `composer install` resolves them without a plugin
 bootstrap or network publication. Root dependencies do not merge nested
 manifests: Composer installs each package with its own autoload/discovery data.
 The development branch alias identifies the root as `0.1.x-dev`. In an archive
@@ -34,7 +35,7 @@ as a dependency without resolving the monorepo development adapters.
 ## Build and install external artifacts
 
 Adding nested manifests does not make GitHub's root VCS repository serve the
-three adapter identities. Build independent ZIP distributions:
+adapter and jq package identities. Build independent ZIP distributions:
 
 ```sh
 php tools/package-composer.php dist/composer 0.1.0-rc.999
@@ -82,3 +83,9 @@ uses authoritative autoloading, the installed CLI, real Laravel discovery and
 migrations, OWS execution/schema resources and real Temporal SDK attributes and
 SDK-neutral execution. Live Temporal server/history replay is outside this
 package-install test; host runtime setup remains required.
+
+The standalone jq package can be installed alone; its pure-PHP and native
+backends are documented in [pkg/Jq](../pkg/Jq/README.md). OpenWorkflow owns
+`$workflow`/`$task`/`$context` preprocessing; jq itself owns only raw input and
+query execution. Core and the Laravel/Temporal adapters do not pull jq in unless
+they also install OpenWorkflow or explicitly require jq.

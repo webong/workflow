@@ -5,40 +5,19 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\OpenWorkflow\Expression;
 
 use Webong\WorkFlow\Contracts\FlowContext;
+use Webong\WorkFlow\Jq\EvaluatorBackend;
+use Webong\WorkFlow\Jq\Evaluator;
+use Webong\WorkFlow\Jq\MultiBackendEvaluator;
 
 /**
- * Expression evaluator for OWS expressions.
- *
- * Uses a multi-backend chain with automatic fallback:
- * 1. **Shell jq** (system binary) - 100% jq compatibility when installed
- * 2. **zest-jq** (wikimedia/zest-jq) - pure PHP, good coverage
- * 3. **Builtin minimal evaluator** - zero deps, basic subset
- *
- * Supported grammar (best available backend):
- * - Property access: .field, .field.subfield
- * - Array iteration/projection: .items[] | {id, name}, .items | map(...)
- * - Pipe: expr1 | expr2
- * - Comparison: ==, !=, <, >, <=, >=
- * - Boolean: and, or
- * - Literals: strings, numbers, true, false, null
- * - Variable references: $workflow, $task, $context (mapped to .workflow, .task, .context)
- * - Parentheses: (expr)
- * - Object construction: {key: expr, ...}
- * - Array construction: [expr, ...]
- * - If-then-else: if cond then a else b end
- * - Select/filter: select(...)
- * - Functions: length, keys, add, map, select
- *
- * With shell jq: full jq 1.8+ support including regex, reduce, group_by, modules, etc.
- * With zest-jq: see zest-jq docs (passes 524 upstream jq tests)
- * NOT supported in zest-jq/builtin:
- * - Regex: test(), match(), capture()
- * - not() function (use == false instead)
- * - Module system (import, include, module)
- * - Alternative operators: //, ?
+ * OWS scopes and variable preprocessing over the standalone jq evaluator.
+ * Raw query execution, backend selection and JSON normalization belong to
+ * webong/workflow-jq; this facade adds workflow/task/context conventions only.
  */
 final class ExpressionEvaluator
 {
+    private readonly Evaluator $jq;
+
     /**
      * @param array<string, mixed> $workflowData
      * @param array<string, mixed> $taskData
@@ -50,6 +29,7 @@ final class ExpressionEvaluator
         private ?EvaluatorBackend $backend = null,
     ) {
         $this->backend = $backend ?? new MultiBackendEvaluator();
+        $this->jq = new Evaluator($this->backend);
     }
 
     /**
@@ -101,22 +81,7 @@ final class ExpressionEvaluator
             $input = new \stdClass();
         }
 
-        $result = $this->backend->evaluate($expression, $input);
-        return $this->normalizeResult($result);
-    }
-
-    /**
-     * Normalize results (stdClass -> array, recursively).
-     */
-    private function normalizeResult(mixed $value): mixed
-    {
-        if (is_object($value)) {
-            return $this->normalizeResult(json_decode(json_encode($value), true));
-        }
-        if (is_array($value)) {
-            return array_map([$this, 'normalizeResult'], $value);
-        }
-        return $value;
+        return $this->jq->evaluate($expression, $input);
     }
 
     /**

@@ -6,7 +6,7 @@ namespace Webong\WorkFlow\OpenWorkflow\Translation;
 
 use Webong\WorkFlow\OpenWorkflow\Contracts\UnsupportedFeature;
 use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionParser;
+use Webong\WorkFlow\Jq\ExpressionParser;
 use Webong\WorkFlow\OpenWorkflow\ValueObjects\OwsDocument;
 use Webong\WorkFlow\ValueObjects\FlowDefinition;
 use Webong\WorkFlow\ValueObjects\FlowStepDefinition;

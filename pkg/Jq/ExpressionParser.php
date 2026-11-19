@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 /**
  * Recursive descent parser for the minimal jq-like expression subset.

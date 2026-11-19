@@ -59,6 +59,7 @@ repeated. Starting the process again uses a new run ID.
 
 For durable queue workers, leases, retries and broker delivery, see the [queue runtime guide](docs/queue.md).
 
+The [standalone jq library](pkg/Jq/README.md) can query JSON without installing the engine or OpenWorkflow.
 Independent [adapter packages](docs/packages.md) own their dependencies and discovery.
 Optional [Composer file projections](docs/composer-surfaces.md) retain selected PHP surfaces without changing package identity or dependencies. Normal installs remain complete.
 

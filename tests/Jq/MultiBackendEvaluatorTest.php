@@ -2,13 +2,12 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Tests\OpenWorkflow;
+namespace Webong\WorkFlow\Tests\Jq;
 
 use PHPUnit\Framework\TestCase;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
-use Webong\WorkFlow\OpenWorkflow\Expression\MultiBackendEvaluator;
-use Webong\WorkFlow\OpenWorkflow\Expression\ShellJqEvaluator;
-use Webong\WorkFlow\OpenWorkflow\Expression\ZestJqEvaluator;
+use Webong\WorkFlow\Jq\MultiBackendEvaluator;
+use Webong\WorkFlow\Jq\ShellJqEvaluator;
+use Webong\WorkFlow\Jq\ZestJqEvaluator;
 
 class MultiBackendEvaluatorTest extends TestCase
 {
@@ -54,16 +53,6 @@ class MultiBackendEvaluatorTest extends TestCase
         $this->assertNotEmpty($unsupported['unsupportedFeatures']);
     }
 
-    public function testExpressionEvaluatorUsesMultiBackendByDefault(): void
-    {
-        $evaluator = new ExpressionEvaluator(
-            workflowData: ['order' => ['id' => 42]],
-        );
-
-        $this->assertContains($evaluator->getActiveBackend(), ['shell-jq', 'zest-jq']);
-        $this->assertSame(42, $evaluator->evaluate('.order.id'));
-    }
-
     public function testShellJqEvaluatesTheProvidedJsonInputAndStreamsResults(): void
     {
         $shell = new ShellJqEvaluator();
@@ -76,14 +65,4 @@ class MultiBackendEvaluatorTest extends TestCase
         self::assertSame("O'Reilly", $shell->evaluate('.author', ['author' => "O'Reilly"]));
     }
 
-    public function testVariablePreprocessingThroughBackend(): void
-    {
-        $evaluator = new ExpressionEvaluator(
-            workflowData: ['input' => 'test'],
-            taskData: ['param' => 'value'],
-        );
-
-        $this->assertSame('test', $evaluator->evaluate('$workflow.input'));
-        $this->assertSame('value', $evaluator->evaluate('$task.param'));
-    }
 }

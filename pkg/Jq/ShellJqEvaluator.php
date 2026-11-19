@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 /**
  * Shell-based jq evaluator using the system jq binary.
@@ -21,11 +21,13 @@ final class ShellJqEvaluator implements EvaluatorBackend
 
     public function isAvailable(): bool
     {
-        // Check if jq binary exists and works
-        $output = [];
-        $returnVar = 0;
-        exec("{$this->jqBinary} --version 2>&1", $output, $returnVar);
-        return $returnVar === 0;
+        if (! function_exists('proc_open')) { return false; }
+        $process = @proc_open([$this->jqBinary, '--version'], [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        if (! is_resource($process)) { return false; }
+        fclose($pipes[0]);
+        $version = stream_get_contents($pipes[1]); fclose($pipes[1]);
+        stream_get_contents($pipes[2]); fclose($pipes[2]);
+        return proc_close($process) === 0 && str_starts_with($version, 'jq-');
     }
 
     /**
@@ -36,13 +38,56 @@ final class ShellJqEvaluator implements EvaluatorBackend
     public function evaluate(string $expression, mixed $inputData): mixed
     {
         if (! $this->isAvailable()) {
-            throw new \RuntimeException('jq binary not available');
+            throw ExpressionEvaluationException::evaluationError($expression, 'jq binary not available');
         }
 
         $json = json_encode($inputData, JSON_THROW_ON_ERROR);
 
+        $output = $this->run($expression, $json);
+
+        $lines = preg_split('/\R/', trim($output));
+        if (! is_array($lines)) {
+            throw ExpressionEvaluationException::evaluationError($expression, 'Unable to parse jq output');
+        }
+
+        $lines = array_values(array_filter($lines, static fn (string $line): bool => $line !== ''));
+        if ($lines === []) {
+            return null;
+        }
+
+        try {
+            $results = array_map(
+                static fn (string $line): mixed => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
+                $lines,
+            );
+        } catch (\JsonException $exception) {
+            throw ExpressionEvaluationException::evaluationError(
+                $expression,
+                'jq returned invalid JSON: '.$exception->getMessage(),
+            );
+        }
+
+        return count($results) === 1 ? $results[0] : $results;
+    }
+
+    public function analyze(string $expression): array
+    {
+        if (! $this->isAvailable()) {
+            return ['supported' => false, 'unsupportedFeatures' => ['jq binary not available']];
+        }
+
+        try {
+            // No stdin values: jq compiles the query but never runs its filter.
+            $this->run($expression, '');
+            return ['supported' => true, 'unsupportedFeatures' => []];
+        } catch (ExpressionEvaluationException $error) {
+            return ['supported' => false, 'unsupportedFeatures' => [$error->getMessage()]];
+        }
+    }
+    private function run(string $expression, string $json): string
+    {
         $process = proc_open(
-            [$this->jqBinary, '--compact-output', $expression],
+            [$this->jqBinary, '--compact-output', '--', $expression],
             [
                 0 => ['pipe', 'r'],
                 1 => ['pipe', 'w'],
@@ -85,38 +130,6 @@ final class ShellJqEvaluator implements EvaluatorBackend
             throw ExpressionEvaluationException::evaluationError($expression, 'Unable to write jq input');
         }
 
-        $lines = preg_split('/\R/', trim($output));
-        if (! is_array($lines)) {
-            throw ExpressionEvaluationException::evaluationError($expression, 'Unable to parse jq output');
-        }
-
-        $lines = array_values(array_filter($lines, static fn (string $line): bool => $line !== ''));
-        if ($lines === []) {
-            return null;
-        }
-
-        try {
-            $results = array_map(
-                static fn (string $line): mixed => json_decode($line, true, 512, JSON_THROW_ON_ERROR),
-                $lines,
-            );
-        } catch (\JsonException $exception) {
-            throw ExpressionEvaluationException::evaluationError(
-                $expression,
-                'jq returned invalid JSON: '.$exception->getMessage(),
-            );
-        }
-
-        return count($results) === 1 ? $results[0] : $results;
-    }
-
-    public function analyze(string $expression): array
-    {
-        if (! $this->isAvailable()) {
-            return ['supported' => false, 'unsupportedFeatures' => ['jq binary not available']];
-        }
-
-        // We can't easily statically analyze with shell jq, so assume supported
-        return ['supported' => true, 'unsupportedFeatures' => []];
+        return $output;
     }
 }

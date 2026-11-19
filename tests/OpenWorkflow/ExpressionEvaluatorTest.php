@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Tests\OpenWorkflow;
 
 use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluator;
-use Webong\WorkFlow\OpenWorkflow\Expression\ExpressionEvaluationException;
+use Webong\WorkFlow\Jq\ExpressionEvaluationException;
 use PHPUnit\Framework\TestCase;
 
 class ExpressionEvaluatorTest extends TestCase

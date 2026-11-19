@@ -38,6 +38,7 @@ command([PHP_BINARY, $root . '/tools/package-composer.php', $lab . '/artifacts',
 
 $cases = [
     'full' => null,
+    'jq' => null,
     'core' => ['core'],
     'core-minimal' => ['core'],
     'runtime' => ['runtime'],
@@ -54,6 +55,7 @@ foreach ($cases as $case => $surfaces) {
     $directory = $lab . '/' . $case;
     mkdir($directory);
     $require = ['php' => '^8.3', 'webong/workflow' => $version];
+    if ($case === 'jq') { $require = ['php' => '^8.3', 'webong/workflow-jq' => $version]; }
     // A real Laravel host must discover the adapter only when installed.
     if (in_array($case, ['full', 'core', 'laravel', 'combined'], true)) {
         $require['laravel/framework'] = '^12.0';
@@ -85,6 +87,10 @@ foreach ($cases as $case => $surfaces) {
         check(is_file($directory . '/vendor/webong/workflow/.source-plugin/projection.json'), 'Projection never ran');
     }
     composer($directory, 'dump-autoload', '--classmap-authoritative');
+    if ($case === 'jq') {
+        echo command([PHP_BINARY, $root . '/tests/integration/jq-consumer.php', $directory], $directory);
+        continue;
+    }
     echo command([PHP_BINARY, $root . '/tests/integration/projection-consumer.php', $directory, $case], $directory);
     echo command([$directory . '/vendor/bin/workflow', 'help'], $directory);
     file_put_contents($directory . '/definition.json', json_encode(['key' => 'cli-check', 'steps' => [['id' => 'first', 'label' => 'First']]], JSON_THROW_ON_ERROR));

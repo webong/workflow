@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 /**
  * Expression AST node.
@@ -10,8 +10,9 @@ namespace Webong\WorkFlow\OpenWorkflow\Expression;
 final readonly class ExpressionNode
 {
     /**
-     * @param array<string, ExpressionNode>|null $properties
-     * @param list<ExpressionNode>|null $elements
+     * @param list<string> $path
+     * @param array<string, ExpressionNode> $properties
+     * @param list<ExpressionNode> $elements
      */
     public function __construct(
         public ExpressionType $type,

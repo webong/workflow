@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Extracted jq backends, parser and evaluation errors to independent
+  `webong/workflow-jq`, with a raw-data evaluator and no core/OWS dependency.
+  OpenWorkflow now requires it and retains only OWS context handling. Backend
+  selection is stable; query errors do not silently switch dialects.
+
 - Adopted Composer Source Plugin ^0.5 directory-owned surface descriptors with
   inherited runtime/CLI closure, types and guides. Real consumer checks cover
   helper/union selections, retained descriptors and locked manifest-drift rejection.

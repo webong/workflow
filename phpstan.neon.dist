@@ -2,6 +2,7 @@ parameters:
     level: 9
     paths:
         - src
+        - pkg/Jq
         - pkg/Laravel
         - pkg/Temporal/TemporalCompletionInbox.php
         - pkg/Temporal/TemporalFlowActivityHandler.php

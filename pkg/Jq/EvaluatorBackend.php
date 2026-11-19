@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 /**
  * Interface for jq expression evaluator backends.

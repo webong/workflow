@@ -14,6 +14,7 @@
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^12.0",
         "webong/composer-source-plugin": "^0.5",
+        "webong/workflow-jq": "@dev",
         "webong/workflow-laravel": "@dev",
         "webong/workflow-open-workflow": "@dev",
         "webong/workflow-temporal": "@dev"
@@ -78,7 +79,8 @@
                 "versions": {
                     "webong/workflow-laravel": "dev-main",
                     "webong/workflow-open-workflow": "dev-main",
-                    "webong/workflow-temporal": "dev-main"
+                    "webong/workflow-temporal": "dev-main",
+                    "webong/workflow-jq": "dev-main"
                 }
             }
         }

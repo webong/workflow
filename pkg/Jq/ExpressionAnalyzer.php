@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 /**
  * Static analyzer for expressions - detects unsupported features without evaluating.
@@ -29,8 +29,7 @@ final class ExpressionAnalyzer
             ExpressionType::BOOLEAN => $this->analyzeBoolean($node),
             ExpressionType::OBJECT_CONSTRUCTION => $this->analyzeObjectConstruction($node),
             ExpressionType::ARRAY_CONSTRUCTION => $this->analyzeArrayConstruction($node),
-            ExpressionType::PARENTHESIZED => $this->analyzeNode($node->child),
-            default => $this->addUnsupported("unknown-node-type: {$node->type->value}"),
+            ExpressionType::PARENTHESIZED => $this->analyzeNode($node->child ?? throw ExpressionEvaluationException::invalidSyntax($node->raw ?? '', 'Missing parenthesized expression')),
         };
     }
 

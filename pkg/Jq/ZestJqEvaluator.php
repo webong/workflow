@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\OpenWorkflow\Expression;
+namespace Webong\WorkFlow\Jq;
 
 use Wikimedia\ZestJQ\JQ;
 use Wikimedia\ZestJQ\JQError;
@@ -40,7 +40,7 @@ final class ZestJqEvaluator implements EvaluatorBackend
             if (count($results) === 1) {
                 return $results[0];
             }
-            return $results;
+            return $results === [] ? null : $results;
 
         } catch (JQError $e) {
             throw ExpressionEvaluationException::evaluationError($expression, $e->getMessage());
