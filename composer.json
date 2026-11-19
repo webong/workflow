@@ -48,6 +48,17 @@
                     "pkg/*"
                 ],
                 "symlink": false
+            },
+            "catalog": {
+                "url": "https://raw.githubusercontent.com/webong/workflow/main/composer/composer-packages.json",
+                "packages": [
+                    "webong/workflow-conditions",
+                    "webong/workflow-jq",
+                    "webong/workflow-laravel",
+                    "webong/workflow-open-workflow",
+                    "webong/workflow-rules",
+                    "webong/workflow-temporal"
+                ]
             }
         },
         "branch-alias": {
