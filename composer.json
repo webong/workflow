@@ -1,0 +1,20 @@
+{
+    "name": "webong/workflow-jq",
+    "description": "Standalone JSON query evaluation and backend selection, independent of WorkFlow and OpenWorkflow.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "wikimedia/zest-jq": "^1.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webong\\WorkFlow\\Jq\\": "./"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    }
+}
