@@ -1,0 +1,23 @@
+{
+    "name": "webong/workflow-illuminate",
+    "description": "Illuminate component adapter supplying the WorkFlow rules condition driver without a Laravel application.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^8.3 || ^8.4 || ^8.5",
+        "illuminate/contracts": "^12.0",
+        "illuminate/translation": "^12.0",
+        "illuminate/validation": "^12.0",
+        "webong/workflow": "^0.1.0-rc.4"
+    },
+    "autoload": {
+        "psr-4": {
+            "Webong\\WorkFlow\\Illuminate\\": "./"
+        }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-main": "0.1.x-dev"
+        }
+    }
+}
