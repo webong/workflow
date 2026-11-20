@@ -4,6 +4,24 @@ package workflow
 
 import "encoding/json"
 
+type FlowConditionVersion string
+
+const (
+	FlowConditionVersionV1 FlowConditionVersion = "v1"
+)
+
+type FlowRulesSyntax string
+
+const (
+	FlowRulesSyntaxRules FlowRulesSyntax = "rules"
+)
+
+type FlowJqSyntax string
+
+const (
+	FlowJqSyntaxJq FlowJqSyntax = "jq"
+)
+
 // Overall status of one flow run.
 type FlowStatus string
 
@@ -70,6 +88,39 @@ const (
 	FlowExecutionStatusCompleted  FlowExecutionStatus = "completed"
 )
 
+// Bounded Laravel-shaped rules; syntax may be omitted for legacy v1 documents. Semantic validation stays in WorkFlow.
+type FlowRulesCondition struct {
+	Version *FlowConditionVersion `json:"version,omitempty"`
+	Syntax *FlowRulesSyntax `json:"syntax,omitempty"`
+	// A field/rule mapping; only an empty list is accepted as the legacy empty mapping.
+	Rules any `json:"rules"`
+}
+
+// A jq predicate. Analysis checks backend support without evaluation; runtime must return one boolean.
+type FlowJqCondition struct {
+	Version *FlowConditionVersion `json:"version,omitempty"`
+	Syntax FlowJqSyntax `json:"syntax"`
+	Expression string `json:"expression"`
+}
+
+// All children must match. Children form a non-empty bounded list.
+type FlowAllCondition struct {
+	Version *FlowConditionVersion `json:"version,omitempty"`
+	All []FlowCondition `json:"all"`
+}
+
+// At least one child must match. Children form a non-empty bounded list.
+type FlowAnyCondition struct {
+	Version *FlowConditionVersion `json:"version,omitempty"`
+	Any []FlowCondition `json:"any"`
+}
+
+// Negates a match; an evaluation error remains an error.
+type FlowNotCondition struct {
+	Version *FlowConditionVersion `json:"version,omitempty"`
+	Not FlowCondition `json:"not"`
+}
+
 // A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
 type FlowInputBinding struct {
 	// The run context or a dependency output.
@@ -94,7 +145,7 @@ type FlowStepDefinition struct {
 	Retriable bool `json:"retriable"`
 	// Step ids that must complete first.
 	DependsOn []string `json:"depends_on"`
-	// Execution bookkeeping; not for domain data.
+	// Execution metadata. Optional when is a FlowCondition; other metadata remains open.
 	Metadata map[string]any `json:"metadata"`
 	// Optional retry policy.
 	RetryPolicy *FlowRetryPolicy `json:"retry_policy"`
@@ -313,3 +364,5 @@ type FlowEvent struct {
 	// Host-supplied timestamp.
 	OccurredAt string `json:"occurred_at"`
 }
+
+type FlowCondition = any

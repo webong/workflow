@@ -155,6 +155,40 @@ The result is the serialized `FlowValidationReport`:
 }
 ```
 
+## Validate step conditions
+
+`metadata.when` contains a [condition document](../pkg/Conditions/README.md): a rules predicate, a jq predicate, or an `all`/`any`/`not` composition. Install the optional Conditions package to enable its authoring integration. The installed `workflow` binary discovers `ConditionAuthoringValidator`; programmatic callers bind it explicitly:
+
+```php
+use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
+use Webong\WorkFlow\Conditions\ConditionCompiler;
+use Webong\WorkFlow\Conditions\GuardedStepExecutor;
+use Webong\WorkFlow\Services\FlowDefinitionValidator;
+
+$compiler = new ConditionCompiler();
+$conditions = new ConditionAuthoringValidator($compiler);
+$guarded = new GuardedStepExecutor($effects, $compiler);
+$validator = new FlowDefinitionValidator(executors: [$guarded], conditions: $conditions);
+$report = $validator->validate($document);
+$schema = $validator->conditionSchema();
+```
+
+Use the same compiler/backend for authoring and execution. The stock CLI uses the portable Zest backend; applications with another backend can inject their condition validator into `FlowAuthoringCli`. The existing `flow.validate` adapter accepts the same optional `conditions` binding. Configuration comes from trusted application code, never request parameters.
+
+```sh
+vendor/bin/workflow validate flow.json --json
+vendor/bin/workflow inspect flow.json --json
+vendor/bin/workflow condition-schema > condition.schema.json
+```
+
+Validation compiles every branch, including branches that would short circuit, without evaluating expressions, invoking executors or inspecting run data. It reports the first condition problem per step and continues checking other steps. A nested rule error can point to `/steps/0/metadata/when/any/1/not/rules/customer.email/1`. Pipe-string rule errors point to the field value itself; explicit rule-list errors include the list index. Property names use RFC 6901 escaping. Backend failures produce safe diagnostics without raw exception details.
+
+A definition containing `metadata.when` is invalid if no condition validator is bound (`condition_validation_unavailable`). Definitions without conditions continue to work in the PHP-only core. Validation does not enable runtime guarding: execution must use `GuardedStepExecutor`. Actual input types, predicate evaluation errors and the exactly-one-boolean jq result requirement are checked at runtime.
+
+The [condition schema](../pkg/Conditions/condition.schema.json) describes the recursive structural shape. Compiler validation additionally enforces rule names/parameters, supported jq syntax, byte limits, depth and total node count. `conditionSchema()` returns null without the optional integration; the CLI schema command exits with code 2. Generated contracts include `FlowCondition` and its five variants; existing metadata stays an open map so unrelated keys round-trip unchanged.
+
+This authoring API uses the new core condition-validator contract. Its Conditions package requires the next core release (`^0.1.0-rc.4`); the existing published rc.3 packages are unchanged.
+
 ## Understand the diagnostics
 
 Each diagnostic has a stable `code`, a human-readable `message`, a `severity`
@@ -165,6 +199,19 @@ it contains no `error`-severity diagnostic. Warnings never block a run.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
+| `condition_validation_unavailable` | error | A guard is present but the optional validator is not bound. |
+| `condition_not_object` | error | A guard or child is not a condition document. |
+| `invalid_condition_version` | error | The condition version is not v1. |
+| `invalid_condition_operator` | error | Multiple composite operators are present. |
+| `invalid_condition_children` | error | Composite children are not a non-empty list within the bound. |
+| `unknown_condition_property` | error | A condition contains an unsupported property. |
+| `invalid_condition_syntax` | error | The predicate syntax is unsupported or missing. |
+| `invalid_condition_rules` | error | The rules mapping is missing or invalid. |
+| `invalid_condition_rule` | error | A field or rule definition is invalid. |
+| `invalid_condition_expression` | error | The jq expression is missing, empty or exceeds its byte limit. |
+| `unsupported_condition_expression` | error | The configured backend cannot compile the expression. |
+| `condition_backend_unavailable` | error | The backend could not analyze the expression. |
+| `condition_limit_exceeded` | error | The tree exceeds its depth or node budget. |
 | `definition_not_object` | error | The document is not a JSON object. |
 | `missing_key` | error | `key` is missing or not a non-empty string. |
 | `invalid_version` | error | `version` is not a positive integer. |
@@ -217,7 +264,7 @@ and Python.
 
 The authoring types are `FlowDefinition`, `FlowStepDefinition`,
 `FlowInputBinding`, `FlowOperation`, `FlowDiagnostic`,
-`FlowValidationReport`, and `FlowValidateParams`. They are transport shapes:
+`FlowValidationReport`, `FlowValidateParams`, and `FlowCondition`. They are transport shapes:
 their only job is to make the JSON-RPC request and response typed. Validation
 stays on the server.
 

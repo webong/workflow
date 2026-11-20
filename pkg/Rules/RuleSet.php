@@ -115,50 +115,70 @@ final readonly class RuleSet
     private static function normalizeRules(array $rules): array
     {
         if (count($rules) > self::MAX_FIELDS) {
-            throw new InvalidArgumentException('Match rules contain too many fields.');
+            throw new RuleDefinitionException('Match rules contain too many fields.');
         }
 
         $normalized = [];
 
         foreach ($rules as $field => $fieldRules) {
             if (! is_string($field)) {
-                throw new InvalidArgumentException('Match-rule field names must be strings.');
+                throw new RuleDefinitionException('Match-rule field names must be strings.', '/'.str_replace(['~', '/'], ['~0', '~1'], (string) $field));
             }
 
-            $field = self::normalizeField($field);
+            $path = '/'.str_replace(['~', '/'], ['~0', '~1'], $field);
+            try {
+                $field = self::normalizeField($field);
+            } catch (InvalidArgumentException $error) {
+                throw new RuleDefinitionException($error->getMessage(), $path);
+            }
             $items = is_string($fieldRules) ? explode('|', $fieldRules) : $fieldRules;
 
             if (! is_array($items) || ! array_is_list($items) || $items === [] || count($items) > self::MAX_RULES_PER_FIELD) {
-                throw new InvalidArgumentException("Match-rule field [{$field}] has an invalid rule list.");
+                throw new RuleDefinitionException("Match-rule field [{$field}] has an invalid rule list.", $path);
             }
 
             if (array_key_exists($field, $normalized)) {
-                throw new InvalidArgumentException("Match-rule field [{$field}] is defined more than once after normalization.");
+                throw new RuleDefinitionException("Match-rule field [{$field}] is defined more than once after normalization.", $path);
             }
 
-            $normalized[$field] = array_map(
-                static function (mixed $rule) use ($field): string {
-                    if (! is_string($rule) || $rule === '' || strlen($rule) > self::MAX_RULE_LENGTH) {
-                        throw new InvalidArgumentException("Match-rule field [{$field}] contains an invalid rule.");
-                    }
-
-                    $parts = explode(':', $rule, 2);
-                    $rawName = $parts[0];
-                    $parameters = $parts[1] ?? null;
-                    $name = strtolower($rawName);
-                    if (! isset(self::ALLOWED_RULES[$name])) {
-                        throw new InvalidArgumentException("Match rule [{$name}] is not allowed.");
-                    }
-
+            $normalized[$field] = [];
+            foreach ($items as $index => $rule) {
+                $rulePath = is_string($fieldRules) ? $path : $path.'/'.$index;
+                if (! is_string($rule) || $rule === '' || strlen($rule) > self::MAX_RULE_LENGTH) {
+                    throw new RuleDefinitionException('Invalid rule.', $rulePath);
+                }
+                $parts = explode(':', $rule, 2);
+                $name = strtolower($parts[0]);
+                $parameters = $parts[1] ?? null;
+                if (! isset(self::ALLOWED_RULES[$name])) {
+                    throw new RuleDefinitionException('Rule is not allowed.', $rulePath);
+                }
+                try {
                     self::validateParameters($field, $name, $parameters);
-
-                    return $parameters === null ? $name : $name.':'.$parameters;
-                },
-                $items,
-            );
+                } catch (InvalidArgumentException $error) {
+                    throw new RuleDefinitionException($error->getMessage(), $rulePath);
+                }
+                $normalized[$field][] = $parameters === null ? $name : $name.':'.$parameters;
+            }
         }
 
         return $normalized;
+    }
+
+    /** @return array<string, mixed> Structural shape; make() checks names, parameters and byte limits. */
+    public static function schema(): array
+    {
+        return ['anyOf' => [
+            ['type' => 'object', 'maxProperties' => self::MAX_FIELDS,
+                'additionalProperties' => ['oneOf' => [
+                    ['type' => 'string', 'minLength' => 1],
+                    ['type' => 'array', 'minItems' => 1, 'maxItems' => self::MAX_RULES_PER_FIELD,
+                        'items' => ['type' => 'string', 'minLength' => 1, 'maxLength' => self::MAX_RULE_LENGTH]],
+                ]],
+            ],
+            // PHP's empty associative array serializes as []; preserve v1 compatibility.
+            ['type' => 'array', 'maxItems' => 0],
+        ], 'x-allowed-rules' => array_keys(self::ALLOWED_RULES), 'x-max-field-bytes' => self::MAX_FIELD_LENGTH];
     }
 
     private static function validateParameters(string $field, string $name, ?string $parameters): void

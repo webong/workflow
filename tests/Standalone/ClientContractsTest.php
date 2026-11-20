@@ -48,6 +48,11 @@ final class ClientContractsTest extends TestCase
         );
 
         foreach ([
+            'FlowRulesCondition',
+            'FlowJqCondition',
+            'FlowAllCondition',
+            'FlowAnyCondition',
+            'FlowNotCondition',
             'FlowDefinition',
             'FlowStepDefinition',
             'FlowInputBinding',
@@ -62,6 +67,16 @@ final class ClientContractsTest extends TestCase
 
         $diagnosticFields = array_column($manifest['types']['FlowDiagnostic']['fields'], 'name');
         self::assertSame(['code', 'message', 'severity', 'path', 'step_id', 'details'], $diagnosticFields);
+    }
+
+    public function testConditionTypesPreserveRecursiveWireOperators(): void
+    {
+        $manifest = require dirname(__DIR__, 2).'/tools/contracts.php';
+        $rendered = ClientContractGenerator::render($manifest);
+        self::assertStringContainsString('export type FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition;', $rendered['ts']);
+        self::assertStringContainsString('FlowNotCondition = TypedDict(', $rendered['py']);
+        self::assertStringContainsString("'not': 'FlowCondition'", $rendered['py']);
+        self::assertStringContainsString('all: FlowCondition[]', $rendered['ts']);
     }
 
     public function testTheGoStateContractPreservesAbsentAndExplicitNullOutputs(): void

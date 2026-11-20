@@ -25,6 +25,9 @@ declare(strict_types=1);
  */
 return [
     'enums' => [
+        'FlowConditionVersion' => ['cases' => ['v1' => 'V1']],
+        'FlowRulesSyntax' => ['cases' => ['rules' => 'RULES']],
+        'FlowJqSyntax' => ['cases' => ['jq' => 'JQ']],
         'FlowStatus' => [
             'description' => 'Overall status of one flow run.',
             'cases' => [
@@ -86,7 +89,47 @@ return [
             ],
         ],
     ],
+    'aliases' => [
+        'FlowCondition' => 'union<FlowRulesCondition,FlowJqCondition,FlowAllCondition,FlowAnyCondition,FlowNotCondition>',
+    ],
     'types' => [
+        'FlowRulesCondition' => [
+            'description' => 'Bounded Laravel-shaped rules; syntax may be omitted for legacy v1 documents. Semantic validation stays in WorkFlow.',
+            'fields' => [
+                ['name' => 'version', 'type' => 'FlowConditionVersion', 'optional' => true],
+                ['name' => 'syntax', 'type' => 'FlowRulesSyntax', 'optional' => true],
+                ['name' => 'rules', 'type' => 'union<map<union<string,string[]>>,unknown[]>', 'description' => 'A field/rule mapping; only an empty list is accepted as the legacy empty mapping.'],
+            ],
+        ],
+        'FlowJqCondition' => [
+            'description' => 'A jq predicate. Analysis checks backend support without evaluation; runtime must return one boolean.',
+            'fields' => [
+                ['name' => 'version', 'type' => 'FlowConditionVersion', 'optional' => true],
+                ['name' => 'syntax', 'type' => 'FlowJqSyntax'],
+                ['name' => 'expression', 'type' => 'string'],
+            ],
+        ],
+        'FlowAllCondition' => [
+            'description' => 'All children must match. Children form a non-empty bounded list.',
+            'fields' => [
+                ['name' => 'version', 'type' => 'FlowConditionVersion', 'optional' => true],
+                ['name' => 'all', 'type' => 'FlowCondition[]'],
+            ],
+        ],
+        'FlowAnyCondition' => [
+            'description' => 'At least one child must match. Children form a non-empty bounded list.',
+            'fields' => [
+                ['name' => 'version', 'type' => 'FlowConditionVersion', 'optional' => true],
+                ['name' => 'any', 'type' => 'FlowCondition[]'],
+            ],
+        ],
+        'FlowNotCondition' => [
+            'description' => 'Negates a match; an evaluation error remains an error.',
+            'fields' => [
+                ['name' => 'version', 'type' => 'FlowConditionVersion', 'optional' => true],
+                ['name' => 'not', 'type' => 'FlowCondition'],
+            ],
+        ],
         'FlowInputBinding' => [
             'description' => 'A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.',
             'fields' => [
@@ -104,7 +147,7 @@ return [
                 ['name' => 'critical', 'type' => 'bool', 'description' => 'Whether failure blocks the run.'],
                 ['name' => 'retriable', 'type' => 'bool', 'description' => 'Whether the host may retry the step.'],
                 ['name' => 'depends_on', 'type' => 'string[]', 'description' => 'Step ids that must complete first.'],
-                ['name' => 'metadata', 'type' => 'map<unknown>', 'description' => 'Execution bookkeeping; not for domain data.'],
+                ['name' => 'metadata', 'type' => 'map<unknown>', 'description' => 'Execution metadata. Optional when is a FlowCondition; other metadata remains open.'],
                 ['name' => 'retry_policy', 'type' => 'FlowRetryPolicy|null', 'description' => 'Optional retry policy.'],
                 ['name' => 'input', 'type' => 'map<FlowInputBinding>', 'optional' => true, 'description' => 'Bindings keyed by input name; omitted when the step declares none.'],
             ],

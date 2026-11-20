@@ -10,6 +10,7 @@ use JsonException;
 use Throwable;
 use Traversable;
 use Webong\WorkFlow\Contracts\FlowOperationDirectory;
+use Webong\WorkFlow\Contracts\FlowConditionValidator;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Services\FlowDefinitionValidator;
 use Webong\WorkFlow\Services\FlowOperationCatalog;
@@ -39,8 +40,11 @@ final readonly class FlowAuthoringCli
     /** @var Closure(string): void */
     private Closure $stderr;
 
-    public function __construct(?Closure $stdout = null, ?Closure $stderr = null)
-    {
+    public function __construct(
+        ?Closure $stdout = null,
+        ?Closure $stderr = null,
+        private ?FlowConditionValidator $conditions = null,
+    ) {
         $this->stdout = $stdout ?? static function (string $text): void {
             fwrite(\STDOUT, $text);
         };
@@ -61,6 +65,7 @@ final readonly class FlowAuthoringCli
                 'validate' => $this->validateCommand($options),
                 'operations' => $this->operationsCommand($options),
                 'inspect' => $this->inspectCommand($options),
+                'condition-schema' => $this->conditionSchemaCommand(),
                 default => $this->fail("Unknown command '{$command}'. Run 'workflow help'."),
             };
         } catch (Throwable $exception) {
@@ -246,7 +251,17 @@ final readonly class FlowAuthoringCli
         return (new FlowDefinitionValidator(
             $executors,
             $this->grantedCapabilities($this->flag($options, 'capabilities')),
+            conditions: $this->conditions,
         ))->validate($document);
+    }
+
+    private function conditionSchemaCommand(): int
+    {
+        if ($this->conditions === null) {
+            return $this->fail('Condition authoring is unavailable. Install webong/workflow-conditions.');
+        }
+        $this->write($this->encode($this->conditions->schema()));
+        return 0;
     }
 
     private function help(): int
@@ -255,6 +270,8 @@ final readonly class FlowAuthoringCli
         WorkFlow authoring tools
 
         Usage:
+          workflow condition-schema
+              Print the optional Conditions package structural JSON Schema.
           workflow validate <definition.json|-> [--executors=file.php] [--capabilities=a,b] [--json]
               Check a canonical flow definition without executing it.
           workflow inspect <definition.json|-> [--executors=file.php] [--capabilities=a,b] [--json]

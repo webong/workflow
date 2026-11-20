@@ -10,6 +10,7 @@ use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Enums\FlowStatus;
 use Webong\WorkFlow\Enums\FlowStepStatus;
 use Webong\WorkFlow\Services\FlowDefinitionValidator;
+use Webong\WorkFlow\Contracts\FlowConditionValidator;
 use Webong\WorkFlow\Services\FlowExecutionDispatcher;
 use Webong\WorkFlow\Services\FlowOperationCatalog;
 use Webong\WorkFlow\Services\FlowStateTransition;
@@ -47,6 +48,7 @@ final readonly class FlowRpcApplication
         iterable $operationProviders = [],
         private ?array $grantedCapabilities = null,
         private ?QueueRpcRuntime $queue = null,
+        private ?FlowConditionValidator $conditions = null,
     ) {
         if ($this->queue !== null && $this->execution->has('queue')) {
             throw new \InvalidArgumentException('Register either the queue runtime or a legacy queue dispatch driver, not both.');
@@ -375,7 +377,7 @@ final readonly class FlowRpcApplication
             throw new RpcFailure(-32602, 'Capabilities are configured by the host');
         }
 
-        $report = (new FlowDefinitionValidator($this->operationProviders, $this->grantedCapabilities))->validate($definition);
+        $report = (new FlowDefinitionValidator($this->operationProviders, $this->grantedCapabilities, conditions: $this->conditions))->validate($definition);
 
         return $report->toArray();
     }

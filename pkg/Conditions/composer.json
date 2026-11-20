@@ -7,7 +7,7 @@
         "php": "^8.3 || ^8.4 || ^8.5",
         "illuminate/translation": "^12.0",
         "illuminate/validation": "^12.0",
-        "webong/workflow": "^0.1.0-rc.2",
+        "webong/workflow": "^0.1.0-rc.4",
         "webong/workflow-jq": "@dev",
         "webong/workflow-rules": "@dev"
     },

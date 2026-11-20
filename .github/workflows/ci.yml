@@ -98,6 +98,15 @@ jobs:
       - run: composer analyse
       - run: composer test
       - run: composer types
+      - name: Check generated Python condition declarations
+        run: |
+          python3 - <<'PYTHON'
+          import runpy, typing
+          scope = runpy.run_path('types/work_flow.py')
+          for name in ['FlowRulesCondition', 'FlowJqCondition', 'FlowAllCondition', 'FlowAnyCondition', 'FlowNotCondition']:
+              typing.get_type_hints(scope[name], globalns=scope, localns=scope)
+          assert 'not' in scope['FlowNotCondition'].__required_keys__
+          PYTHON
       - run: git diff --exit-code -- types/work-flow.generated.ts types/work-flow.d.ts types/work_flow.py types/work_flow.go
 
   projections:

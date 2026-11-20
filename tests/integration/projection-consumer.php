@@ -161,3 +161,11 @@ if (class_exists(Illuminate\Foundation\Application::class)) {
     }
 }
 echo "PASS: $case autoload, execution, optional closures and Laravel discovery\n";
+
+// A core-only installation must reject unchecked guards without pulling in optional dependencies.
+if ($case === 'core-minimal') {
+    $report = (new \Webong\WorkFlow\Services\FlowDefinitionValidator())->validate([
+        'key' => 'guard', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['rules' => []]]]],
+    ]);
+    ensure(! $report->isValid() && $report->errors()[0]->code === 'condition_validation_unavailable', 'Core-only install silently accepted unchecked conditions');
+}

@@ -19,6 +19,7 @@ final class ClientContractGenerator
 {
     /**
      * @param array{
+     *     aliases?: array<string, string>,
      *     enums: array<string, array{description?: string, cases: array<string, string>}>,
      *     types: array<string, array{description?: string, fields: list<array{name: string, type: string, optional?: bool, description?: string}>}>
      * } $manifest
@@ -36,7 +37,7 @@ final class ClientContractGenerator
     /**
      * Writes the three generated files beneath $root and returns their paths.
      *
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      * @return array<string, string> Language => path.
      */
     public static function write(array $manifest, string $root): array
@@ -59,7 +60,7 @@ final class ClientContractGenerator
     }
 
     /**
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      */
     private static function renderTypeScript(array $manifest): string
     {
@@ -85,11 +86,15 @@ final class ClientContractGenerator
             $out .= "}\n\n";
         }
 
+        foreach ($manifest['aliases'] ?? [] as $name => $type) {
+            $out .= 'export type '.$name.' = '.self::ts($type).";\n\n";
+        }
+
         return rtrim($out)."\n";
     }
 
     /**
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      */
     private static function renderPython(array $manifest): string
     {
@@ -107,6 +112,25 @@ final class ClientContractGenerator
 
         foreach (self::types($manifest) as $name => $type) {
             $out .= self::pyDoc($type['description'] ?? null);
+            // JSON keys can be Python keywords (the condition operator `not`).
+            $keywords = [
+                'False', 'None', 'True', 'and', 'as', 'assert', 'async', 'await', 'break',
+                'class', 'continue', 'def', 'del', 'elif', 'else', 'except', 'finally',
+                'for', 'from', 'global', 'if', 'import', 'in', 'is', 'lambda', 'nonlocal',
+                'not', 'or', 'pass', 'raise', 'return', 'try', 'while', 'with', 'yield',
+            ];
+            if (array_intersect(array_column($type['fields'], 'name'), $keywords) !== []) {
+                $out .= $name." = TypedDict('".$name."', {\n";
+                foreach ($type['fields'] as $field) {
+                    $field = self::field($field);
+                    // Quoted types preserve forward references in functional TypedDicts.
+                    $annotation = "'".self::pyString(self::py($field['type']))."'";
+                    if ($field['optional']) { $annotation = 'NotRequired['.$annotation.']'; }
+                    $out .= "    '".self::pyString($field['name'])."': ".$annotation.",\n";
+                }
+                $out .= "})\n\n";
+                continue;
+            }
             $out .= 'class '.$name."(TypedDict):\n";
             if ($type['fields'] === []) {
                 $out .= "    pass\n\n";
@@ -124,11 +148,15 @@ final class ClientContractGenerator
             $out .= "\n";
         }
 
+        foreach ($manifest['aliases'] ?? [] as $name => $type) {
+            $out .= $name.' = '.self::py($type)."\n\n";
+        }
+
         return rtrim($out)."\n";
     }
 
     /**
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      */
     private static function renderGo(array $manifest): string
     {
@@ -168,11 +196,15 @@ final class ClientContractGenerator
             $out .= "}\n\n";
         }
 
+        foreach ($manifest['aliases'] ?? [] as $name => $type) {
+            $out .= 'type '.$name.' = '.self::go($type)."\n\n";
+        }
+
         return rtrim($out)."\n";
     }
 
     /**
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      * @return array<string, array{description?: string, cases: array<string, string>}>
      */
     private static function enums(array $manifest): array
@@ -184,7 +216,7 @@ final class ClientContractGenerator
     }
 
     /**
-     * @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest
+     * @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest
      * @return array<string, array{description?: string, fields: list<array{name: string, type: string, optional?: bool, description?: string}>}>
      */
     private static function types(array $manifest): array
@@ -322,7 +354,7 @@ final class ClientContractGenerator
         return $base;
     }
 
-    /** @param array{enums: array<string, mixed>, types: array<string, mixed>} $manifest */
+    /** @param array{aliases?: array<string, string>, enums: array<string, mixed>, types: array<string, mixed>} $manifest */
     private static function goNeedsJson(array $manifest): bool
     {
         foreach (self::types($manifest) as $type) {

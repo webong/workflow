@@ -216,11 +216,32 @@ final class FlowAuthoringCliTest extends TestCase
         self::assertStringContainsString('The definition could not be parsed:', $stdout);
     }
 
+    public function testGuardedAuthoringAndSchemaUseTheSameOptionalValidator(): void
+    {
+        $validator = new \Webong\WorkFlow\Conditions\ConditionAuthoringValidator();
+        $document = ['key' => 'guarded', 'steps' => [
+            ['id' => 'a', 'metadata' => ['when' => ['not' => ['syntax' => 'jq', 'expression' => '.[']]]],
+        ]];
+        [$code, $output] = $this->invoke(['validate', $this->definition($document), '--json'], $validator);
+        self::assertSame(1, $code);
+        $errors = array_values(array_filter(json_decode($output, true)['diagnostics'], fn ($d) => $d['severity'] === 'error'));
+        self::assertSame('/steps/0/metadata/when/not/expression', $errors[0]['path']);
+        [$code, $output] = $this->invoke(['inspect', $this->definition($document), '--json'], $validator);
+        self::assertSame(1, $code);
+        self::assertStringContainsString('unsupported_condition_expression', $output);
+        [$code, $output] = $this->invoke(['condition-schema'], $validator);
+        self::assertSame(0, $code);
+        self::assertSame($validator->schema(), json_decode($output, true));
+        [$code, , $error] = $this->invoke(['condition-schema']);
+        self::assertSame(2, $code);
+        self::assertStringContainsString('webong/workflow-conditions', $error);
+    }
+
     /**
      * @param list<string> $arguments
      * @return array{0: int, 1: string, 2: string}
      */
-    private function invoke(array $arguments): array
+    private function invoke(array $arguments, ?\Webong\WorkFlow\Contracts\FlowConditionValidator $conditions = null): array
     {
         $stdout = '';
         $stderr = '';
@@ -231,6 +252,7 @@ final class FlowAuthoringCliTest extends TestCase
             static function (string $text) use (&$stderr): void {
                 $stderr .= $text;
             },
+            conditions: $conditions,
         );
 
         return [$cli->run($arguments), $stdout, $stderr];

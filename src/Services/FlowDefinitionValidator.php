@@ -6,6 +6,7 @@ namespace Webong\WorkFlow\Services;
 
 use InvalidArgumentException;
 use Webong\WorkFlow\Contracts\FlowOperationProvider;
+use Webong\WorkFlow\Contracts\FlowConditionValidator;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
 use Webong\WorkFlow\Enums\FlowDiagnosticSeverity;
 use Webong\WorkFlow\Enums\FlowInputSource;
@@ -29,6 +30,7 @@ use Webong\WorkFlow\ValueObjects\FlowValidationReport;
  *
  * - document shape: key, version, steps, and step/input object shapes;
  * - topology: dependency targets, self-dependencies, and cycles;
+ * - optional condition compilation through FlowConditionValidator;
  * - bindings: sources, JSON Pointers, and steps that are declared
  *   dependencies;
  * - operation availability: whether a bound executor supports each step;
@@ -60,6 +62,7 @@ final readonly class FlowDefinitionValidator
         iterable $executors = [],
         private ?array $grantedCapabilities = null,
         private FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
+        private ?FlowConditionValidator $conditions = null,
     ) {
         $this->executors = $this->executorResolver->normalize($executors);
     }
@@ -108,6 +111,7 @@ final readonly class FlowDefinitionValidator
         foreach ($this->cycleDiagnostics($dependencies, $idIndexes) as $diagnostic) {
             $diagnostics[] = $diagnostic;
         }
+        $this->conditions($rawSteps, $diagnostics);
         $this->bindings($rawSteps, $idIndexes, $dependencies, $diagnostics);
         $operations = $this->operations($rawSteps, $executors, $diagnostics);
         $this->capabilities($document, $operations, $idIndexes, $diagnostics);
@@ -132,6 +136,34 @@ final readonly class FlowDefinitionValidator
         }
 
         return new FlowValidationReport($diagnostics);
+    }
+
+    /** @return array<string, mixed>|null Null when the optional condition integration is not bound. */
+    public function conditionSchema(): ?array
+    {
+        return $this->conditions?->schema();
+    }
+
+    /**
+     * @param list<mixed> $steps
+     * @param list<FlowDiagnostic> $diagnostics
+     */
+    private function conditions(array $steps, array &$diagnostics): void
+    {
+        foreach ($steps as $index => $step) {
+            if (! is_array($step) || ! is_array($step['metadata'] ?? null) || ! array_key_exists('when', $step['metadata'])) {
+                continue;
+            }
+            $path = '/steps/'.$index.'/metadata/when';
+            $id = is_string($step['id'] ?? null) ? $step['id'] : null;
+            if ($this->conditions === null) {
+                $diagnostics[] = $this->error('condition_validation_unavailable', 'Bind a condition validator to validate metadata.when.', $path, $id);
+                continue;
+            }
+            foreach ($this->conditions->validate($step['metadata']['when'], $path, $id) as $diagnostic) {
+                $diagnostics[] = $diagnostic;
+            }
+        }
     }
 
     /** @return array<string, mixed>|null Null when the value is not a JSON object. */

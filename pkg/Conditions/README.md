@@ -23,3 +23,11 @@ Evaluation is ordered and short circuits. An encountered error propagates throug
 To opt a core executor into conditional steps, wrap it in `GuardedStepExecutor`. A step's existing `metadata.when` contains the same condition document and sees `{context: ..., input: ...}`. False skips the step, satisfying dependencies under the core runner's existing skip behavior; errors fail it without retry and without executing its effect. Missing when delegates unchanged. Guarding is opt-in and does not change the core serialized schema.
 
 Hosts remain responsible for normalization, authorization, subscription ownership and delivery. Conditions contain no Gateway-specific fields or behavior.
+
+## Authoring
+
+`ConditionAuthoringValidator` implements the optional core `FlowConditionValidator` contract. Bind it as `new FlowDefinitionValidator(conditions: new ConditionAuthoringValidator($compiler))` to validate guards before a run starts. Share the same compiler with runtime guards. Validation never evaluates a predicate: actual jq return types and data-dependent errors remain runtime checks. Diagnostics contain stable codes and escaped JSON Pointers, with one condition error per step.
+
+The installed `workflow` binary discovers this integration when available. `workflow validate`, `workflow inspect`, and the existing validation API use the same compiler. `workflow condition-schema` exports [the structural JSON Schema](condition.schema.json); the authoritative compiler also checks rule parameters, backend support and whole-tree limits. See [the authoring guide](../../docs/authoring.md#validate-step-conditions).
+
+This new authoring integration requires core `^0.1.0-rc.4`; source changes do not alter already-published rc.3 packages. `ConditionDefinitionException` remains an `InvalidArgumentException` and adds a relative `path` and `diagnosticCode` for authoring tools.

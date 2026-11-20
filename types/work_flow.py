@@ -6,6 +6,12 @@ from __future__ import annotations
 
 from typing import Any, Literal, NotRequired, TypedDict
 
+FlowConditionVersion = Literal['v1']
+
+FlowRulesSyntax = Literal['rules']
+
+FlowJqSyntax = Literal['jq']
+
 # Overall status of one flow run.
 FlowStatus = Literal['pending', 'running', 'attention', 'completed', 'blocked', 'cancelled']
 
@@ -23,6 +29,35 @@ FlowDiagnosticSeverity = Literal['error', 'warning', 'info']
 
 # Whether a driver accepted asynchronous work or completed it synchronously.
 FlowExecutionStatus = Literal['dispatched', 'completed']
+
+# Bounded Laravel-shaped rules; syntax may be omitted for legacy v1 documents. Semantic validation stays in WorkFlow.
+class FlowRulesCondition(TypedDict):
+    version: NotRequired[FlowConditionVersion]
+    syntax: NotRequired[FlowRulesSyntax]
+    # A field/rule mapping; only an empty list is accepted as the legacy empty mapping.
+    rules: dict[str, str | list[str]] | list[Any]
+
+# A jq predicate. Analysis checks backend support without evaluation; runtime must return one boolean.
+class FlowJqCondition(TypedDict):
+    version: NotRequired[FlowConditionVersion]
+    syntax: FlowJqSyntax
+    expression: str
+
+# All children must match. Children form a non-empty bounded list.
+class FlowAllCondition(TypedDict):
+    version: NotRequired[FlowConditionVersion]
+    all: list[FlowCondition]
+
+# At least one child must match. Children form a non-empty bounded list.
+class FlowAnyCondition(TypedDict):
+    version: NotRequired[FlowConditionVersion]
+    any: list[FlowCondition]
+
+# Negates a match; an evaluation error remains an error.
+FlowNotCondition = TypedDict('FlowNotCondition', {
+    'version': NotRequired['FlowConditionVersion'],
+    'not': 'FlowCondition',
+})
 
 # A declarative step input binding. Pointers are RFC 6901 JSON Pointers; the empty pointer selects the whole source document.
 class FlowInputBinding(TypedDict):
@@ -47,7 +82,7 @@ class FlowStepDefinition(TypedDict):
     retriable: bool
     # Step ids that must complete first.
     depends_on: list[str]
-    # Execution bookkeeping; not for domain data.
+    # Execution metadata. Optional when is a FlowCondition; other metadata remains open.
     metadata: dict[str, Any]
     # Optional retry policy.
     retry_policy: FlowRetryPolicy | None
@@ -115,23 +150,16 @@ class FlowOperationsResult(TypedDict):
     operations: dict[str, FlowOperation]
 
 # A runtime-neutral child run request correlated to one parent step attempt.
-class FlowChildRunRequest(TypedDict):
-    # Definition identity the host resolves.
-    child_flow_key: str
-    # Stable child identity for this parent attempt.
-    child_run_id: str
-    # Child workflow input.
-    input: dict[str, Any]
-    # Parent flow identity.
-    parent_flow_key: str
-    # Parent run identity when tracked.
-    parent_run_id: str | None
-    # Parent step awaiting or dispatching the child.
-    parent_step_id: str
-    # One-based parent attempt used for callback correlation.
-    parent_attempt: int
-    # Whether the parent waits for the child outcome.
-    await: bool
+FlowChildRunRequest = TypedDict('FlowChildRunRequest', {
+    'child_flow_key': 'str',
+    'child_run_id': 'str',
+    'input': 'dict[str, Any]',
+    'parent_flow_key': 'str',
+    'parent_run_id': 'str | None',
+    'parent_step_id': 'str',
+    'parent_attempt': 'int',
+    'await': 'bool',
+})
 
 # The host result of dispatching one child run.
 class FlowChildRunReceipt(TypedDict):
@@ -249,3 +277,5 @@ class FlowEvent(TypedDict):
     payload: dict[str, Any]
     # Host-supplied timestamp.
     occurred_at: str
+
+FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition

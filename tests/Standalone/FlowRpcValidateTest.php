@@ -132,8 +132,20 @@ final class FlowRpcValidateTest extends TestCase
         ] : $document;
     }
 
+    public function testConditionDiagnosticsMatchTheLibraryWithoutLoadingOrPersistingARun(): void
+    {
+        $conditions = new \Webong\WorkFlow\Conditions\ConditionAuthoringValidator();
+        $document = ['key' => 'rpc-guard', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['rules' => ['account.id' => ['required', 'unique:private_table']]]]]]];
+        $expected = (new \Webong\WorkFlow\Services\FlowDefinitionValidator(conditions: $conditions))->validate($document)->toArray();
+        $actual = $this->application(conditions: $conditions)->invoke('flow.validate', ['definition' => $document]);
+        self::assertSame($expected, $actual);
+        self::assertFalse($actual['valid']);
+        self::assertSame('/steps/0/metadata/when/rules/account.id/1', $actual['diagnostics'][0]['path']);
+        self::assertStringNotContainsString('private_table', json_encode($actual));
+    }
+
     /** @param list<string>|null $grantedCapabilities */
-    private function application(?FlowStepExecutor $provider = null, ?array $grantedCapabilities = null): FlowRpcApplication
+    private function application(?FlowStepExecutor $provider = null, ?array $grantedCapabilities = null, ?\Webong\WorkFlow\Contracts\FlowConditionValidator $conditions = null): FlowRpcApplication
     {
         $definitions = new class implements FlowDefinitionProvider {
             public function definition(string $flowKey): FlowDefinition
@@ -155,6 +167,7 @@ final class FlowRpcValidateTest extends TestCase
             new FlowExecutionDispatcher([]),
             operationProviders: $provider === null ? [] : [$provider],
             grantedCapabilities: $grantedCapabilities,
+            conditions: $conditions,
         );
     }
 
