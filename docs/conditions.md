@@ -26,7 +26,7 @@ Install only the engines you need. `webong/workflow-jq` supplies `JqConditionDri
 
 A driver exposes `syntax()`, `compile(array $document): CompiledCondition`, and `schema()`. Compilation validates a leaf without evaluating runtime data. Return a compiled predicate whose evaluation produces `ConditionResult`; report configuration errors using `ConditionDefinitionException` with a path relative to the leaf. Core prefixes that path through nested composites. Unexpected compilation failures become safe `condition_driver_failure` diagnostics. Driver schema properties describe the leaf; core supplies its common version property.
 
-Register every driver explicitly. Names must be unique and cannot use `all`, `any` or `not`. Unknown/unregistered syntax yields `condition_driver_unavailable`; installing a package does not enable its driver. A driverless compiler can inspect the composition shape but cannot compile a predicate. Schema output includes only enabled leaf drivers and lists them in `x-condition-syntaxes`.
+Register every driver explicitly. Names must be unique and cannot use `all`, `any` or `not`. Unknown/unregistered syntax yields `condition_driver_unavailable`; installing a package does not enable its driver. A driverless compiler can inspect the composition shape but cannot compile a predicate. Schema output includes only enabled leaf drivers and lists them in `x-condition-syntaxes`. Generated `FlowCondition` declarations include an open `FlowDriverCondition` dictionary so custom leaves can appear inside compositions; server validation remains authoritative.
 
 ## Composition and evaluation
 

@@ -365,4 +365,6 @@ type FlowEvent struct {
 	OccurredAt string `json:"occurred_at"`
 }
 
+type FlowDriverCondition = map[string]any
+
 type FlowCondition = any

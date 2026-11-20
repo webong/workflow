@@ -90,7 +90,9 @@ return [
         ],
     ],
     'aliases' => [
-        'FlowCondition' => 'union<FlowRulesCondition,FlowJqCondition,FlowAllCondition,FlowAnyCondition,FlowNotCondition>',
+        // Custom drivers define their own flat leaf properties. Server compilation validates syntax and payload.
+        'FlowDriverCondition' => 'map<unknown>',
+        'FlowCondition' => 'union<FlowRulesCondition,FlowJqCondition,FlowAllCondition,FlowAnyCondition,FlowNotCondition,FlowDriverCondition>',
     ],
     'types' => [
         'FlowRulesCondition' => [

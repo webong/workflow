@@ -73,10 +73,11 @@ final class ClientContractsTest extends TestCase
     {
         $manifest = require dirname(__DIR__, 2).'/tools/contracts.php';
         $rendered = ClientContractGenerator::render($manifest);
-        self::assertStringContainsString('export type FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition;', $rendered['ts']);
+        self::assertStringContainsString('export type FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition | FlowDriverCondition;', $rendered['ts']);
         self::assertStringContainsString('FlowNotCondition = TypedDict(', $rendered['py']);
         self::assertStringContainsString("'not': 'FlowCondition'", $rendered['py']);
         self::assertStringContainsString('all: FlowCondition[]', $rendered['ts']);
+        self::assertStringContainsString('export type FlowDriverCondition = Record<string, unknown>;', $rendered['ts']);
     }
 
     public function testTheGoStateContractPreservesAbsentAndExplicitNullOutputs(): void

@@ -189,7 +189,7 @@ Validation compiles every branch, including branches that would short circuit, w
 
 Validation does not enable runtime guarding: execution must use `GuardedStepExecutor`. Actual input types, predicate evaluation errors and the jq driver's exactly-one-boolean result requirement remain runtime checks.
 
-The [core schema](../src/Conditions/condition.schema.json) describes composition. A configured compiler's `schema()` and `FlowDefinitionValidator::conditionSchema()` include the registered drivers' leaf schemas; no-driver schema output lists no predicate syntaxes. Compilation additionally enforces rule parameters, supported jq syntax, byte limits, depth and total node count. Generated contracts retain the existing condition wire variants and open metadata maps; applications with custom drivers can define their own leaf types.
+The [core schema](../src/Conditions/condition.schema.json) describes composition. A configured compiler's `schema()` and `FlowDefinitionValidator::conditionSchema()` include the registered drivers' leaf schemas; no-driver schema output lists no predicate syntaxes. Compilation additionally enforces rule parameters, supported jq syntax, byte limits, depth and total node count. Generated contracts retain the existing condition wire variants and open metadata maps. `FlowDriverCondition` is an open dictionary for custom engine leaves, allowing them inside nested compositions; server compilation validates their syntax and payload.
 
 ## Understand the diagnostics
 

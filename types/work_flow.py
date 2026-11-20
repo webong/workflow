@@ -278,4 +278,6 @@ class FlowEvent(TypedDict):
     # Host-supplied timestamp.
     occurred_at: str
 
-FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition
+FlowDriverCondition = dict[str, Any]
+
+FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition | FlowDriverCondition

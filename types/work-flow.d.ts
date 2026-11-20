@@ -360,4 +360,6 @@ export interface FlowEvent {
     occurred_at: string;
 }
 
-export type FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition;
+export type FlowDriverCondition = Record<string, unknown>;
+
+export type FlowCondition = FlowRulesCondition | FlowJqCondition | FlowAllCondition | FlowAnyCondition | FlowNotCondition | FlowDriverCondition;
