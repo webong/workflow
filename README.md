@@ -60,6 +60,7 @@ repeated. Starting the process again uses a new run ID.
 For durable queue workers, leases, retries and broker delivery, see the [queue runtime guide](docs/queue.md).
 
 The [standalone jq library](pkg/Jq/README.md) can query JSON without installing the engine or OpenWorkflow.
+Core [driver interfaces](docs/drivers.md) connect optional OpenWorkflow, jq and Illuminate rules engines.
 Core [conditions](docs/conditions.md) compose explicit predicate drivers and provide workflow guards.
 [Rule definitions](docs/rules.md) require only PHP; jq and Laravel rule engines stay optional.
 Independent [adapter packages](docs/packages.md) own their dependencies and discovery.

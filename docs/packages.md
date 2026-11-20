@@ -12,7 +12,7 @@
 Core requires PHP only. A VCS install of the monorepo root may still download
 unloaded adapter sources; the independent core ZIP excludes them, and the
 optional core projection prunes them from a VCS/dist installation. Installing it never advertises a Laravel provider or
-loads adapter namespaces. Laravel, OpenWorkflow and Temporal require clean core `^0.1.0-rc.3`; the Illuminate rules driver requires `^0.1.0-rc.4`. Their PHP
+loads adapter namespaces. Laravel and Temporal require clean core `^0.1.0-rc.3`; the new Illuminate and OpenWorkflow drivers require `^0.1.0-rc.4`. Their PHP
 namespaces remain `Webong\WorkFlow\Laravel`, `Webong\WorkFlow\OpenWorkflow`
 and `Webong\WorkFlow\Temporal`. Install OpenWorkflow alongside Laravel or
 Temporal when those integrations handle OWS definitions. No adapter implicitly

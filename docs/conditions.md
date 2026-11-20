@@ -1,5 +1,7 @@
 # Conditions and explicit drivers
 
+OpenWorkflow connects through the separate [core definition-driver hook](drivers.md). jq and Rules connect through the condition-driver hook described here.
+
 Core owns condition composition, results, guards, authoring validation and driver registration under `src/Conditions`. It requires PHP only. No predicate engine is selected automatically.
 
 ```php

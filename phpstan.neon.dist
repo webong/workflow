@@ -5,6 +5,7 @@ parameters:
         - pkg/Jq
         - pkg/Laravel
         - pkg/Illuminate
+        - pkg/OpenWorkflow/OwsDefinitionDriver.php
         - pkg/Temporal/TemporalCompletionInbox.php
         - pkg/Temporal/TemporalFlowActivityHandler.php
         - pkg/Temporal/TemporalFlowCompletion.php

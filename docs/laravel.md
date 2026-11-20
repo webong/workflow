@@ -200,3 +200,9 @@ store configuration, and host integration, but it does not provide your step
 executors or authorization. See Laravel's guidance for
 [package guidelines](https://laravel.com/framework/docs/boost#third-party-package-ai-guidelines)
 and [package skills](https://laravel.com/framework/docs/boost#third-party-package-skills).
+
+## Optional definition and condition drivers
+
+Laravel uses the [core driver interfaces](drivers.md) rather than importing definition-language adapters in its package provider. Application bootstrap may bind `FlowDefinitionImporter` with `OwsDefinitionDriver`; application code receives a canonical core definition and can use the existing persistence and execution integration. OpenWorkflow is never enabled merely because its package is installed.
+
+The component-only `webong/workflow-illuminate` adapter supplies the Rules condition driver. It is separate from this Laravel application adapter. Register it and/or the jq driver explicitly in a core `ConditionCompiler`, sharing that compiler between authoring and runtime guards.

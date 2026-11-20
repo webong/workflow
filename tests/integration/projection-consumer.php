@@ -133,6 +133,12 @@ if ($example) {
     ensure($state['state']['metadata']['execution_driver'] === 'queue', 'Standalone example RPC closure failed without optional OWS');
 }
 
+if ($ows) {
+    $importer = new Webong\WorkFlow\Services\FlowDefinitionImporter([new Webong\WorkFlow\OpenWorkflow\OwsDefinitionDriver()]);
+    $document = json_encode(['document' => ['dsl' => '1.0.3', 'namespace' => 'consumer', 'name' => 'import', 'version' => '1.0.0'], 'do' => [['make' => ['set' => ['answer' => 42]]]]], JSON_THROW_ON_ERROR);
+    ensure($importer->import('ows', $document)->isValid(), 'Independent OWS driver failed through core');
+}
+
 if (class_exists(Illuminate\Foundation\Application::class)) {
     foreach (['bootstrap/cache', 'config', 'database'] as $path) { @mkdir($consumer . '/' . $path, 0777, true); }
     $manifest = new Illuminate\Foundation\PackageManifest(new Illuminate\Filesystem\Filesystem(), $consumer, $consumer . '/bootstrap/cache/packages.php');
@@ -149,7 +155,7 @@ if (class_exists(Illuminate\Foundation\Application::class)) {
     foreach ($manifest->providers() as $discovered) { $application->register($discovered); }
     $application->boot();
     ensure($application->bound(FlowStateStoreFactory::class) === $laravel, 'Discovery advertised a missing store or lost the full integration');
-    ensure($application->bound(Webong\WorkFlow\OpenWorkflow\OpenWorkflow::class) === ($laravel && $ows), 'Laravel exposed missing OWS integration');
+    ensure(! $application->bound(Webong\WorkFlow\OpenWorkflow\OpenWorkflow::class), 'Laravel implicitly registered a definition engine');
     $published = Illuminate\Support\ServiceProvider::pathsToPublish($provider);
     ensure(($published !== []) === $laravel, 'Discovery exposed pruned resources or lost original publication ownership');
     foreach (array_keys($published) as $path) { ensure(is_file($path), 'Provider publishes a deleted resource'); }
@@ -158,6 +164,20 @@ if (class_exists(Illuminate\Foundation\Application::class)) {
         $store = $application->make(FlowStateStoreFactory::class)->for(new FlowStateSubject('projection-order', '42'));
         $store->put('consumer', $finished);
         ensure($store->get('consumer')?->status === FlowStatus::COMPLETED, 'Projected Laravel database store failed');
+        if ($ows) {
+            ensure($application->make(Webong\WorkFlow\Services\FlowDefinitionImporter::class)->formats() === [], 'Laravel implicitly enabled a core definition driver');
+            // Application code enables a definition driver through core; the Laravel adapter knows no OWS classes.
+            $application->singleton(Webong\WorkFlow\Services\FlowDefinitionImporter::class, static fn () => new Webong\WorkFlow\Services\FlowDefinitionImporter([new Webong\WorkFlow\OpenWorkflow\OwsDefinitionDriver()]));
+            $document = json_encode(['document' => ['dsl' => '1.0.3', 'namespace' => 'consumer', 'name' => 'hook', 'version' => '1.0.0'], 'do' => [['make' => ['set' => ['answer' => 42]]]]], JSON_THROW_ON_ERROR);
+            $result = $application->make(Webong\WorkFlow\Services\FlowDefinitionImporter::class)->import('ows', $document);
+            ensure($result->isValid(), 'Laravel could not consume an explicitly enabled core definition driver');
+            $run = new FlowRun('imported', $result->definition);
+            $state = (new FlowRunner())->run($result->definition, $run->initialState(), new Webong\WorkFlow\OpenWorkflow\Runtime\OwsWorkflowContext([]), [new Webong\WorkFlow\OpenWorkflow\Runtime\OwsSetStepExecutor()]);
+            ensure($state->status === FlowStatus::COMPLETED, 'Imported OWS definition did not execute through core');
+            $store->put($result->definition->key, $state);
+            ensure($store->get($result->definition->key)?->status === FlowStatus::COMPLETED, 'Laravel could not store an imported core run');
+        }
+
     }
 }
 echo "PASS: $case autoload, execution, optional closures and Laravel discovery\n";

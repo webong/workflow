@@ -23,9 +23,30 @@ Raw jq evaluation is reusable through the [standalone jq package](../pkg/Jq/READ
 only OWS data scopes and variable preprocessing live in this adapter. Install a PSR-18
 HTTP client when using HTTP/OpenAPI operations.
 
+## Register the definition driver with core
+
+`OwsDefinitionDriver` implements core's `FlowDefinitionDriver` interface. Register it explicitly; Laravel and other consumers then use the core importer:
+
+```php
+use Webong\WorkFlow\OpenWorkflow\OwsDefinitionDriver;
+use Webong\WorkFlow\Services\FlowDefinitionImporter;
+
+$importer = new FlowDefinitionImporter([new OwsDefinitionDriver()]);
+$result = $importer->import('ows', $jsonOrYaml);
+if (! $result->isValid()) {
+    // Inspect $result->diagnostics; no runnable definition is exposed.
+    return;
+}
+$definition = $result->definition;
+```
+
+Unsupported features block this core import even when schema validation succeeded and the legacy translator produced a partial definition. Metadata retains the pinned specification version and supported features. Import does not persist or execute anything. Runtime contexts and executors remain explicitly supplied through the core contracts, as shown below.
+
+Laravel's adapter does not import or auto-register this engine. The application can bind a configured `FlowDefinitionImporter` in its container; see [core drivers](drivers.md#laravel-uses-the-core-hook). This new driver integration requires the next core/adapter release (`^0.1.0-rc.4`).
+
 ## Validate and translate a definition
 
-`registerOwsDefinition()` does not save anything. It returns a capability
+The existing `OpenWorkflow` facade remains available. `registerOwsDefinition()` does not save anything. It returns a capability
 report and translated `FlowDefinition`; the host decides whether to accept and
 persist that definition.
 

@@ -31,6 +31,19 @@ if ($argv[2] === 'core-conditions') {
     };
     $condition = (new ConditionCompiler([$driver]))->compile(['not' => ['syntax' => 'php', 'expected' => false]]);
     if (! $condition->matches(true) || $condition->matches(false)) { throw new RuntimeException('Core PHP driver composition failed'); }
+    $definitions = new \Webong\WorkFlow\Services\FlowDefinitionImporter();
+    if ($definitions->formats() !== [] || $definitions->import('ows', 'anything')->isValid()) {
+        throw new RuntimeException('Core implicitly enabled a definition driver');
+    }
+    $definitionDriver = new class implements \Webong\WorkFlow\Contracts\FlowDefinitionDriver {
+        public function format(): string { return 'php'; }
+        public function import(string $document): \Webong\WorkFlow\ValueObjects\FlowDefinitionImportResult {
+            return new \Webong\WorkFlow\ValueObjects\FlowDefinitionImportResult(new \Webong\WorkFlow\ValueObjects\FlowDefinition('php-only', []));
+        }
+    };
+    if (! (new \Webong\WorkFlow\Services\FlowDefinitionImporter([$definitionDriver]))->import('php', 'anything')->isValid()) {
+        throw new RuntimeException('Core definition hook required an external engine');
+    }
     $authoring = new ConditionAuthoringValidator();
     if ($authoring->validate(['rules' => []])[0]->code !== 'condition_driver_unavailable') { throw new RuntimeException('Core silently enabled a rules engine'); }
 } else {
