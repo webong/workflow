@@ -35,19 +35,27 @@ if ($argv[2] === 'core-conditions') {
     if ($authoring->validate(['rules' => []])[0]->code !== 'condition_driver_unavailable') { throw new RuntimeException('Core silently enabled a rules engine'); }
 } else {
     $jq = $argv[2] === 'jq-driver';
-    $driver = $jq ? new \Webong\WorkFlow\Jq\JqConditionDriver() : new \Webong\WorkFlow\Laravel\RuleConditionDriver();
+    $driver = $jq ? new \Webong\WorkFlow\Jq\JqConditionDriver() : new \Webong\WorkFlow\Illuminate\RuleConditionDriver();
     $compiler = new ConditionCompiler([$driver]);
     $leaf = $jq ? ['syntax' => 'jq', 'expression' => '.amount > 10'] : ['rules' => ['amount' => 'required|numeric|min:11']];
     $condition = $compiler->compile(['all' => [$leaf]]);
     if (! $condition->matches(['amount' => 11]) || $condition->matches(['amount' => 1])) { throw new RuntimeException('Installed predicate driver failed'); }
     if ($jq && InstalledVersions::isInstalled('illuminate/validation')) { throw new RuntimeException('Jq driver pulled in Illuminate'); }
     if (! $jq && InstalledVersions::isInstalled('webong/workflow-jq')) { throw new RuntimeException('Rule driver pulled in jq'); }
+    if (! $jq) {
+        foreach (['webong/workflow-laravel', 'illuminate/database', 'illuminate/cache', 'spatie/eloquent-sortable'] as $dependency) {
+            if (InstalledVersions::isInstalled($dependency)) { throw new RuntimeException('Illuminate driver pulled in app integration: '.$dependency); }
+        }
+        $manifest = json_decode(file_get_contents($argv[1].'/vendor/webong/workflow-illuminate/composer.json'), true);
+        if (isset($manifest['extra']['laravel']['providers'])) { throw new RuntimeException('Component adapter advertises an application provider'); }
+    }
+
     $authoring = new ConditionAuthoringValidator($compiler);
     $bad = $jq ? ['syntax' => 'jq', 'expression' => '.['] : ['rules' => ['id' => ['exists:private_users']]];
     $report = (new FlowDefinitionValidator(conditions: $authoring))->validate(['key' => 'authoring', 'steps' => [['id' => 'send', 'metadata' => ['when' => $bad]]]]);
     $expected = '/steps/0/metadata/when/'.($jq ? 'expression' : 'rules/id/0');
     if ($report->isValid() || $report->errors()[0]->path !== $expected) { throw new RuntimeException('Installed driver authoring lost its diagnostic path'); }
-    $driverClass = $jq ? '\\Webong\\WorkFlow\\Jq\\JqConditionDriver' : '\\Webong\\WorkFlow\\Laravel\\RuleConditionDriver';
+    $driverClass = $jq ? '\\Webong\\WorkFlow\\Jq\\JqConditionDriver' : '\\Webong\\WorkFlow\\Illuminate\\RuleConditionDriver';
     file_put_contents($argv[1].'/drivers.php', '<?php return [new '.$driverClass.'()];');
     $pipes = [];
     $process = proc_open([PHP_BINARY, $argv[1].'/vendor/bin/workflow', 'condition-schema', '--condition-drivers='.$argv[1].'/drivers.php'], [1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);

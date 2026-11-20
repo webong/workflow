@@ -14,4 +14,4 @@ Field paths preserve case and accept dotted segments and wildcards. Applications
 
 Supported rules: accepted, array, bail, between, boolean, declined, ends_with, filled, in, integer, list, max, min, not_in, nullable, numeric, present, required, size, starts_with, string. Pipe strings and explicit lists are supported; use a list when a parameter contains a pipe.
 
-The optional Laravel adapter supplies `RuleConditionDriver` and `RuleMatcher`. Core never loads Illuminate to parse a rule document. See [conditions](conditions.md) for explicit driver registration.
+The optional Illuminate adapter (`webong/workflow-illuminate`) supplies `RuleConditionDriver` and `RuleMatcher`. Core never loads Illuminate to parse a rule document. See [conditions](conditions.md) for explicit driver registration.

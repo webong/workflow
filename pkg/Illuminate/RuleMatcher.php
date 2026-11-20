@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Laravel;
+namespace Webong\WorkFlow\Illuminate;
 
 use Illuminate\Contracts\Validation\Factory as ValidationFactory;
 use Illuminate\Translation\ArrayLoader;

@@ -5,7 +5,7 @@ Core owns condition composition, results, guards, authoring validation and drive
 ```php
 use Webong\WorkFlow\Conditions\ConditionCompiler;
 use Webong\WorkFlow\Jq\JqConditionDriver;
-use Webong\WorkFlow\Laravel\RuleConditionDriver;
+use Webong\WorkFlow\Illuminate\RuleConditionDriver;
 
 $compiler = new ConditionCompiler([
     new JqConditionDriver(),
@@ -20,7 +20,7 @@ if ($result->isError()) { /* report evaluation failure */ }
 elseif ($result->matched()) { /* perform the action */ }
 ```
 
-Install only the engines you need. `webong/workflow-jq` supplies `JqConditionDriver`; its raw jq evaluator still works without core installed. `webong/workflow-laravel` supplies `RuleConditionDriver` and `RuleMatcher`, using Illuminate Validation. An application can implement `Contracts\ConditionDriver` for another engine without changing core.
+Install only the engines you need. `webong/workflow-jq` supplies `JqConditionDriver`; its raw jq evaluator still works without core installed. `webong/workflow-illuminate` supplies `RuleConditionDriver` and `RuleMatcher` using Illuminate components, without a Laravel application. An application can implement `Contracts\ConditionDriver` for another engine without changing core.
 
 ## Driver interface
 
@@ -37,10 +37,10 @@ Evaluation is ordered and short circuits. An encountered error propagates throug
 `RuleConditionDriver` accepts a `RuleMatcher`, which can use an application validation factory:
 
 ```php
-$rules = new RuleConditionDriver(new \Webong\WorkFlow\Laravel\RuleMatcher($validationFactory));
+$rules = new RuleConditionDriver(new \Webong\WorkFlow\Illuminate\RuleMatcher($validationFactory));
 ```
 
-The bounded [RuleSet](rules.md) preserves Laravel's missing/null, wildcard, size and coercion semantics while excluding custom/database/regex rules. The Laravel package remains an optional framework adapter with its existing discovery behavior.
+The bounded [RuleSet](rules.md) preserves Laravel's missing/null, wildcard, size and coercion semantics while excluding custom/database/regex rules. The Illuminate adapter has no service provider or application discovery; the separate Laravel adapter owns app integration.
 
 ## Guards and authoring
 
@@ -54,7 +54,7 @@ For CLI use, create a trusted PHP file returning the drivers:
 <?php // condition-drivers.php
 return [
     new \Webong\WorkFlow\Jq\JqConditionDriver(),
-    new \Webong\WorkFlow\Laravel\RuleConditionDriver(),
+    new \Webong\WorkFlow\Illuminate\RuleConditionDriver(),
 ];
 ```
 
@@ -70,4 +70,4 @@ The [core schema](../src/Conditions/condition.schema.json) describes engine-inde
 
 Conditions and Rules are now core modules, retaining their PHP namespaces. Remove `webong/workflow-conditions` and `webong/workflow-rules` from consumer requirements and require the new core release when available. Core conflicts with those legacy packages to prevent duplicate class ownership. Their published rc.3 tags and index records remain historical artifacts, not current source workspaces.
 
-`RuleMatcher` moved from `Webong\WorkFlow\Conditions` to `Webong\WorkFlow\Laravel`. Replace implicit `new ConditionCompiler()` engines with an explicit driver list and pass the same compiler to authoring and guards. Laravel adapter users need the new adapter release alongside core; old published packages are not rewritten. No Gateway application changes are part of this refactor.
+`RuleMatcher` moved from `Webong\WorkFlow\Conditions` to `Webong\WorkFlow\Laravel`. Replace implicit `new ConditionCompiler()` engines with an explicit driver list and pass the same compiler to authoring and guards. Rules users need the Illuminate adapter release alongside core; old published packages are not rewritten. No Gateway application changes are part of this refactor.

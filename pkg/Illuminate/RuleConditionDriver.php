@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Webong\WorkFlow\Laravel;
+namespace Webong\WorkFlow\Illuminate;
 
 use UnexpectedValueException;
 use Webong\WorkFlow\Conditions\CompiledCondition;
@@ -13,7 +13,7 @@ use Webong\WorkFlow\Contracts\ConditionDriver;
 use Webong\WorkFlow\Rules\RuleDefinitionException;
 use Webong\WorkFlow\Rules\RuleSet;
 
-/** Laravel Validation supplies the rules engine; core never instantiates Illuminate. */
+/** Illuminate Validation supplies the rules engine; core never instantiates Illuminate. */
 final readonly class RuleConditionDriver implements ConditionDriver
 {
     public function __construct(private RuleMatcher $engine = new RuleMatcher()) {}

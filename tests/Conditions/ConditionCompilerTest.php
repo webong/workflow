@@ -7,7 +7,7 @@ namespace Webong\WorkFlow\Tests\Conditions;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Conditions\ConditionCompiler;
-use Webong\WorkFlow\Laravel\RuleMatcher;
+use Webong\WorkFlow\Illuminate\RuleMatcher;
 use Webong\WorkFlow\Rules\RuleSet;
 
 final class ConditionCompilerTest extends TestCase

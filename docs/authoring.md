@@ -164,7 +164,7 @@ use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
 use Webong\WorkFlow\Conditions\ConditionCompiler;
 use Webong\WorkFlow\Conditions\GuardedStepExecutor;
 use Webong\WorkFlow\Jq\JqConditionDriver;
-use Webong\WorkFlow\Laravel\RuleConditionDriver;
+use Webong\WorkFlow\Illuminate\RuleConditionDriver;
 use Webong\WorkFlow\Services\FlowDefinitionValidator;
 
 $compiler = new ConditionCompiler([new JqConditionDriver(), new RuleConditionDriver()]);

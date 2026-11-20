@@ -3,7 +3,8 @@
 | Directory | Composer identity | Owns |
 |---|---|---|
 | repository root | `webong/workflow` | Engine, conditions/rules, authoring CLI and core projection |
-| `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie dependencies, rules predicate driver, config, migrations and Boost resources |
+| `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie application dependencies, config, migrations and Boost resources |
+| `pkg/Illuminate` | `webong/workflow-illuminate` | Component-only rules driver and matcher; no app provider or Laravel dependency |
 | `pkg/Jq` | `webong/workflow-jq` | Raw jq evaluation/backends/parser; PHP and Zest only, no engine dependency |
 | `pkg/OpenWorkflow` | `webong/workflow-open-workflow` | OWS translator/runtime/schema/CTK, PSR HTTP, YAML and the standalone jq package |
 | `pkg/Temporal` | `webong/workflow-temporal` | Temporal workflow/activity classes and Temporal SDK dependency |
@@ -11,7 +12,7 @@
 Core requires PHP only. A VCS install of the monorepo root may still download
 unloaded adapter sources; the independent core ZIP excludes them, and the
 optional core projection prunes them from a VCS/dist installation. Installing it never advertises a Laravel provider or
-loads adapter namespaces. OpenWorkflow and Temporal require clean core `^0.1.0-rc.3`; the new Laravel condition driver requires `^0.1.0-rc.4`. Their PHP
+loads adapter namespaces. Laravel, OpenWorkflow and Temporal require clean core `^0.1.0-rc.3`; the Illuminate rules driver requires `^0.1.0-rc.4`. Their PHP
 namespaces remain `Webong\WorkFlow\Laravel`, `Webong\WorkFlow\OpenWorkflow`
 and `Webong\WorkFlow\Temporal`. Install OpenWorkflow alongside Laravel or
 Temporal when those integrations handle OWS definitions. No adapter implicitly
@@ -81,10 +82,10 @@ A coordinated clean root engine release is required for the Laravel, OpenWorkflo
 
 ## Conditions, rules and optional engines
 
-[Conditions](conditions.md) and [rule definitions](rules.md) ship in core under `src/`. Core requires only PHP. `ConditionDriver` is the seam for predicate engines: the standalone jq package supplies `JqConditionDriver`, and the Laravel adapter supplies `RuleConditionDriver` and `RuleMatcher`. Neither engine is automatically enabled.
+[Conditions](conditions.md) and [rule definitions](rules.md) ship in core under `src/`. Core requires only PHP. `ConditionDriver` is the seam for predicate engines: the standalone jq package supplies `JqConditionDriver`, and the Illuminate adapter supplies `RuleConditionDriver` and `RuleMatcher`. Neither engine is automatically enabled.
 
-The jq package still requires only PHP and Zest. Its condition driver is optional integration code and requires core when used; raw jq evaluation never installs core. The Laravel adapter's new driver uses Illuminate Validation and needs core `^0.1.0-rc.4`.
+The jq package still requires only PHP and Zest. Its condition driver is optional integration code and requires core when used; raw jq evaluation never installs core. The component-only Illuminate adapter uses Illuminate Validation and needs core `^0.1.0-rc.4`.
 
-Remove the old Conditions/Rules package requirements when adopting the new core release. Core explicitly conflicts with those old package identities to prevent duplicate class ownership. Published rc.3 refs/index records remain immutable; the committed rc.3 index still describes that historical release. Do not regenerate it as part of this source refactor. A subsequent Source Plugin publication must preserve the historical records while publishing the four active adapter/library workspaces.
+Remove the old Conditions/Rules package requirements when adopting the new core release. Core explicitly conflicts with those old package identities to prevent duplicate class ownership. Published rc.3 refs/index records remain immutable; the committed rc.3 index still describes that historical release. Do not regenerate it as part of this source refactor. A subsequent Source Plugin publication must preserve the historical records while publishing the five active adapter/library workspaces.
 
 Consumers still register the Source Plugin index for optional packages and use the root VCS repository for core. The new architecture needs the next coordinated core/adapter release; pushing source does not publish it. See the [condition migration notes](conditions.md#migrating-from-the-rc3-subpackages).

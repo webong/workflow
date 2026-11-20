@@ -60,7 +60,7 @@ foreach ($cases as $case => $surfaces) {
     $require = ['php' => '^8.3', 'webong/workflow' => $version];
     if ($case === 'jq') { $require = ['php' => '^8.3', 'webong/workflow-jq' => $version]; }
     if ($case === 'jq-driver') { $require['webong/workflow-jq'] = $version; }
-    if ($case === 'rules-driver') { $require['webong/workflow-laravel'] = $version; }
+    if ($case === 'rules-driver') { $require['webong/workflow-illuminate'] = $version; }
     // A real Laravel host must discover the adapter only when installed.
     if (in_array($case, ['full', 'core', 'laravel', 'combined'], true)) {
         $require['laravel/framework'] = '^12.0';
@@ -157,7 +157,7 @@ try {
     composer($legacy, 'update', '--dry-run', '--no-plugins');
     throw new RuntimeException('Split adapter incorrectly accepted the old monolithic core');
 } catch (RuntimeException $error) {
-    check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.4'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
+    check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.3'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
 }
 
 

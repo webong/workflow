@@ -9,7 +9,7 @@ use Webong\WorkFlow\Conditions\ConditionCompiler;
 use Webong\WorkFlow\Jq\EvaluatorBackend;
 use Webong\WorkFlow\Jq\JqConditionDriver;
 use Webong\WorkFlow\Jq\ZestJqEvaluator;
-use Webong\WorkFlow\Laravel\RuleConditionDriver;
+use Webong\WorkFlow\Illuminate\RuleConditionDriver;
 
 final class ConditionFixtures
 {

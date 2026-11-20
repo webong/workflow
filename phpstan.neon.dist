@@ -4,6 +4,7 @@ parameters:
         - src
         - pkg/Jq
         - pkg/Laravel
+        - pkg/Illuminate
         - pkg/Temporal/TemporalCompletionInbox.php
         - pkg/Temporal/TemporalFlowActivityHandler.php
         - pkg/Temporal/TemporalFlowCompletion.php
