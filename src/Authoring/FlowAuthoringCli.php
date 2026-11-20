@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Authoring;
 
 use Closure;
+use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
+use Webong\WorkFlow\Conditions\ConditionCompiler;
 use InvalidArgumentException;
 use JsonException;
 use Throwable;
@@ -65,7 +67,7 @@ final readonly class FlowAuthoringCli
                 'validate' => $this->validateCommand($options),
                 'operations' => $this->operationsCommand($options),
                 'inspect' => $this->inspectCommand($options),
-                'condition-schema' => $this->conditionSchemaCommand(),
+                'condition-schema' => $this->conditionSchemaCommand($options),
                 default => $this->fail("Unknown command '{$command}'. Run 'workflow help'."),
             };
         } catch (Throwable $exception) {
@@ -251,17 +253,31 @@ final readonly class FlowAuthoringCli
         return (new FlowDefinitionValidator(
             $executors,
             $this->grantedCapabilities($this->flag($options, 'capabilities')),
-            conditions: $this->conditions,
+            conditions: $this->conditionValidator($options),
         ))->validate($document);
     }
 
-    private function conditionSchemaCommand(): int
+    /** @param array{positional: list<string>, flags: array<string, string|bool>} $options */
+    private function conditionSchemaCommand(array $options): int
     {
-        if ($this->conditions === null) {
-            return $this->fail('Condition authoring is unavailable. Install webong/workflow-conditions.');
-        }
-        $this->write($this->encode($this->conditions->schema()));
+        if ($this->flag($options, 'help') === true) { return $this->help(); }
+        $this->write($this->encode($this->conditionValidator($options)->schema()));
         return 0;
+    }
+
+    /** @param array{positional: list<string>, flags: array<string, string|bool>} $options */
+    private function conditionValidator(array $options): FlowConditionValidator
+    {
+        $file = $this->flag($options, 'condition-drivers');
+        if ($file === null) { return $this->conditions ?? new ConditionAuthoringValidator(); }
+        if (! is_string($file) || ! is_file($file) || ! is_readable($file)) {
+            throw new InvalidArgumentException('Pass --condition-drivers=file.php with a readable trusted driver file.');
+        }
+        $drivers = require $file;
+        if (! is_iterable($drivers)) {
+            throw new InvalidArgumentException('The condition driver file must return an iterable of ConditionDriver objects.');
+        }
+        return new ConditionAuthoringValidator(new ConditionCompiler($drivers));
     }
 
     private function help(): int
@@ -271,7 +287,7 @@ final readonly class FlowAuthoringCli
 
         Usage:
           workflow condition-schema
-              Print the optional Conditions package structural JSON Schema.
+              Print the structural JSON Schema for enabled condition drivers.
           workflow validate <definition.json|-> [--executors=file.php] [--capabilities=a,b] [--json]
               Check a canonical flow definition without executing it.
           workflow inspect <definition.json|-> [--executors=file.php] [--capabilities=a,b] [--json]
@@ -280,6 +296,7 @@ final readonly class FlowAuthoringCli
               List the operations this host publishes.
 
         Options:
+          --condition-drivers=file.php  Trusted PHP file returning explicitly enabled condition drivers.
           --executors=file.php  A PHP file returning an array of FlowStepExecutor objects.
           --capabilities=a,b    Capabilities this host grants (enables capability checks).
           --json                Emit one JSON object instead of text.

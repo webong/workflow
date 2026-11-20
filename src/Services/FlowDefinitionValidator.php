@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Webong\WorkFlow\Services;
 
 use InvalidArgumentException;
+use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
 use Webong\WorkFlow\Contracts\FlowOperationProvider;
 use Webong\WorkFlow\Contracts\FlowConditionValidator;
 use Webong\WorkFlow\Contracts\FlowStepExecutor;
@@ -30,7 +31,7 @@ use Webong\WorkFlow\ValueObjects\FlowValidationReport;
  *
  * - document shape: key, version, steps, and step/input object shapes;
  * - topology: dependency targets, self-dependencies, and cycles;
- * - optional condition compilation through FlowConditionValidator;
+ * - condition compilation through explicitly registered drivers;
  * - bindings: sources, JSON Pointers, and steps that are declared
  *   dependencies;
  * - operation availability: whether a bound executor supports each step;
@@ -51,6 +52,8 @@ final readonly class FlowDefinitionValidator
     /** @var list<mixed> */
     private array $executors;
 
+    private FlowConditionValidator $conditions;
+
     /**
      * @param iterable<mixed> $executors Executors bound on this host; only
      *     FlowStepExecutor instances participate in operation checks.
@@ -62,9 +65,10 @@ final readonly class FlowDefinitionValidator
         iterable $executors = [],
         private ?array $grantedCapabilities = null,
         private FlowStepExecutorResolver $executorResolver = new FlowStepExecutorResolver(),
-        private ?FlowConditionValidator $conditions = null,
+        ?FlowConditionValidator $conditions = null,
     ) {
         $this->executors = $this->executorResolver->normalize($executors);
+        $this->conditions = $conditions ?? new ConditionAuthoringValidator();
     }
 
     public function validate(mixed $definition): FlowValidationReport
@@ -138,10 +142,10 @@ final readonly class FlowDefinitionValidator
         return new FlowValidationReport($diagnostics);
     }
 
-    /** @return array<string, mixed>|null Null when the optional condition integration is not bound. */
-    public function conditionSchema(): ?array
+    /** @return array<string, mixed> Includes the configured predicate drivers. */
+    public function conditionSchema(): array
     {
-        return $this->conditions?->schema();
+        return $this->conditions->schema();
     }
 
     /**
@@ -156,10 +160,6 @@ final readonly class FlowDefinitionValidator
             }
             $path = '/steps/'.$index.'/metadata/when';
             $id = is_string($step['id'] ?? null) ? $step['id'] : null;
-            if ($this->conditions === null) {
-                $diagnostics[] = $this->error('condition_validation_unavailable', 'Bind a condition validator to validate metadata.when.', $path, $id);
-                continue;
-            }
             foreach ($this->conditions->validate($step['metadata']['when'], $path, $id) as $diagnostic) {
                 $diagnostics[] = $diagnostic;
             }

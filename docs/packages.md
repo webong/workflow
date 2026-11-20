@@ -2,10 +2,8 @@
 
 | Directory | Composer identity | Owns |
 |---|---|---|
-| repository root | `webong/workflow` | Engine, authoring CLI and core projection |
-| `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie dependencies, config, migrations and Boost resources |
-| `pkg/Rules` | `webong/workflow-rules` | Bounded portable rule definitions; PHP only |
-| `pkg/Conditions` | `webong/workflow-conditions` | Rule/jq predicates, boolean composition and opt-in flow guards |
+| repository root | `webong/workflow` | Engine, conditions/rules, authoring CLI and core projection |
+| `pkg/Laravel` | `webong/workflow-laravel` | Laravel autoloading, discovery, Illuminate/Spatie dependencies, rules predicate driver, config, migrations and Boost resources |
 | `pkg/Jq` | `webong/workflow-jq` | Raw jq evaluation/backends/parser; PHP and Zest only, no engine dependency |
 | `pkg/OpenWorkflow` | `webong/workflow-open-workflow` | OWS translator/runtime/schema/CTK, PSR HTTP, YAML and the standalone jq package |
 | `pkg/Temporal` | `webong/workflow-temporal` | Temporal workflow/activity classes and Temporal SDK dependency |
@@ -13,7 +11,7 @@
 Core requires PHP only. A VCS install of the monorepo root may still download
 unloaded adapter sources; the independent core ZIP excludes them, and the
 optional core projection prunes them from a VCS/dist installation. Installing it never advertises a Laravel provider or
-loads adapter namespaces. The three workflow adapters require clean core `^0.1.0-rc.3`; their PHP
+loads adapter namespaces. OpenWorkflow and Temporal require clean core `^0.1.0-rc.3`; the new Laravel condition driver requires `^0.1.0-rc.4`. Their PHP
 namespaces remain `Webong\WorkFlow\Laravel`, `Webong\WorkFlow\OpenWorkflow`
 and `Webong\WorkFlow\Temporal`. Install OpenWorkflow alongside Laravel or
 Temporal when those integrations handle OWS definitions. No adapter implicitly
@@ -81,23 +79,12 @@ The publisher reads committed manifests. Its release command splits the selected
 
 A coordinated clean root engine release is required for the Laravel, OpenWorkflow and Temporal adapters' `^0.1.0-rc.3` constraint. Existing `v0.1.0-rc.2` remains immutable. Source configuration and local preview do not publish tags, package refs, releases or index metadata.
 
-## Conditions and rules
+## Conditions, rules and optional engines
 
-[Rules](../pkg/Rules/README.md) can be installed without the engine or Illuminate. [Conditions](../pkg/Conditions/README.md) uses Illuminate Validation without requiring a Laravel application and composes rules with jq. Its optional guard decorator uses existing core contracts compatible with rc.2. The new rules, jq and conditions package identities are distributed through the Source Plugin subpackage index.
+[Conditions](conditions.md) and [rule definitions](rules.md) ship in core under `src/`. Core requires only PHP. `ConditionDriver` is the seam for predicate engines: the standalone jq package supplies `JqConditionDriver`, and the Laravel adapter supplies `RuleConditionDriver` and `RuleMatcher`. Neither engine is automatically enabled.
 
-## Install the published rc.3 subpackages
+The jq package still requires only PHP and Zest. Its condition driver is optional integration code and requires core when used; raw jq evaluation never installs core. The Laravel adapter's new driver uses Illuminate Validation and needs core `^0.1.0-rc.4`.
 
-The Source Plugin generated index is committed on main:
+Remove the old Conditions/Rules package requirements when adopting the new core release. Core explicitly conflicts with those old package identities to prevent duplicate class ownership. Published rc.3 refs/index records remain immutable; the committed rc.3 index still describes that historical release. Do not regenerate it as part of this source refactor. A subsequent Source Plugin publication must preserve the historical records while publishing the four active adapter/library workspaces.
 
-```json
-{
-  "repositories": [
-    {"type": "composer", "url": "https://raw.githubusercontent.com/webong/workflow/main/composer/composer-packages.json"},
-    {"type": "vcs", "url": "https://github.com/webong/workflow", "no-api": true, "only": ["webong/workflow"]}
-  ],
-  "require": {"webong/workflow-conditions": "0.1.0-rc.3"},
-  "minimum-stability": "RC"
-}
-```
-
-The VCS entry supplies the repository-root engine; the generated index supplies the six subpackages. Standalone jq and Rules consumers need only the index and can omit the VCS entry. A consumer already configured to resolve the root package can instead run `composer source:catalog webong/workflow:0.1.0-rc.3` to import its catalog's exact package-name filters. Runtime dependency installation then uses ordinary Composer behavior.
+Consumers still register the Source Plugin index for optional packages and use the root VCS repository for core. The new architecture needs the next coordinated core/adapter release; pushing source does not publish it. See the [condition migration notes](conditions.md#migrating-from-the-rc3-subpackages).

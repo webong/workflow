@@ -167,5 +167,5 @@ if ($case === 'core-minimal') {
     $report = (new \Webong\WorkFlow\Services\FlowDefinitionValidator())->validate([
         'key' => 'guard', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['rules' => []]]]],
     ]);
-    ensure(! $report->isValid() && $report->errors()[0]->code === 'condition_validation_unavailable', 'Core-only install silently accepted unchecked conditions');
+    ensure(! $report->isValid() && $report->errors()[0]->code === 'condition_driver_unavailable', 'Core-only install silently accepted unchecked conditions');
 }

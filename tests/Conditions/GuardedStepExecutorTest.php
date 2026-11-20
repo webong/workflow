@@ -31,7 +31,7 @@ final class GuardedStepExecutorTest extends TestCase
             new FlowStepDefinition('after','After', dependsOn:['optional']),
         ]);
         $run = new FlowRun('branch-run',$definition);
-        $state=(new FlowRunner())->run($definition,$run->initialState(),new ArrayFlowContext(['enabled'=>false]),[new GuardedStepExecutor($effects)]);
+        $state=(new FlowRunner())->run($definition,$run->initialState(),new ArrayFlowContext(['enabled'=>false]),[new GuardedStepExecutor($effects, ConditionFixtures::compiler())]);
         self::assertSame(FlowStepStatus::SKIPPED,$state->steps['optional']->status);
         self::assertSame(FlowStatus::COMPLETED,$state->status);
         self::assertSame(1,$effects->calls);
@@ -47,7 +47,7 @@ final class GuardedStepExecutorTest extends TestCase
         foreach ([['rules'=>['id'=>'exists:private_users']],['syntax'=>'jq','expression'=>'.context.amount']] as $when) {
             $definition = new FlowDefinition('guard',[new FlowStepDefinition('effect','Effect',metadata:['when'=>$when])]);
             $run=new FlowRun('guard-run',$definition);
-            $state=(new FlowRunner())->run($definition,$run->initialState(),new ArrayFlowContext(['amount'=>42]),[new GuardedStepExecutor($effects)]);
+            $state=(new FlowRunner())->run($definition,$run->initialState(),new ArrayFlowContext(['amount'=>42]),[new GuardedStepExecutor($effects, ConditionFixtures::compiler())]);
             self::assertSame(FlowStepStatus::FAILED,$state->steps['effect']->status);
             self::assertStringNotContainsString('private_users',$state->steps['effect']->error ?? '');
         }

@@ -7,14 +7,14 @@ namespace Webong\WorkFlow\Tests\Conditions;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Webong\WorkFlow\Conditions\ConditionCompiler;
-use Webong\WorkFlow\Conditions\RuleMatcher;
+use Webong\WorkFlow\Laravel\RuleMatcher;
 use Webong\WorkFlow\Rules\RuleSet;
 
 final class ConditionCompilerTest extends TestCase
 {
     public function testRulesAndJqShareTheSameMatchInterface(): void
     {
-        $compiler = new ConditionCompiler();
+        $compiler = ConditionFixtures::compiler();
         foreach ([['version'=>'v1','rules'=>['amount'=>'required|numeric|min:100']], ['syntax'=>'jq','expression'=>'.amount >= 100']] as $definition) {
             $condition = $compiler->compile($definition);
             self::assertTrue($condition->matches(['amount'=>125]));
@@ -35,7 +35,7 @@ final class ConditionCompilerTest extends TestCase
 
     public function testBooleanCompositionAndErrorsAreDistinct(): void
     {
-        $compiler = new ConditionCompiler();
+        $compiler = ConditionFixtures::compiler();
         $yes = ['syntax'=>'jq','expression'=>'true'];
         $no = ['syntax'=>'jq','expression'=>'false'];
         self::assertTrue($compiler->compile(['all'=>[$yes,['not'=>$no]]])->matches([]));
@@ -50,12 +50,12 @@ final class ConditionCompilerTest extends TestCase
     public function testInvalidUnvisitedBranchesAreStillRejectedDuringCompilation(): void
     {
         $this->expectException(InvalidArgumentException::class);
-        (new ConditionCompiler())->compile(['any'=>[['syntax'=>'jq','expression'=>'true'],['rules'=>['id'=>'exists:users']]]]);
+        (ConditionFixtures::compiler())->compile(['any'=>[['syntax'=>'jq','expression'=>'true'],['rules'=>['id'=>'exists:users']]]]);
     }
 
     public function testStrictBooleanJqAndRuntimeFailureNeverBecomeTruthyMatches(): void
     {
-        $compiler = new ConditionCompiler();
+        $compiler = ConditionFixtures::compiler();
         foreach (['null','1','[]','true, false'] as $expression) {
             $result = $compiler->compile(['syntax'=>'jq','expression'=>$expression])->evaluate([]);
             self::assertTrue($result->isError());
@@ -69,7 +69,7 @@ final class ConditionCompilerTest extends TestCase
         $deep = ['syntax'=>'jq','expression'=>'true'];
         for ($i=0;$i<34;$i++) { $deep=['not'=>$deep]; }
         foreach ([['version'=>null,'rules'=>[]],['syntax'=>null,'rules'=>[]],['version'=>'v2','rules'=>[]],['syntax'=>'php','expression'=>'anything'],['all'=>[]],['any'=>[['rules'=>[]]],'extra'=>true],$deep] as $definition) {
-            try { (new ConditionCompiler())->compile($definition); self::fail('Invalid condition accepted'); }
+            try { (ConditionFixtures::compiler())->compile($definition); self::fail('Invalid condition accepted'); }
             catch (InvalidArgumentException) { self::assertTrue(true); }
         }
     }
@@ -78,7 +78,7 @@ final class ConditionCompilerTest extends TestCase
         $leaf = ['rules' => []];
         foreach ([['any' => array_fill(0, 65, $leaf)], ['all' => array_fill(0, 5, ['all' => array_fill(0, 64, $leaf)])]] as $definition) {
             try {
-                (new ConditionCompiler())->compile($definition);
+                (ConditionFixtures::compiler())->compile($definition);
                 self::fail('Oversized condition accepted');
             } catch (InvalidArgumentException) {
                 self::assertTrue(true);

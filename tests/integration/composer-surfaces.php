@@ -39,8 +39,9 @@ command([PHP_BINARY, $root . '/tools/package-composer.php', $lab . '/artifacts',
 $cases = [
     'full' => null,
     'jq' => null,
-    'rules' => null,
-    'conditions' => null,
+    'core-conditions' => null,
+    'jq-driver' => null,
+    'rules-driver' => null,
     'core' => ['core'],
     'core-minimal' => ['core'],
     'runtime' => ['runtime'],
@@ -57,7 +58,9 @@ foreach ($cases as $case => $surfaces) {
     $directory = $lab . '/' . $case;
     mkdir($directory);
     $require = ['php' => '^8.3', 'webong/workflow' => $version];
-    if (in_array($case, ['jq', 'rules', 'conditions'], true)) { $require = ['php' => '^8.3', 'webong/workflow-' . $case => $version]; }
+    if ($case === 'jq') { $require = ['php' => '^8.3', 'webong/workflow-jq' => $version]; }
+    if ($case === 'jq-driver') { $require['webong/workflow-jq'] = $version; }
+    if ($case === 'rules-driver') { $require['webong/workflow-laravel'] = $version; }
     // A real Laravel host must discover the adapter only when installed.
     if (in_array($case, ['full', 'core', 'laravel', 'combined'], true)) {
         $require['laravel/framework'] = '^12.0';
@@ -89,7 +92,7 @@ foreach ($cases as $case => $surfaces) {
         check(is_file($directory . '/vendor/webong/workflow/.source-plugin/projection.json'), 'Projection never ran');
     }
     composer($directory, 'dump-autoload', '--classmap-authoritative');
-    if (in_array($case, ['rules', 'conditions'], true)) {
+    if (in_array($case, ['core-conditions', 'jq-driver', 'rules-driver'], true)) {
         echo command([PHP_BINARY, $root . '/tests/integration/conditions-consumer.php', $directory, $case], $directory);
         continue;
     }
@@ -154,7 +157,47 @@ try {
     composer($legacy, 'update', '--dry-run', '--no-plugins');
     throw new RuntimeException('Split adapter incorrectly accepted the old monolithic core');
 } catch (RuntimeException $error) {
-    check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.3'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
+    check(str_contains($error->getMessage(), 'requires webong/workflow ^0.1.0-rc.4'), 'Old core was not rejected by the adapter minimum: ' . $error->getMessage());
 }
-echo "PASS: public plugin 0.5.0, directory groups, unions, descriptor integrity, independent packages, lock replay and CLI\n";
+
+
+// Core now owns these namespaces; old package requirements must fail during resolution.
+foreach (['workflow-rules', 'workflow-conditions'] as $removed) {
+    $directory = $lab.'/reject-'.$removed; mkdir($directory);
+    $manifest = [
+        'name' => 'workflow-test/reject-'.$removed,
+        'require' => ['webong/workflow' => $version, 'webong/'.$removed => '0.1.0-rc.3'],
+        'repositories' => [
+            ['type' => 'package', 'package' => ['name' => 'webong/'.$removed, 'version' => '0.1.0-rc.3', 'type' => 'metapackage']],
+            ['type' => 'artifact', 'url' => $lab.'/artifacts'],
+        ],
+        'minimum-stability' => 'RC',
+    ];
+    file_put_contents($directory.'/composer.json', json_encode($manifest, JSON_THROW_ON_ERROR));
+    try {
+        composer($directory, 'update', '--dry-run', '--no-plugins');
+        throw new RuntimeException('Core accepted duplicate namespace ownership from '.$removed);
+    } catch (RuntimeException $error) {
+        check(str_contains($error->getMessage(), 'conflicts with webong/'.$removed), 'Unexpected namespace conflict diagnostic: '.$error->getMessage());
+    }
+}
+$directory = $lab.'/reject-old-core-jq'; mkdir($directory);
+file_put_contents($directory.'/composer.json', json_encode([
+    'name' => 'workflow-test/reject-old-core-jq',
+    'require' => ['webong/workflow' => '0.1.0-rc.2', 'webong/workflow-jq' => $version],
+    'repositories' => [
+        ['type' => 'package', 'package' => ['name' => 'webong/workflow', 'version' => '0.1.0-rc.2', 'type' => 'metapackage']],
+        ['type' => 'artifact', 'url' => $lab.'/artifacts'],
+    ],
+    'minimum-stability' => 'RC',
+], JSON_THROW_ON_ERROR));
+try {
+    composer($directory, 'update', '--dry-run', '--no-plugins');
+    throw new RuntimeException('New jq driver accepted a core without the driver contract');
+} catch (RuntimeException $error) {
+    check(str_contains($error->getMessage(), 'conflicts with webong/workflow'), 'Unexpected jq/core compatibility diagnostic: '.$error->getMessage());
+}
+echo "PASS: legacy namespace-owner packages cannot coexist with the new core\n";
+
+echo "PASS: public plugin 0.5.0, directory groups, unions, descriptor integrity, independent drivers, lock replay and CLI\n";
 echo "Consumer artifacts: $lab\n";

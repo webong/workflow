@@ -18,7 +18,7 @@ $files = array_unique(explode("\0", stream_get_contents($pipes[1])));
 fclose($pipes[1]);
 if (proc_close($process) !== 0) { throw new RuntimeException('Cannot list package source'); }
 sort($files);
-foreach (['' => 'workflow', 'pkg/Rules/' => 'workflow-rules', 'pkg/Conditions/' => 'workflow-conditions', 'pkg/Jq/' => 'workflow-jq', 'pkg/Laravel/' => 'workflow-laravel', 'pkg/OpenWorkflow/' => 'workflow-open-workflow', 'pkg/Temporal/' => 'workflow-temporal'] as $prefix => $name) {
+foreach (['' => 'workflow', 'pkg/Jq/' => 'workflow-jq', 'pkg/Laravel/' => 'workflow-laravel', 'pkg/OpenWorkflow/' => 'workflow-open-workflow', 'pkg/Temporal/' => 'workflow-temporal'] as $prefix => $name) {
     $manifest = json_decode(file_get_contents($root . '/' . $prefix . 'composer.json'), true, flags: JSON_THROW_ON_ERROR);
     $manifest['version'] = $version;
     $archive = $output . '/' . $name . '-' . $version . '.zip';

@@ -6,7 +6,7 @@ namespace Webong\WorkFlow\Contracts;
 
 use Webong\WorkFlow\ValueObjects\FlowDiagnostic;
 
-/** Optional authoring integration; validates configuration without evaluating runtime data. */
+/** Condition authoring interface; validates configuration without evaluating runtime data. */
 interface FlowConditionValidator
 {
     /** @return list<FlowDiagnostic> */

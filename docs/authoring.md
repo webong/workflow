@@ -157,15 +157,17 @@ The result is the serialized `FlowValidationReport`:
 
 ## Validate step conditions
 
-`metadata.when` contains a [condition document](../pkg/Conditions/README.md): a rules predicate, a jq predicate, or an `all`/`any`/`not` composition. Install the optional Conditions package to enable its authoring integration. The installed `workflow` binary discovers `ConditionAuthoringValidator`; programmatic callers bind it explicitly:
+Core validates [condition composition](conditions.md) through explicit predicate drivers. Condition trees, diagnostics, [rule definitions](rules.md), guards and authoring require only PHP. jq and Laravel rule engines are optional adapters.
 
 ```php
 use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
 use Webong\WorkFlow\Conditions\ConditionCompiler;
 use Webong\WorkFlow\Conditions\GuardedStepExecutor;
+use Webong\WorkFlow\Jq\JqConditionDriver;
+use Webong\WorkFlow\Laravel\RuleConditionDriver;
 use Webong\WorkFlow\Services\FlowDefinitionValidator;
 
-$compiler = new ConditionCompiler();
+$compiler = new ConditionCompiler([new JqConditionDriver(), new RuleConditionDriver()]);
 $conditions = new ConditionAuthoringValidator($compiler);
 $guarded = new GuardedStepExecutor($effects, $compiler);
 $validator = new FlowDefinitionValidator(executors: [$guarded], conditions: $conditions);
@@ -173,21 +175,21 @@ $report = $validator->validate($document);
 $schema = $validator->conditionSchema();
 ```
 
-Use the same compiler/backend for authoring and execution. The stock CLI uses the portable Zest backend; applications with another backend can inject their condition validator into `FlowAuthoringCli`. The existing `flow.validate` adapter accepts the same optional `conditions` binding. Configuration comes from trusted application code, never request parameters.
+Use the same configured compiler for authoring and execution. The existing `flow.validate` adapter can accept this validator explicitly. Driver registration comes from trusted application code, never request parameters. Installing an engine package does not enable it. Without a driver, its leaves fail with `condition_driver_unavailable`; default core authoring can still validate topology, bindings and condition composition.
+
+For CLI use, supply a trusted PHP file returning an iterable of `ConditionDriver` objects (see the [example](conditions.md#guards-and-authoring)):
 
 ```sh
-vendor/bin/workflow validate flow.json --json
-vendor/bin/workflow inspect flow.json --json
-vendor/bin/workflow condition-schema > condition.schema.json
+vendor/bin/workflow validate flow.json --condition-drivers=condition-drivers.php --json
+vendor/bin/workflow inspect flow.json --condition-drivers=condition-drivers.php --json
+vendor/bin/workflow condition-schema --condition-drivers=condition-drivers.php
 ```
 
-Validation compiles every branch, including branches that would short circuit, without evaluating expressions, invoking executors or inspecting run data. It reports the first condition problem per step and continues checking other steps. A nested rule error can point to `/steps/0/metadata/when/any/1/not/rules/customer.email/1`. Pipe-string rule errors point to the field value itself; explicit rule-list errors include the list index. Property names use RFC 6901 escaping. Backend failures produce safe diagnostics without raw exception details.
+Validation compiles every branch, including branches that would short circuit, without evaluating expressions or inspecting run data. It reports the first condition problem per step and continues checking other steps. A nested rule error can point to `/steps/0/metadata/when/any/1/not/rules/customer.email/1`. Pipe-string errors point to the field value itself; explicit lists include a rule index. Property names use RFC 6901 escaping. Backend failures produce safe diagnostics without raw exception details.
 
-A definition containing `metadata.when` is invalid if no condition validator is bound (`condition_validation_unavailable`). Definitions without conditions continue to work in the PHP-only core. Validation does not enable runtime guarding: execution must use `GuardedStepExecutor`. Actual input types, predicate evaluation errors and the exactly-one-boolean jq result requirement are checked at runtime.
+Validation does not enable runtime guarding: execution must use `GuardedStepExecutor`. Actual input types, predicate evaluation errors and the jq driver's exactly-one-boolean result requirement remain runtime checks.
 
-The [condition schema](../pkg/Conditions/condition.schema.json) describes the recursive structural shape. Compiler validation additionally enforces rule names/parameters, supported jq syntax, byte limits, depth and total node count. `conditionSchema()` returns null without the optional integration; the CLI schema command exits with code 2. Generated contracts include `FlowCondition` and its five variants; existing metadata stays an open map so unrelated keys round-trip unchanged.
-
-This authoring API uses the new core condition-validator contract. Its Conditions package requires the next core release (`^0.1.0-rc.4`); the existing published rc.3 packages are unchanged.
+The [core schema](../src/Conditions/condition.schema.json) describes composition. A configured compiler's `schema()` and `FlowDefinitionValidator::conditionSchema()` include the registered drivers' leaf schemas; no-driver schema output lists no predicate syntaxes. Compilation additionally enforces rule parameters, supported jq syntax, byte limits, depth and total node count. Generated contracts retain the existing condition wire variants and open metadata maps; applications with custom drivers can define their own leaf types.
 
 ## Understand the diagnostics
 
@@ -199,7 +201,8 @@ it contains no `error`-severity diagnostic. Warnings never block a run.
 
 | Code | Severity | Meaning |
 | --- | --- | --- |
-| `condition_validation_unavailable` | error | A guard is present but the optional validator is not bound. |
+| `condition_driver_unavailable` | error | A leaf names a predicate engine that was not explicitly registered. |
+| `condition_driver_failure` | error | A driver unexpectedly failed during compilation. |
 | `condition_not_object` | error | A guard or child is not a condition document. |
 | `invalid_condition_version` | error | The condition version is not v1. |
 | `invalid_condition_operator` | error | Multiple composite operators are present. |

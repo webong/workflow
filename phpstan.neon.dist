@@ -2,8 +2,6 @@ parameters:
     level: 9
     paths:
         - src
-        - pkg/Rules
-        - pkg/Conditions
         - pkg/Jq
         - pkg/Laravel
         - pkg/Temporal/TemporalCompletionInbox.php

@@ -20,7 +20,7 @@ final class ConditionAuthoringTest extends TestCase
             ['syntax' => 'jq', 'expression' => 'true'],
             ['not' => ['rules' => ['customer.email' => ['required', 'exists:private_users']]]],
         ]];
-        $report = (new FlowDefinitionValidator(conditions: new ConditionAuthoringValidator()))->validate([
+        $report = (new FlowDefinitionValidator(conditions: ConditionFixtures::authoring()))->validate([
             'key' => 'guarded', 'steps' => [['id' => 'send', 'metadata' => ['when' => $condition]]],
         ]);
         self::assertFalse($report->isValid());
@@ -31,12 +31,12 @@ final class ConditionAuthoringTest extends TestCase
         self::assertStringNotContainsString('private_users', $error->message);
     }
 
-    public function testMissingIntegrationNeverSilentlyValidatesAGuard(): void
+    public function testMissingDriverNeverSilentlyValidatesAGuard(): void
     {
         $report = (new FlowDefinitionValidator())->validate(['key' => 'a', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['rules' => []]]]]]);
         self::assertFalse($report->isValid());
-        self::assertSame('condition_validation_unavailable', $report->errors()[0]->code);
-        self::assertNull((new FlowDefinitionValidator())->conditionSchema());
+        self::assertSame('condition_driver_unavailable', $report->errors()[0]->code);
+        self::assertSame([], (new FlowDefinitionValidator())->conditionSchema()['x-condition-syntaxes']);
     }
 
     public function testCompilationDoesNotEvaluateEvenAnUnvisitedPredicate(): void
@@ -47,7 +47,7 @@ final class ConditionAuthoringTest extends TestCase
             public function analyze(string $expression): array { $this->analyses++; return ['supported' => true, 'unsupportedFeatures' => []]; }
             public function getName(): string { return 'authoring-test'; }
         };
-        $authoring = new ConditionAuthoringValidator(new ConditionCompiler(jq: new Evaluator($backend)));
+        $authoring = new ConditionAuthoringValidator(ConditionFixtures::compiler($backend));
         self::assertSame([], $authoring->validate(['all' => [['syntax' => 'jq', 'expression' => 'false'], ['syntax' => 'jq', 'expression' => 'error("never execute")']]]));
         self::assertSame(2, $backend->analyses);
     }
@@ -59,21 +59,21 @@ final class ConditionAuthoringTest extends TestCase
             public function analyze(string $expression): array { throw new \RuntimeException('private backend credential'); }
             public function getName(): string { return 'unavailable'; }
         };
-        $validator = new ConditionAuthoringValidator(new ConditionCompiler(jq: new Evaluator($backend)));
+        $validator = new ConditionAuthoringValidator(ConditionFixtures::compiler($backend));
         $diagnostics = $validator->validate(['syntax' => 'jq', 'expression' => 'true']);
         self::assertSame('condition_backend_unavailable', $diagnostics[0]->code);
         self::assertSame('/expression', $diagnostics[0]->path);
         self::assertStringNotContainsString('credential', $diagnostics[0]->message);
         $condition = ['rules' => []];
         for ($i = 0; $i < 34; $i++) { $condition = ['not' => $condition]; }
-        $diagnostics = (new ConditionAuthoringValidator())->validate($condition);
+        $diagnostics = (ConditionFixtures::authoring())->validate($condition);
         self::assertSame('condition_limit_exceeded', $diagnostics[0]->code);
         self::assertSame(str_repeat('/not', 33), $diagnostics[0]->path);
     }
 
     public function testDiagnosticsEscapePointersAndPreservePipeRuleLocations(): void
     {
-        $validator = new ConditionAuthoringValidator();
+        $validator = ConditionFixtures::authoring();
         foreach ([
             [['not' => ['extra/~' => true, 'rules' => []]], '/not/extra~1~0', 'unknown_condition_property'],
             [['rules' => ['invalid/~' => 'required']], '/rules/invalid~1~0', 'invalid_condition_rule'],
@@ -92,7 +92,7 @@ final class ConditionAuthoringTest extends TestCase
 
     public function testMultipleStepsProduceSeparateFindingsAndValidGuardsRemainValid(): void
     {
-        $validator = new FlowDefinitionValidator(conditions: new ConditionAuthoringValidator());
+        $validator = new FlowDefinitionValidator(conditions: ConditionFixtures::authoring());
         $report = $validator->validate(['key' => 'a', 'steps' => [
             ['id' => 'a', 'metadata' => ['when' => null]],
             ['id' => 'b', 'metadata' => ['when' => ['all' => []]]],
@@ -100,13 +100,14 @@ final class ConditionAuthoringTest extends TestCase
         ]]);
         self::assertCount(2, $report->errors());
         self::assertSame(['a', 'b'], array_map(fn ($d) => $d->stepId, $report->errors()));
-        self::assertSame(ConditionSchema::document(), $validator->conditionSchema());
+        self::assertSame(ConditionFixtures::compiler()->schema(), $validator->conditionSchema());
     }
 
     public function testCheckedInSchemaMatchesItsRuntimeBoundsAndRejectsInvalidShapes(): void
     {
-        $schema = json_decode(file_get_contents(__DIR__.'/../../pkg/Conditions/condition.schema.json'));
+        $schema = json_decode(file_get_contents(__DIR__.'/../../src/Conditions/condition.schema.json'));
         self::assertSame(json_encode(ConditionSchema::document()), json_encode($schema));
+        $schema = json_decode(json_encode(ConditionFixtures::compiler()->schema()));
         foreach ([
             [['rules' => []], true],
             [['any' => [['rules' => ['id' => ['required']]], ['syntax' => 'jq', 'expression' => 'true']]], true],

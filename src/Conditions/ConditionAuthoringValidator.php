@@ -27,6 +27,6 @@ final readonly class ConditionAuthoringValidator implements FlowConditionValidat
 
     public function schema(): array
     {
-        return ConditionSchema::document();
+        return $this->compiler->schema();
     }
 }

@@ -134,7 +134,7 @@ final class FlowRpcValidateTest extends TestCase
 
     public function testConditionDiagnosticsMatchTheLibraryWithoutLoadingOrPersistingARun(): void
     {
-        $conditions = new \Webong\WorkFlow\Conditions\ConditionAuthoringValidator();
+        $conditions = \Webong\WorkFlow\Tests\Conditions\ConditionFixtures::authoring();
         $document = ['key' => 'rpc-guard', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['rules' => ['account.id' => ['required', 'unique:private_table']]]]]]];
         $expected = (new \Webong\WorkFlow\Services\FlowDefinitionValidator(conditions: $conditions))->validate($document)->toArray();
         $actual = $this->application(conditions: $conditions)->invoke('flow.validate', ['definition' => $document]);

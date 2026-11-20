@@ -218,7 +218,7 @@ final class FlowAuthoringCliTest extends TestCase
 
     public function testGuardedAuthoringAndSchemaUseTheSameOptionalValidator(): void
     {
-        $validator = new \Webong\WorkFlow\Conditions\ConditionAuthoringValidator();
+        $validator = \Webong\WorkFlow\Tests\Conditions\ConditionFixtures::authoring();
         $document = ['key' => 'guarded', 'steps' => [
             ['id' => 'a', 'metadata' => ['when' => ['not' => ['syntax' => 'jq', 'expression' => '.[']]]],
         ]];
@@ -232,9 +232,27 @@ final class FlowAuthoringCliTest extends TestCase
         [$code, $output] = $this->invoke(['condition-schema'], $validator);
         self::assertSame(0, $code);
         self::assertSame($validator->schema(), json_decode($output, true));
-        [$code, , $error] = $this->invoke(['condition-schema']);
-        self::assertSame(2, $code);
-        self::assertStringContainsString('webong/workflow-conditions', $error);
+        [$code, $output] = $this->invoke(['condition-schema']);
+        self::assertSame(0, $code);
+        self::assertSame([], json_decode($output, true)['x-condition-syntaxes']);
+    }
+
+    public function testTrustedDriverFileEnablesOnlyTheRequestedEngine(): void
+    {
+        $file = $this->file('<?php return [new \\Webong\\WorkFlow\\Jq\\JqConditionDriver()];');
+        $document = ['key' => 'a', 'steps' => [['id' => 'a', 'metadata' => ['when' => ['syntax' => 'jq', 'expression' => 'true']]]]];
+        [$code, $output] = $this->invoke(['validate', $this->definition($document), '--condition-drivers='.$file, '--json']);
+        self::assertSame(0, $code, $output);
+        [$code, $output] = $this->invoke(['condition-schema', '--condition-drivers='.$file]);
+        self::assertSame(0, $code, $output);
+        self::assertSame(['jq'], json_decode($output, true)['x-condition-syntaxes']);
+        [$code, $output] = $this->invoke(['validate', $this->definition($document), '--json']);
+        self::assertSame(1, $code);
+        self::assertStringContainsString('condition_driver_unavailable', $output);
+        foreach ([$this->file('<?php return null;'), $this->file('<?php return [new \\stdClass()];'), '/missing/driver.php'] as $invalid) {
+            [$code] = $this->invoke(['condition-schema', '--condition-drivers='.$invalid]);
+            self::assertSame(2, $code);
+        }
     }
 
     /**

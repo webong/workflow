@@ -4,7 +4,6 @@
 declare(strict_types=1);
 
 use Webong\WorkFlow\Authoring\FlowAuthoringCli;
-use Webong\WorkFlow\Conditions\ConditionAuthoringValidator;
 
 // Support both this repository (vendor/ next to bin/) and a package installed
 // as a Composer dependency (vendor/autoload.php three levels up from
@@ -28,6 +27,4 @@ if (! $loaded) {
     exit(2);
 }
 
-$conditions = class_exists(ConditionAuthoringValidator::class) ? new ConditionAuthoringValidator() : null;
-
-exit((new FlowAuthoringCli(conditions: $conditions))->run(array_slice($argv, 1)));
+exit((new FlowAuthoringCli())->run(array_slice($argv, 1)));

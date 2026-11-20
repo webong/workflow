@@ -16,5 +16,11 @@
         "branch-alias": {
             "dev-main": "0.1.x-dev"
         }
+    },
+    "suggest": {
+        "webong/workflow": "Required only for the optional JqConditionDriver integration (^0.1.0-rc.4); raw jq evaluation remains standalone."
+    },
+    "conflict": {
+        "webong/workflow": "<0.1.0-rc.4"
     }
 }
