@@ -12,7 +12,6 @@ use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 use Webong\WorkFlow\Contracts\FlowStateSerializer;
 use Webong\WorkFlow\Contracts\FlowStateStoreFactory;
-use Webong\WorkFlow\OpenWorkflow\OpenWorkflow;
 use Webong\WorkFlow\Services\DefaultFlowStateSerializer;
 
 final class WorkFlowServiceProvider extends ServiceProvider
@@ -23,13 +22,6 @@ final class WorkFlowServiceProvider extends ServiceProvider
 
         $this->app->singleton(FlowStateSerializer::class, DefaultFlowStateSerializer::class);
 
-        // Optional Open Workflow Specification support. Hosts opt in by
-        // binding their own OpenWorkflow instance (e.g. with a custom
-        // validator) or by using this default; the RPC layer only exposes
-        // OWS document registration when the binding exists (ADR 0006).
-        if (class_exists(OpenWorkflow::class)) {
-            $this->app->singleton(OpenWorkflow::class, fn (): OpenWorkflow => new OpenWorkflow());
-        }
         $this->app->singleton(FlowStateStoreFactory::class, function (): LaravelFlowStateStoreFactory {
             $configuration = (array) $this->app->make(ConfigRepository::class)->get('work-flow');
             $driver = is_string($configuration['driver'] ?? null) ? $configuration['driver'] : 'database';

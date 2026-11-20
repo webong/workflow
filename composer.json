@@ -27,7 +27,6 @@
     },
     "suggest": {
         "illuminate/redis": "Required for the optional Redis store.",
-        "webong/workflow-open-workflow": "Required when using OpenWorkflow definitions with this adapter.",
         "webong/workflow-illuminate": "Optional rules condition driver using Illuminate Validation without app integration."
     }
 }
