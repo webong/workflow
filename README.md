@@ -42,3 +42,7 @@ This new package has not been published by this source extraction. OpenWorkflow
 requires it as an ordinary Composer dependency and adds only OWS-specific scopes.
 Generic classes now use `Webong\WorkFlow\Jq`; the OWS-specific
 `OpenWorkflow\Expression\ExpressionEvaluator` facade keeps its existing namespace.
+
+## Optional WorkFlow condition driver
+
+When core `^0.1.0-rc.4` is installed, explicitly register `new JqConditionDriver($backend)` in `ConditionCompiler` to use jq predicates in condition trees and guards. The driver defaults to portable Zest and requires exactly one boolean output. This integration is optional; the raw evaluator's package requirements remain PHP and Zest only. If core is installed alongside this version, Composer requires a compatible core version through a conflict constraint. See [core conditions](../../docs/conditions.md).
