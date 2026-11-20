@@ -9,7 +9,7 @@
         "psr/http-factory": "^1.1",
         "psr/http-message": "^2.0",
         "symfony/yaml": "^7.0",
-        "webong/workflow": "^0.1.0-rc.3",
+        "webong/workflow": "^0.1.0-rc.4",
         "webong/workflow-jq": "@dev"
     },
     "autoload": {
