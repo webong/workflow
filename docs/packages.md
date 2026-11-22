@@ -73,12 +73,12 @@ After committing source changes, inspect the selected packages and preview publi
 
 ```sh
 composer source:publish list
-composer source:publish release --release-version=0.1.0-rc.3 --no-metadata-branch --out-dir=composer --dry-run
+composer source:publish release --release-version=0.1.0-rc.4 --no-metadata-branch --out-dir=composer --dry-run
 ```
 
 The publisher reads committed manifests. Its release command splits the selected subpackages and writes the Composer index; publication uses its explicit push flow. Keep the index on the normal branch at `composer/composer-packages.json`. Consumers register that standard Composer index (or discover it through a Source Plugin catalog) and require subpackages normally. Do not hand-maintain package split branches or index records.
 
-A coordinated clean root engine release is required for the Laravel, OpenWorkflow and Temporal adapters' `^0.1.0-rc.3` constraint. Existing `v0.1.0-rc.2` remains immutable. Source configuration and local preview do not publish tags, package refs, releases or index metadata.
+The coordinated `v0.1.0-rc.4` release publishes core and all five active workspaces. Existing release tags remain immutable. Source configuration and local preview do not publish tags, package refs, releases or index metadata.
 
 ## Conditions, rules and optional engines
 
@@ -86,6 +86,6 @@ A coordinated clean root engine release is required for the Laravel, OpenWorkflo
 
 The jq package still requires only PHP and Zest. Its condition driver is optional integration code and requires core when used; raw jq evaluation never installs core. The component-only Illuminate adapter uses Illuminate Validation and needs core `^0.1.0-rc.4`.
 
-Remove the old Conditions/Rules package requirements when adopting the new core release. Core explicitly conflicts with those old package identities to prevent duplicate class ownership. Published rc.3 refs/index records remain immutable; the committed rc.3 index still describes that historical release. Do not regenerate it as part of this source refactor. A subsequent Source Plugin publication must preserve the historical records while publishing the five active adapter/library workspaces.
+Remove the old Conditions/Rules package requirements when adopting the new core release. Core explicitly conflicts with those old package identities to prevent duplicate class ownership. Published rc.3 refs/index records remain immutable; the rc.4 index preserves their exact historical stable records alongside the five active adapter/library workspaces. When keeping the index on main, seed a local-only `dist/composer` baseline containing the previously published index at its root before running file-only publication; the publisher reads history from that ref, not the output directory. Do not push this local baseline branch.
 
-Consumers still register the Source Plugin index for optional packages and use the root VCS repository for core. The new architecture needs the next coordinated core/adapter release; pushing source does not publish it. See the [condition migration notes](conditions.md#migrating-from-the-rc3-subpackages).
+Consumers still register the Source Plugin index for optional packages and use the root VCS repository for core. Use `0.1.0-rc.4` for core and the active adapters; pushing source alone does not publish a release. See the [condition migration notes](conditions.md#migrating-from-the-rc3-subpackages).
